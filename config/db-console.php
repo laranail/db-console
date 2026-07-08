@@ -91,12 +91,16 @@ return [
     | Catalog storage
     |--------------------------------------------------------------------------
     | DBConsole's own records (servers, databases, accounts, grants, audit)
-    | live on a dedicated connection — by default an SQLite file outside the
-    | web root, entirely separate from both the app's default connection and
-    | any managed server.
+    | live on a database connection you already have. Leave `connection` null
+    | (the default) and DBConsole uses your app's default connection — zero
+    | infrastructure, fully host-agnostic; the db_console_ prefix keeps its
+    | tables out of the way. Set `connection` to a name for a DEDICATED,
+    | isolated catalog: if that name is not defined in your database config,
+    | DBConsole provisions a private SQLite file at `database` (outside the
+    | web root) — the only mode where whole-file SQLCipher applies.
     */
     'catalog' => [
-        'connection' => env('DB_CONSOLE_CATALOG_CONNECTION', 'db_console_catalog'),
+        'connection' => env('DB_CONSOLE_CATALOG_CONNECTION'),
         'prefix' => 'db_console_',
         'database' => env('DB_CONSOLE_CATALOG_PATH', storage_path('db-console/catalog.sqlite')),
     ],

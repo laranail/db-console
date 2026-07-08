@@ -22,13 +22,10 @@ composer test        # Pest (unit + feature + architecture)
 composer lint        # pint --test, phpstan (level 8), rector --dry-run
 ```
 
-Feature tests that need live database servers read `DB_CONSOLE_TEST_*`
-environment variables and skip when the servers are unreachable. Bring up the
-full engine matrix with the bundled Docker stack:
-
-```bash
-cd docker && docker compose up -d
-```
+The suite runs entirely on in-memory SQLite — no external servers or Docker.
+Live multi-engine integration (MySQL/MariaDB/PostgreSQL) against a real engine
+matrix lives in [`laranail/db-console-boilerplate`](https://github.com/laranail/db-console-boilerplate),
+which owns the Docker stack and exercises the package end-to-end.
 
 ## Coding conventions
 

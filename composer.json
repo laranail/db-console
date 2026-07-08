@@ -79,8 +79,7 @@
     "autoload": {
         "psr-4": {
             "Simtabi\\Laranail\\DBConsole\\": "src/",
-            "Simtabi\\Laranail\\DBConsole\\Database\\Factories\\": "database/factories/",
-            "Simtabi\\Laranail\\DBConsole\\Database\\Seeders\\": "database/seeders/"
+            "Simtabi\\Laranail\\DBConsole\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
@@ -107,10 +106,7 @@
         "laravel": {
             "providers": [
                 "Simtabi\\Laranail\\DBConsole\\Providers\\DBConsoleServiceProvider"
-            ],
-            "aliases": {
-                "DbConsole": "Simtabi\\Laranail\\DBConsole\\Facades\\DbConsole"
-            }
+            ]
         },
         "branch-alias": {
             "dev-main": "1.0.x-dev"

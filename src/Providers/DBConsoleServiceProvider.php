@@ -220,6 +220,18 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
      */
     private function registerCatalogConnection(): void
     {
+        // Resolve the catalog connection ONCE and write it back to config, so
+        // every downstream reader (SqlCipherManager, CatalogConnection,
+        // DatabaseSecretStore, the migrations, and the models) sees the same
+        // concrete name. When unset, DBConsole rides the host app's default
+        // connection — no dedicated infrastructure. A configured name that the
+        // host has not defined falls through to the dedicated-SQLite synthesis
+        // below (isolation / whole-file SQLCipher).
+        $rootConfig = $this->app->make(Config::class);
+        $resolvedCatalog = $this->stringOrNull($rootConfig->get('laranail.db-console.catalog.connection'))
+            ?? (string) $rootConfig->get('database.default');
+        $rootConfig->set('laranail.db-console.catalog.connection', $resolvedCatalog);
+
         $this->app->singleton(SqlCipherManager::class, function ($app): SqlCipherManager {
             $config = $app->make(Config::class);
             $catalogName = (string) $config->get('laranail.db-console.catalog.connection', 'db_console_catalog');

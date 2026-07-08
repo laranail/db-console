@@ -56,9 +56,13 @@ abstract class TestCase extends Orchestra
             'foreign_key_constraints' => true,
         ]);
 
-        // Pin the catalog to a shared in-memory SQLite connection for tests.
-        // Defining it here means the provider sees it already registered and
-        // reuses it, rather than pointing at a storage_path file.
+        // Pin the catalog to a dedicated, shared in-memory SQLite connection
+        // for tests. Setting the connection name explicitly keeps the suite on
+        // the dedicated-catalog mode regardless of the host-agnostic default
+        // (which would otherwise ride 'testing'); defining the connection here
+        // means the provider reuses it rather than a storage_path file. The
+        // host-agnostic default is covered by CatalogConnectionResolutionTest.
+        $config->set('laranail.db-console.catalog.connection', 'db_console_catalog');
         $config->set('database.connections.db_console_catalog', [
             'driver' => 'sqlite',
             'database' => ':memory:',

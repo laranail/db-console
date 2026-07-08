@@ -7,7 +7,7 @@
 
 > Self-hosted, multi-server database, account, and privilege management for Laravel — guided, auditable flows over MySQL, MariaDB, PostgreSQL, SQL Server, and SQLite, with scoped RBAC, an encrypted catalog, a full CLI, and an optional REST API and webhooks.
 
-Requires PHP `^8.4.1 || ^8.5` and Laravel `^13.0`. Headless by design: all logic, no UI (the [`laranail/db-console-webui`](https://github.com/laranail/db-console-webui) package is the thin Livewire/Flux front end).
+Requires PHP `^8.4.1 || ^8.5` and Laravel `^13.0`. Headless by design: all logic, no UI (the [`laranail/db-console-webui`](https://github.com/laranail/db-console-webui) package is the thin Livewire/Flux front end). It uses your app's existing database connections — no separate infrastructure to stand up.
 
 `db-console` is the safe way to run the operations a DBA does by hand — create a database, mint a least-privilege account, grant exactly the rights an app needs, rotate a credential, move a user to a new host — from Laravel, over any number of servers, without ever handing the tool a root account. Every input is allow-list validated, only the engine layer builds SQL (so injection has nowhere to land), secrets redact themselves, privileges are capped below server-wide, and every action lands in a tamper-evident audit trail.
 
@@ -87,7 +87,6 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 - [Issue an API token](docs/recipes/issue-api-token.md)
 - [Verify a webhook signature](docs/recipes/verify-webhook-signature.md)
 - [Use the Spatie RBAC driver](docs/recipes/spatie-rbac.md)
-- [Run the Docker multi-engine stack](docs/recipes/docker-stack.md)
 
 ## Stability
 
@@ -97,12 +96,11 @@ Pre-1.0. The public surface — services, value objects, the shared validation l
 
 ```bash
 composer install
-docker compose -f docker/compose.yaml up -d   # MySQL, MariaDB, Postgres, mailpit
-composer test                                 # Pest (skips live engines when Docker is down)
+composer test                                 # Pest — runs entirely on SQLite, no external servers
 composer lint                                 # Pint, PHPStan (level 8), Rector
 ```
 
-See [docker/README.md](docker/README.md) for the multi-engine stack and [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
+The suite is self-contained (in-memory SQLite). Live multi-engine integration against MySQL/MariaDB/PostgreSQL — and a full demo UI — live in [`laranail/db-console-boilerplate`](https://github.com/laranail/db-console-boilerplate). See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ## Sister packages
 

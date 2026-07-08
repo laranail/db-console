@@ -3,44 +3,21 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
-use Simtabi\Laranail\DBConsole\Exceptions\AuthenticationFailure;
 use Simtabi\Laranail\DBConsole\Exceptions\ConnectionException;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
-use Simtabi\Laranail\DBConsole\Tests\Concerns\InteractsWithDockerServers;
 
-uses(InteractsWithDockerServers::class);
+/*
+ * Exception translation that needs no live server: a dead port proves every
+ * driver failure is translated into a DBConsole exception (never a raw
+ * PDOException with SQL/credentials). The credential-rejection case, which
+ * needs a reachable-but-wrong-password server, lives in the boilerplate's
+ * live-server suite.
+ */
 
 beforeEach(function (): void {
     Gate::before(fn ($user = null): bool => true);
-});
-
-it('translates rejected admin credentials into AuthenticationFailure (no raw driver error escapes)', function (): void {
-    $params = $this->mysqlParams();
-    $this->skipUnlessReachable('mysql', $params['host'], $params['port'], $params['username'], $params['password']);
-
-    // Same reachable host, wrong password.
-    config()->set('database.connections.db_console_admin', [
-        'driver' => 'mysql',
-        'host' => $params['host'],
-        'port' => $params['port'],
-        'database' => $params['database'],
-        'username' => $params['username'],
-        'password' => 'definitely-the-wrong-password',
-        'prefix' => '',
-    ]);
-    config()->set('laranail.db-console.servers.bad-creds', [
-        'engine' => 'mysql', 'connection' => 'db_console_admin', 'tls' => ['enabled' => false],
-    ]);
-
-    try {
-        app(DatabaseManager::class)->list('bad-creds');
-        $this->fail('expected an authentication failure');
-    } catch (AuthenticationFailure $e) {
-        expect($e->userMessage())->toContain('bad-creds')
-            ->and($e->userMessage())->not->toContain('definitely-the-wrong-password');
-    }
 });
 
 it('translates an unreachable host into ServerUnreachable', function (): void {
