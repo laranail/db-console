@@ -7,7 +7,7 @@ namespace Simtabi\Laranail\DBConsole\Backup;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
-use Simtabi\Laranail\DatabaseTools\Backup\Contracts\BackupManagerInterface;
+use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
@@ -15,13 +15,13 @@ use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Throwable;
 
 /**
- * Backup-before-drop via laranail/database-tools. Snapshots the specific
+ * Backup-before-drop via laranail/db-tools. Snapshots the specific
  * database by pointing a transient connection (cloned from the server's admin
- * connection) at it and asking database-tools' BackupManager to dump it. If
- * database-tools is not installed, available() is false and the drop flow
+ * connection) at it and asking db-tools' BackupManager to dump it. If
+ * db-tools is not installed, available() is false and the drop flow
  * proceeds with a logged notice (never a silent skip).
  */
-final readonly class DatabaseToolsBackupService implements BackupService
+final readonly class DbToolsBackupService implements BackupService
 {
     private const string BACKUP_MANAGER = BackupManagerInterface::class;
 
@@ -86,7 +86,7 @@ final readonly class DatabaseToolsBackupService implements BackupService
         }
 
         if (! interface_exists(self::BACKUP_MANAGER)) {
-            return 'laranail/database-tools is not installed, so backup-before-drop is unavailable';
+            return 'laranail/db-tools is not installed, so backup-before-drop is unavailable';
         }
 
         return null;

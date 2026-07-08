@@ -7,12 +7,12 @@ namespace Simtabi\Laranail\DBConsole\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Override;
-use Simtabi\Laranail\DatabaseTools\Observers\AuditObserver;
+use Simtabi\Laranail\DbTools\Observers\AuditObserver;
 
 /**
  * Base for every catalog model: ULID primary keys, the dedicated catalog
  * connection (never the app default), and the configurable db_console_
- * table prefix applied in one place. When laranail/database-tools is
+ * table prefix applied in one place. When laranail/db-tools is
  * installed its AuditObserver is attached (created_by/updated_by stamping);
  * without it the models still work, just without actor columns populated.
  */

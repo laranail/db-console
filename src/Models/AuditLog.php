@@ -49,7 +49,7 @@ final class AuditLog extends CatalogModel
     /**
      * The audit log is the audit SINK, not an audited entity: it records its
      * own actor explicitly (actor_type/actor_id) and is append-only. So it
-     * does NOT attach the database-tools blameable observer (which would stamp
+     * does NOT attach the db-tools blameable observer (which would stamp
      * created_by/updated_by columns this table deliberately does not have).
      * The append-only AuditLogObserver is attached separately by the provider.
      */

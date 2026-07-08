@@ -21,7 +21,7 @@ use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
 use Simtabi\Laranail\DBConsole\Audit\AuditLogObserver;
 use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
-use Simtabi\Laranail\DBConsole\Backup\DatabaseToolsBackupService;
+use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
 use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
 use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
@@ -286,7 +286,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         // available for explicit headless use where no persistence is wanted.
         $this->app->bindIf(Catalog::class, DbConsoleCatalog::class);
 
-        $this->app->bindIf(BackupService::class, DatabaseToolsBackupService::class);
+        $this->app->bindIf(BackupService::class, DbToolsBackupService::class);
 
         $this->app->singleton(DatabaseManager::class);
         $this->app->singleton(AccountManager::class);

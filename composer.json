@@ -53,7 +53,7 @@
     },
     "require-dev": {
         "aws/aws-sdk-php": "^3.0",
-        "laranail/database-tools": "^1.0",
+        "laranail/db-tools": "^2.0",
         "larastan/larastan": "^3.0",
         "laravel/passport": "^13.0",
         "laravel/pint": "^1.18",
@@ -71,7 +71,7 @@
     "suggest": {
         "aws/aws-sdk-php": "Required by the kms secret driver (AWS KMS envelope encryption) and the aws-secrets-manager reference resolver.",
         "google/cloud-kms": "Required by the kms secret driver when using the GCP KMS provider.",
-        "laranail/database-tools": "Enables backup-before-drop snapshots, live schema inspection for doctor and the dashboard, and cursor pagination for API lists.",
+        "laranail/db-tools": "Enables backup-before-drop snapshots, live schema inspection for doctor and the dashboard, and cursor pagination for API lists.",
         "laravel/passport": "OAuth2 guard for the optional REST API (service-to-service access).",
         "laravel/sanctum": "Default token guard for the optional REST API.",
         "spatie/laravel-permission": "Delegates console RBAC storage to Spatie when rbac.driver is set to spatie."

@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
-use Simtabi\Laranail\DBConsole\Backup\DatabaseToolsBackupService;
+use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
@@ -93,8 +93,8 @@ it('does not snapshot an empty database (nothing to protect)', function (): void
 it('reports unavailable with a clear reason when backups are disabled', function (): void {
     config()->set('laranail.db-console.backup.enabled', false);
 
-    // The real DatabaseToolsBackupService reflects config.
-    $service = app(DatabaseToolsBackupService::class);
+    // The real DbToolsBackupService reflects config.
+    $service = app(DbToolsBackupService::class);
 
     expect($service->available())->toBeFalse()
         ->and($service->unavailableReason())->toContain('disabled');

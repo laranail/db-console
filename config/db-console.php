@@ -224,7 +224,7 @@ return [
     |--------------------------------------------------------------------------
     | Backup before destructive operations
     |--------------------------------------------------------------------------
-    | Requires laranail/database-tools; disabled with a clear notice when absent.
+    | Requires laranail/db-tools; disabled with a clear notice when absent.
     */
     'backup' => [
         'enabled' => true,

@@ -109,7 +109,7 @@ See [docker/README.md](docker/README.md) for the multi-engine stack and [CONTRIB
 - [`laranail/console`](https://github.com/laranail/console) — the command base, formatter, and prompter.
 - [`laranail/package-tools`](https://github.com/laranail/package-tools) — the service-provider builder and install flow.
 - [`laranail/enumerator`](https://github.com/laranail/enumerator) — the translatable enum toolkit.
-- [`laranail/database-tools`](https://github.com/laranail/database-tools) — optional backup, inspection, and audit helpers.
+- [`laranail/db-tools`](https://github.com/laranail/db-tools) — optional backup, inspection, and audit helpers.
 - [`laranail/db-console-webui`](https://github.com/laranail/db-console-webui) — the thin Livewire + Flux front end for this package.
 
 ## Community

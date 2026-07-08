@@ -7,7 +7,7 @@ Requirements, install, the minimal admin account, and catalog setup for `laranai
 - PHP `^8.4.1 || ^8.5`
 - Laravel `^13.0`
 - A reachable database server (MySQL 8+, MariaDB 11+, PostgreSQL 16+, SQL Server 2022, or SQLite) with a **minimal** admin account
-- Optional: `laravel/sanctum` or `laravel/passport` (REST API), `spatie/laravel-permission` (Spatie RBAC driver), `laranail/database-tools` (backup-before-drop, inspection), a KMS/Vault SDK (production secret drivers)
+- Optional: `laravel/sanctum` or `laravel/passport` (REST API), `spatie/laravel-permission` (Spatie RBAC driver), `laranail/db-tools` (backup-before-drop, inspection), a KMS/Vault SDK (production secret drivers)
 
 ## Install
 

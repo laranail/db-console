@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Registered servers. Columns are declared explicitly (no dependency on the
- * database-tools blueprint macros), on the dedicated catalog connection.
+ * db-tools blueprint macros), on the dedicated catalog connection.
  */
 return new class extends Migration
 {
