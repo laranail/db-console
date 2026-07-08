@@ -1,0 +1,75 @@
+# DBConsole Docker layer.
+#
+# Brings up the managed-database matrix so `doctor`, the multi-server
+# switcher, and the feature suite have several real servers to exercise —
+# each provisioned with a minimal-privilege db_console_admin account (the
+# same statements the docs recommend for production), never root.
+#
+#   docker compose -f docker/compose.yaml up -d
+#
+# SQL Server is behind an opt-in profile (heavy image, x86-only):
+#   docker compose -f docker/compose.yaml --profile sqlsrv up -d
+name: db-console
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root-not-for-app-use
+      MYSQL_DATABASE: db_console_demo
+    command:
+      - --require-secure-transport=OFF   # local dev; production requires TLS (doctor enforces)
+    ports:
+      - "33061:3306"
+    volumes:
+      - ./init/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot-not-for-app-use"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root-not-for-app-use
+      MARIADB_DATABASE: db_console_demo
+    ports:
+      - "33062:3306"
+    volumes:
+      - ./init/mariadb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: root-not-for-app-use
+      POSTGRES_DB: db_console_demo
+    ports:
+      - "54329:5432"
+    volumes:
+      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  sqlsrv:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: ["sqlsrv"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Root-not-for-app-use1"
+    ports:
+      - "14330:1433"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "10250:8025"   # web UI
+      - "10251:1025"   # SMTP

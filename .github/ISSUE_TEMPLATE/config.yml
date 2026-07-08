@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://opensource.simtabi.com/documentation/laranail/db-console/
+    about: Guides, reference, and recipes for laranail/db-console.
+  - name: Security disclosure
+    url: https://github.com/laranail/db-console/blob/main/SECURITY.md
+    about: Report vulnerabilities privately to opensource@simtabi.com — never in a public issue.
