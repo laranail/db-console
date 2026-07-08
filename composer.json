@@ -66,7 +66,7 @@
         "phpstan/phpstan": "^2.0",
         "rector/rector": "^2.0",
         "roave/security-advisories": "dev-latest",
-        "spatie/laravel-permission": "^6.0"
+        "spatie/laravel-permission": "^8.3"
     },
     "suggest": {
         "aws/aws-sdk-php": "Required by the kms secret driver (AWS KMS envelope encryption) and the aws-secrets-manager reference resolver.",
