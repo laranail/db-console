@@ -13,3 +13,4 @@ composer.lock
 .vscode/
 .env
 db-console-design.md
+.plans/
