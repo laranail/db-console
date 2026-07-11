@@ -49,7 +49,7 @@
         "illuminate/validation": "^13.0",
         "laranail/console": "^1.0",
         "laranail/enumerator": "^0.4",
-        "laranail/package-tools": "^2.3"
+        "laranail/package-tools": "^7.0"
     },
     "require-dev": {
         "aws/aws-sdk-php": "^3.0",

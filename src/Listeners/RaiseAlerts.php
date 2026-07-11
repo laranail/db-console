@@ -58,9 +58,15 @@ final readonly class RaiseAlerts
             ]);
         } catch (Throwable $e) {
             // An alert-delivery failure must not cascade; record it and move on.
+            // Redact the webhook URL before logging (failure-handling standard,
+            // rule 15): an HTTP transport error routinely embeds the full URL,
+            // whose path is a bearer token — the key-based ContextScrubber can't
+            // reach into a free-text exception message, so strip the known secret
+            // here and keep the exception class for diagnosis.
             $this->log->write($event->severity(), 'alert.delivery_failed', [
                 'server' => $event->serverName(),
-                'error' => $e->getMessage(),
+                'exception' => $e::class,
+                'error' => str_replace($webhook, '[redacted-webhook]', $e->getMessage()),
             ]);
         }
     }

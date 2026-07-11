@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Events\AccountPasswordRotated;
@@ -65,6 +67,34 @@ describe('alerts (high-severity subset)', function (): void {
 
         Http::assertSent(fn ($request): bool => $request->url() === 'https://alerts.example.com/hook'
             && str_contains((string) ($request['text'] ?? ''), 'db-console alert'));
+    });
+
+    it('redacts the webhook url from the log when alert delivery fails (rule 15)', function (): void {
+        $webhook = 'https://alerts.example.com/hook/T000/SECRET-TOKEN';
+        config()->set('laranail.db-console.alerts.webhook', $webhook);
+
+        // A transport error routinely embeds the full URL — whose path is a
+        // bearer token — in its message. Force that shape.
+        Http::fake(function () use ($webhook): void {
+            throw new RuntimeException('cURL error 28: timeout for ' . $webhook);
+        });
+
+        $logged = [];
+        Log::listen(function (MessageLogged $message) use (&$logged): void {
+            $logged[] = $message;
+        });
+
+        app(RaiseAlerts::class)->handle(new SuspiciousActivity('prod-mysql', 'a root-like admin was detected'));
+
+        $failure = collect($logged)->first(
+            fn (MessageLogged $m): bool => str_contains($m->message, 'alert.delivery_failed'),
+        );
+
+        expect($failure)->not->toBeNull();
+
+        $error = (string) ($failure->context['error'] ?? '');
+        expect($error)->toContain('[redacted-webhook]')
+            ->and($error)->not->toContain('SECRET-TOKEN');
     });
 
     it('does not alert for a routine info event', function (): void {
