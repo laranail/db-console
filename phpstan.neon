@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - src
+    excludePaths:
+        - vendor
+        # Optional-integration adapter for google/cloud-kms, which is not a
+        # dev dependency of this repo (aws/aws-sdk-php is, so the AWS adapters
+        # ARE analyzed). This shim is exercised by integration tests only when
+        # google/cloud-kms is installed; static analysis cannot see its types.
+        - src/Secrets/Kms/GcpKmsClient.php
+    treatPhpDocTypesAsCertain: false

@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Simtabi\Laranail\DBConsole\Exceptions;
+
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
+use Throwable;
+
+final class InsufficientPrivilege extends ConnectionException
+{
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::InsufficientPrivilege;
+    }
+
+    public static function forOperation(string $operation, ?Throwable $previous = null): self
+    {
+        return new self(
+            message: "the admin account lacks a privilege needed for '{$operation}'",
+            userParams: ['operation' => $operation],
+            context: ['operation' => $operation],
+            previous: $previous,
+        );
+    }
+}

@@ -1,0 +1,142 @@
+{
+    "name": "laranail/db-console",
+    "description": "Self-hosted, multi-server database, user, and privilege management for Laravel: guided flows, engines for MySQL/MariaDB/PostgreSQL/SQL Server/SQLite, scoped RBAC, encrypted catalog, CLI, and an optional REST API with webhooks.",
+    "keywords": [
+        "laravel",
+        "database",
+        "database-management",
+        "privileges",
+        "grants",
+        "mysql",
+        "mariadb",
+        "postgresql",
+        "sqlserver",
+        "sqlite",
+        "rbac",
+        "dba",
+        "laranail"
+    ],
+    "homepage": "https://opensource.simtabi.com/products/laranail/db-console",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Simtabi LLC",
+            "email": "opensource@simtabi.com",
+            "homepage": "https://opensource.simtabi.com",
+            "role": "Organization"
+        },
+        {
+            "name": "Imani Manyara",
+            "email": "imani@simtabi.com",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/laranail/db-console/issues",
+        "source": "https://github.com/laranail/db-console",
+        "docs": "https://opensource.simtabi.com/documentation/laranail/db-console/"
+    },
+    "require": {
+        "php": "^8.4.1 || ^8.5",
+        "illuminate/auth": "^13.0",
+        "illuminate/console": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/encryption": "^13.0",
+        "illuminate/http": "^13.0",
+        "illuminate/notifications": "^13.0",
+        "illuminate/support": "^13.0",
+        "illuminate/validation": "^13.0",
+        "laranail/console": "^0.1",
+        "laranail/enumerator": "^0.1",
+        "laranail/package-tools": "^0.1"
+    },
+    "require-dev": {
+        "aws/aws-sdk-php": "^3.0",
+        "laranail/db-tools": "^0.1",
+        "larastan/larastan": "^3.0",
+        "laravel/passport": "^13.0",
+        "laravel/pint": "^1.18",
+        "laravel/sanctum": "^4.3",
+        "mockery/mockery": "^1.6",
+        "orchestra/testbench": "^11.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0",
+        "phpstan/phpstan": "^2.0",
+        "rector/rector": "^2.0",
+        "roave/security-advisories": "dev-latest",
+        "spatie/laravel-permission": "^6.0"
+    },
+    "suggest": {
+        "aws/aws-sdk-php": "Required by the kms secret driver (AWS KMS envelope encryption) and the aws-secrets-manager reference resolver.",
+        "google/cloud-kms": "Required by the kms secret driver when using the GCP KMS provider.",
+        "laranail/db-tools": "Enables backup-before-drop snapshots, live schema inspection for doctor and the dashboard, and cursor pagination for API lists.",
+        "laravel/passport": "OAuth2 guard for the optional REST API (service-to-service access).",
+        "laravel/sanctum": "Default token guard for the optional REST API.",
+        "spatie/laravel-permission": "Delegates console RBAC storage to Spatie when rbac.driver is set to spatie."
+    },
+    "autoload": {
+        "psr-4": {
+            "Simtabi\\Laranail\\DBConsole\\": "src/",
+            "Simtabi\\Laranail\\DBConsole\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Simtabi\\Laranail\\DBConsole\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest --no-coverage",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "pint": "vendor/bin/pint --test",
+        "pint-fix": "vendor/bin/pint",
+        "phpstan": "vendor/bin/phpstan analyse --no-progress",
+        "rector": "vendor/bin/rector process --dry-run",
+        "rector-fix": "vendor/bin/rector process",
+        "lint": [
+            "@pint",
+            "@phpstan",
+            "@rector"
+        ],
+        "audit": "composer audit"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Simtabi\\Laranail\\DBConsole\\Providers\\DBConsoleServiceProvider"
+            ]
+        },
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/laranail/console"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/laranail/enumerator"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/laranail/package-tools"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/laranail/db-tools"
+        }
+    ]
+}

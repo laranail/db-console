@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a defect in laranail/db-console
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security issues must NOT be filed here — email
+        opensource@simtabi.com instead (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: PHP / Laravel / database engine
+      placeholder: e.g. PHP 8.4, Laravel 13, MySQL 8.4
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal reproduction — commands run, config used (redact all credentials).
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Sanitized command output or log entries. Never paste passwords or connection secrets.
+      render: shell
