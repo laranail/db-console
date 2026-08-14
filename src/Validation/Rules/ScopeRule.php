@@ -24,7 +24,7 @@ final class ScopeRule implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value) || ! self::isValid($value)) {
-            $fail((string) __('db-console::validation.scope', ['attribute' => $attribute]));
+            $fail((string) __('laranail-db-console::validation.scope', ['attribute' => $attribute]));
         }
     }
 

@@ -44,7 +44,7 @@ abstract class DBConsoleException extends RuntimeException
      */
     public function userMessage(): string
     {
-        return (string) __('db-console::exceptions.' . $this->code()->value, $this->userParams);
+        return (string) __('laranail-db-console::exceptions.' . $this->code()->value, $this->userParams);
     }
 
     /**

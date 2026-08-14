@@ -18,7 +18,7 @@ final class ServerNameRule implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value) || preg_match(self::PATTERN, $value) !== 1) {
-            $fail((string) __('db-console::validation.server_name', ['attribute' => $attribute]));
+            $fail((string) __('laranail-db-console::validation.server_name', ['attribute' => $attribute]));
         }
     }
 }

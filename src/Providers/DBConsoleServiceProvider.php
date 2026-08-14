@@ -67,11 +67,11 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $package
             ->name('laranail/db-console')
             ->hasConfigFile()
-            ->hasTranslations('db-console')
+            ->hasTranslations('laranail-db-console')
             ->discoversMigrations()
             ->runsMigrations()
             ->hasRoutesWhen('laranail.db-console.api.enabled', 'api')
-            ->registerMiddlewareAliases(['db-console.api-guard' => ApiGuard::class])
+            ->registerMiddlewareAliases(['laranail-db-console.api-guard' => ApiGuard::class])
             ->hasCommands($this->commandClasses())
             ->hasInstallCommand($this->installDefinition())
             ->hasAboutSection(

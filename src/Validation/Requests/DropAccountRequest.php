@@ -39,7 +39,7 @@ final class DropAccountRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'confirm.same' => (string) __('db-console::validation.confirm_username'),
+            'confirm.same' => (string) __('laranail-db-console::validation.confirm_username'),
         ];
     }
 }

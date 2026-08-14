@@ -20,7 +20,7 @@ final class IdentifierRule implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         if (! is_string($value)) {
-            $fail((string) __('db-console::validation.string', ['attribute' => $attribute]));
+            $fail((string) __('laranail-db-console::validation.string', ['attribute' => $attribute]));
 
             return;
         }

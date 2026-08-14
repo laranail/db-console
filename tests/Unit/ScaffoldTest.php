@@ -15,5 +15,5 @@ it('registers the db-console translation namespaces', function (): void {
     $translator = app('translator');
     $loader = $translator->getLoader();
 
-    expect($loader->namespaces())->toHaveKeys(['laranail/db-console', 'db-console']);
+    expect($loader->namespaces())->toHaveKeys(['laranail/db-console', 'laranail-db-console']);
 });

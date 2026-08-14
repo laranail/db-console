@@ -12,12 +12,12 @@ use Simtabi\Laranail\DBConsole\Http\Api\Controllers\WebhookController;
 
 /*
  * DBConsole REST API. Loaded only when laranail.db-console.api.enabled is
- * true (hasRoutesWhen). Every route is behind the db-console.api-guard
+ * true (hasRoutesWhen). Every route is behind the laranail-db-console.api-guard
  * middleware (HTTPS + auth guard + IP allow-list); authorization itself
  * happens inside the services (same Gate as the CLI/UI).
  */
 Route::prefix((string) config('laranail.db-console.api.prefix', 'api/db-console'))
-    ->middleware(['db-console.api-guard'])
+    ->middleware(['laranail-db-console.api-guard'])
     ->group(function (): void {
         Route::get('servers', [ServerController::class, 'index']);
 

@@ -112,7 +112,7 @@ describe('pass-through and message hygiene', function (): void {
 
 it('every ExceptionCode has a real translated user message', function (): void {
     foreach (ExceptionCode::cases() as $code) {
-        $key = 'db-console::exceptions.' . $code->value;
+        $key = 'laranail-db-console::exceptions.' . $code->value;
 
         expect(__($key))->toBeString()->not->toBe($key, "missing translation for {$code->value}");
     }

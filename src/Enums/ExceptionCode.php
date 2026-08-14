@@ -11,7 +11,7 @@ use Simtabi\Laranail\Enumerator\Contracts\Translatable;
 /**
  * The closed set of machine-readable error codes. Every DBConsoleException
  * carries exactly one; the code doubles as the translation key for the
- * exception's user-safe message (db-console::exceptions.<code>).
+ * exception's user-safe message (laranail-db-console::exceptions.<code>).
  */
 enum ExceptionCode: string implements Enumerator, Translatable
 {
