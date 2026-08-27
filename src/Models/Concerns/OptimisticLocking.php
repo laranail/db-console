@@ -21,9 +21,7 @@ trait OptimisticLocking
     public static function bootOptimisticLocking(): void
     {
         static::creating(function ($model): void {
-            if ($model->version === null) {
-                $model->version = 1;
-            }
+            $model->version ??= 1;
         });
     }
 
