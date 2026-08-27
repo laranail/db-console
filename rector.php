@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Rector\CodeQuality\Rector\FuncCall\SimplifyRegexPatternRector;
 use Rector\Config\RectorConfig;
 use Rector\Set\ValueObject\SetList;
 
@@ -11,7 +10,6 @@ return RectorConfig::configure()
     ->withSkipPath(__DIR__ . '/vendor')
     // The identifier allow-lists are an injection barrier; they stay as
     // explicit character classes, never shorthands that could widen.
-    ->withSkip([SimplifyRegexPatternRector::class])
     ->withPhpSets(php84: true)
     ->withSets([
         SetList::CODE_QUALITY,
