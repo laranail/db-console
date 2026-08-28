@@ -64,7 +64,7 @@
         "pestphp/pest-plugin-arch": "^4.0",
         "pestphp/pest-plugin-laravel": "^4.0",
         "phpstan/phpstan": "^2.0",
-        "rector/rector": "^2.0",
+        "rector/rector": "^2.5.8",
         "roave/security-advisories": "dev-latest",
         "spatie/laravel-permission": "^6.0"
     },
@@ -138,6 +138,16 @@
         {
             "type": "vcs",
             "url": "https://github.com/laranail/db-tools"
+        },
+        {
+            "type": "composer",
+            "url": "https://repo.packagist.org",
+            "exclude": [
+                "laranail/*"
+            ]
+        },
+        {
+            "packagist.org": false
         }
     ]
 }
