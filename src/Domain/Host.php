@@ -14,9 +14,9 @@ use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
  */
 final readonly class Host
 {
-    private const string PATTERN = '/^[A-Za-z0-9_.%\-]{1,255}$/';
-
     public const string REQUIREMENT = '1-255 characters of letters, digits, underscore, dot, hyphen, or the % wildcard';
+
+    private const string PATTERN = '/^[A-Za-z0-9_.%\-]{1,255}$/';
 
     public function __construct(public string $value)
     {

@@ -8,11 +8,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class UnknownServer extends RegistryException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::UnknownServer;
-    }
-
     public static function named(string $server): self
     {
         return new self(
@@ -20,5 +15,10 @@ final class UnknownServer extends RegistryException
             userParams: ['server' => $server],
             context: ['server' => $server],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::UnknownServer;
     }
 }

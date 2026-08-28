@@ -8,11 +8,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class NotAuthorized extends AuthorizationException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::NotAuthorized;
-    }
-
     public static function forAbility(string $ability, ?string $scope = null): self
     {
         $where = $scope ?? 'any scope';
@@ -27,7 +22,7 @@ final class NotAuthorized extends AuthorizationException
     /**
      * A token may never carry abilities its issuer does not hold.
      *
-     * @param  list<string>  $abilities
+     * @param list<string> $abilities
      */
     public static function forTokenAbilities(array $abilities): self
     {
@@ -47,5 +42,10 @@ final class NotAuthorized extends AuthorizationException
             userParams: [],
             context: [],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::NotAuthorized;
     }
 }

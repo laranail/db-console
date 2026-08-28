@@ -13,14 +13,14 @@ use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
  */
 final readonly class DbName
 {
+    public const string REQUIREMENT = '1-64 characters of letters, digits, or underscore';
+
     /**
      * Letters, digits, underscore only. No backticks, dots, whitespace, or
      * unicode homoglyphs. 64 is the MySQL identifier limit; engines with
      * lower limits re-check in their own validation.
      */
     private const string PATTERN = '/^[A-Za-z0-9_]{1,64}$/';
-
-    public const string REQUIREMENT = '1-64 characters of letters, digits, or underscore';
 
     public function __construct(public string $value)
     {

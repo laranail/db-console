@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Webhooks;
 
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 
 /**
@@ -24,7 +24,8 @@ final readonly class WebhookManager
     ) {}
 
     /**
-     * @param  list<string>  $events
+     * @param list<string> $events
+     *
      * @return array{0: WebhookSubscription, 1: string} the subscription and its one-time signing secret
      */
     public function subscribe(string $url, array $events, ?string $server = null): array
@@ -36,11 +37,11 @@ final readonly class WebhookManager
         $this->vault->store($ref, $secret);
 
         $subscription = WebhookSubscription::query()->create([
-            'url' => $url,
-            'events' => $events,
-            'secret_ref' => $ref,
-            'active' => true,
-            'server' => $server,
+            'url'           => $url,
+            'events'        => $events,
+            'secret_ref'    => $ref,
+            'active'        => true,
+            'server'        => $server,
             'failure_count' => 0,
         ]);
 

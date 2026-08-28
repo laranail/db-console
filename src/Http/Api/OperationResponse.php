@@ -17,11 +17,11 @@ final readonly class OperationResponse
     public static function make(OperationResult $result, int $status = 200): JsonResponse
     {
         $body = [
-            'operation' => $result->operation->value,
-            'outcome' => $result->outcome->value,
-            'server' => $result->server,
+            'operation'       => $result->operation->value,
+            'outcome'         => $result->outcome->value,
+            'server'          => $result->server,
             'already_existed' => $result->alreadyExisted,
-            'data' => $result->data,
+            'data'            => $result->data,
         ];
 
         $password = $result->takeGeneratedPassword();

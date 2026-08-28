@@ -7,8 +7,8 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Rotate an account password. --generate prints the new password once.

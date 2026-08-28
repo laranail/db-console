@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
+use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 
 /**
  * Probe every registered server (reachability, TLS, capabilities, admin
@@ -29,9 +29,9 @@ final class DoctorCommand extends DBConsoleCommand
         $hasError = false;
         foreach ($findings as $finding) {
             match ($finding->severity) {
-                Severity::Error => $this->components->error("{$finding->check}: {$finding->message}"),
+                Severity::Error   => $this->components->error("{$finding->check}: {$finding->message}"),
                 Severity::Warning => $this->components->warn("{$finding->check}: {$finding->message}"),
-                default => $this->components->info("{$finding->check}: {$finding->message}"),
+                default           => $this->components->info("{$finding->check}: {$finding->message}"),
             };
 
             if ($finding->remediation !== null) {

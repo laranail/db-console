@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Models\Permission;
 use Simtabi\Laranail\DBConsole\Models\Role;
+use Simtabi\Laranail\DBConsole\Models\Permission;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * Create a custom console role (builtin driver).

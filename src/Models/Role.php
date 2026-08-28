@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Override;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * A named console role (builtin driver only). Groups permissions; editable.
@@ -23,15 +23,6 @@ final class Role extends CatalogModel
     protected $guarded = [];
 
     /**
-     * @return array<string, string>
-     */
-    #[Override]
-    protected function casts(): array
-    {
-        return ['is_shipped' => 'boolean'];
-    }
-
-    /**
      * @return BelongsToMany<Permission, $this>
      */
     public function permissions(): BelongsToMany
@@ -42,5 +33,14 @@ final class Role extends CatalogModel
             'role_id',
             'permission_id',
         );
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    #[Override]
+    protected function casts(): array
+    {
+        return ['is_shipped' => 'boolean'];
     }
 }

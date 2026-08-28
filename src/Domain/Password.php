@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Domain;
 
+use Stringable;
 use JsonSerializable;
 use SensitiveParameter;
-use Simtabi\Laranail\DBConsole\Domain\Concerns\RedactsSelf;
 use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
-use Stringable;
+use Simtabi\Laranail\DBConsole\Domain\Concerns\RedactsSelf;
 
 /**
  * An account password: strength-checked on construction, self-redacting on
@@ -23,9 +23,9 @@ final class Password implements JsonSerializable, Stringable
 {
     use RedactsSelf;
 
-    private const string REDACTED = '[redacted]';
-
     public const int DEFAULT_MIN_LENGTH = 16;
+
+    private const string REDACTED = '[redacted]';
 
     private const string SYMBOLS = '!#$%&()*+,-./:;<=>?@[]^_{|}~';
 
@@ -46,14 +46,6 @@ final class Password implements JsonSerializable, Stringable
         }
 
         $this->value = $value;
-    }
-
-    /**
-     * The only accessor for the real value.
-     */
-    public function reveal(): string
-    {
-        return $this->value;
     }
 
     /**
@@ -88,6 +80,14 @@ final class Password implements JsonSerializable, Stringable
         }
 
         return new self(implode('', $characters));
+    }
+
+    /**
+     * The only accessor for the real value.
+     */
+    public function reveal(): string
+    {
+        return $this->value;
     }
 
     private function characterClassCount(#[SensitiveParameter] string $value): int

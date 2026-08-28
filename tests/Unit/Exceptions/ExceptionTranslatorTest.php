@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use Illuminate\Database\QueryException;
 use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
-use Simtabi\Laranail\DBConsole\Exceptions\AuthenticationFailure;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
-use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
+use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
 use Simtabi\Laranail\DBConsole\Exceptions\OperationFailed;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
-use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
+use Simtabi\Laranail\DBConsole\Exceptions\AuthenticationFailure;
+use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 
 function pdoExceptionWith(string $sqlState, ?int $errno, string $message = 'driver detail'): PDOException
 {
@@ -27,8 +27,8 @@ describe('driver error mapping', function (): void {
         expect($translated)->toBeInstanceOf(AuthenticationFailure::class)
             ->and($translated->userMessage())->toContain('prod-mysql');
     })->with([
-        'SQLSTATE 28000' => ['28000', null],
-        'mysql 1045' => ['HY000', 1045],
+        'SQLSTATE 28000'         => ['28000', null],
+        'mysql 1045'             => ['HY000', 1045],
         'mysql 1698 auth plugin' => ['HY000', 1698],
     ]);
 
@@ -37,18 +37,18 @@ describe('driver error mapping', function (): void {
             ->toBeInstanceOf(ServerUnreachable::class);
     })->with([
         'connection class 08006' => ['08006', null],
-        'mysql 2002 socket' => ['HY000', 2002],
-        'mysql 2006 gone away' => ['HY000', 2006],
+        'mysql 2002 socket'      => ['HY000', 2002],
+        'mysql 2006 gone away'   => ['HY000', 2006],
     ]);
 
     it('maps privilege denials to InsufficientPrivilege', function (string $sqlState, ?int $errno): void {
         expect(ExceptionTranslator::from(pdoExceptionWith($sqlState, $errno), ['operation' => 'database.create']))
             ->toBeInstanceOf(InsufficientPrivilege::class);
     })->with([
-        'mysql 1044 db denied' => ['42000', 1044],
+        'mysql 1044 db denied'    => ['42000', 1044],
         'mysql 1142 table denied' => ['42000', 1142],
-        'mysql 1227 needs SUPER' => ['42000', 1227],
-        'postgres 42501' => ['42501', null],
+        'mysql 1227 needs SUPER'  => ['42000', 1227],
+        'postgres 42501'          => ['42501', null],
     ]);
 
     it('maps everything else to OperationFailed, keeping the driver detail only in context', function (): void {

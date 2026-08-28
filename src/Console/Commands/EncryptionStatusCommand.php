@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
+use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
 
 /**
  * Report TLS status per server and the catalog encryption mode.

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\ScopeType;
+use Illuminate\Database\Eloquent\Model;
 use Simtabi\Laranail\Enumerator\Casts\AsEnum;
+use Simtabi\Laranail\DBConsole\Enums\ScopeType;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
  * The (assignee, role, scope) triple that grants console access — the row the
@@ -32,15 +32,6 @@ final class RoleAssignment extends CatalogModel
     protected $guarded = [];
 
     /**
-     * @return array<string, string>
-     */
-    #[Override]
-    protected function casts(): array
-    {
-        return ['scope_type' => AsEnum::of(ScopeType::class)];
-    }
-
-    /**
      * @return MorphTo<Model, $this>
      */
     public function assignee(): MorphTo
@@ -54,9 +45,18 @@ final class RoleAssignment extends CatalogModel
     public function scopeString(): string
     {
         return match ($this->scope_type) {
-            ScopeType::Global => 'global',
-            ScopeType::Server => 'server:' . $this->scope_ref,
+            ScopeType::Global   => 'global',
+            ScopeType::Server   => 'server:' . $this->scope_ref,
             ScopeType::Database => 'database:' . $this->scope_ref,
         };
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    #[Override]
+    protected function casts(): array
+    {
+        return ['scope_type' => AsEnum::of(ScopeType::class)];
     }
 }

@@ -5,24 +5,24 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Services;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Events\DatabasesAttached;
 use Simtabi\Laranail\DBConsole\Events\DatabasesDetached;
-use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesGranted;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesRevoked;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
  * Grants and revokes privileges. The privilege set is already guaranteed
@@ -59,8 +59,8 @@ final readonly class PrivilegeManager
 
         $this->catalog->recordGrant($server, $user, $host, $db, $set);
         $this->log->success(OperationType::GrantCreate->value, $server, [
-            'target' => $target,
-            'preset' => $set->preset->value,
+            'target'     => $target,
+            'preset'     => $set->preset->value,
             'privileges' => $set->values(),
         ]);
         $this->events->dispatch(new PrivilegesGranted($server, [
@@ -70,9 +70,9 @@ final readonly class PrivilegeManager
 
         return OperationResult::succeeded(OperationType::GrantCreate, $server, [
             'username' => $user->value,
-            'host' => $host->value,
+            'host'     => $host->value,
             'database' => $db->value,
-            'preset' => $set->preset->value,
+            'preset'   => $set->preset->value,
         ]);
     }
 
@@ -98,7 +98,7 @@ final readonly class PrivilegeManager
 
         return OperationResult::succeeded(OperationType::GrantRevoke, $server, [
             'username' => $user->value,
-            'host' => $host->value,
+            'host'     => $host->value,
             'database' => $db->value,
         ]);
     }
@@ -109,7 +109,7 @@ final readonly class PrivilegeManager
      * is reported without aborting the rest, and the result names exactly
      * which succeeded and which didn't.
      *
-     * @param  list<DbName>  $databases
+     * @param list<DbName> $databases
      */
     public function attach(string $server, Username $user, Host $host, array $databases, PrivilegeSet $set): BatchResult
     {
@@ -122,9 +122,9 @@ final readonly class PrivilegeManager
 
         $result = new BatchResult($pairings);
         $this->events->dispatch(new DatabasesAttached($server, [
-            'target' => "{$user->value}@{$host->value}",
+            'target'    => "{$user->value}@{$host->value}",
             'succeeded' => count($result->succeeded()),
-            'failed' => count($result->failed()),
+            'failed'    => count($result->failed()),
         ]));
 
         return $result;
@@ -133,7 +133,7 @@ final readonly class PrivilegeManager
     /**
      * Attach many users to one database with one preset (section 15).
      *
-     * @param  list<array{0: Username, 1: Host}>  $users
+     * @param list<array{0: Username, 1: Host}> $users
      */
     public function attachMany(string $server, array $users, DbName $database, PrivilegeSet $set): BatchResult
     {
@@ -146,9 +146,9 @@ final readonly class PrivilegeManager
 
         $result = new BatchResult($pairings);
         $this->events->dispatch(new DatabasesAttached($server, [
-            'target' => $database->value,
+            'target'    => $database->value,
             'succeeded' => count($result->succeeded()),
-            'failed' => count($result->failed()),
+            'failed'    => count($result->failed()),
         ]));
 
         return $result;
@@ -158,7 +158,7 @@ final readonly class PrivilegeManager
      * Detach one user from many databases: a batch of audited revokes. Never
      * drops the user or the databases — only the grants.
      *
-     * @param  list<DbName>  $databases
+     * @param list<DbName> $databases
      */
     public function detach(string $server, Username $user, Host $host, array $databases, PrivilegeSet $set): BatchResult
     {
@@ -171,9 +171,9 @@ final readonly class PrivilegeManager
 
         $result = new BatchResult($pairings);
         $this->events->dispatch(new DatabasesDetached($server, [
-            'target' => "{$user->value}@{$host->value}",
+            'target'    => "{$user->value}@{$host->value}",
             'succeeded' => count($result->succeeded()),
-            'failed' => count($result->failed()),
+            'failed'    => count($result->failed()),
         ]));
 
         return $result;
@@ -242,7 +242,7 @@ final readonly class PrivilegeManager
         $this->log->failure($operation->value, $server, $e);
         $this->events->dispatch(new OperationFailedEvent($server, $operation, [
             'target' => $target,
-            'code' => $e->code()->value,
+            'code'   => $e->code()->value,
         ]));
 
         throw $e;

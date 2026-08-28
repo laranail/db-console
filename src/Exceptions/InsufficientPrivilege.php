@@ -4,16 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class InsufficientPrivilege extends ConnectionException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::InsufficientPrivilege;
-    }
-
     public static function forOperation(string $operation, ?Throwable $previous = null): self
     {
         return new self(
@@ -22,5 +17,10 @@ final class InsufficientPrivilege extends ConnectionException
             context: ['operation' => $operation],
             previous: $previous,
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::InsufficientPrivilege;
     }
 }

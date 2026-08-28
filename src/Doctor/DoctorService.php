@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
-use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Probes the deployment for security and health problems (scenario A). For
@@ -78,6 +78,21 @@ final readonly class DoctorService
         );
 
         return $findings;
+    }
+
+    /**
+     * Raise a SuspiciousActivity alert for each root-like admin found (a
+     * security warning per section 10).
+     *
+     * @param list<DoctorFinding> $findings
+     */
+    public function alertOnSecurityFindings(array $findings): void
+    {
+        foreach ($findings as $finding) {
+            if ($finding->isError() && str_ends_with($finding->check, ':admin')) {
+                $this->events->dispatch(new SuspiciousActivity('global', $finding->message));
+            }
+        }
     }
 
     private function checkAdminPrivileges(string $server): DoctorFinding
@@ -149,7 +164,7 @@ final readonly class DoctorService
     }
 
     /**
-     * @param  array<string, bool|string|null>  $capabilities
+     * @param array<string, bool|string|null> $capabilities
      */
     private function summariseCapabilities(array $capabilities): string
     {
@@ -176,20 +191,5 @@ final readonly class DoctorService
             "GRANT CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE USER, RELOAD ON *.* TO 'db_console_admin'@'%';",
             "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREATE VIEW, SHOW VIEW ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;",
         ]);
-    }
-
-    /**
-     * Raise a SuspiciousActivity alert for each root-like admin found (a
-     * security warning per section 10).
-     *
-     * @param  list<DoctorFinding>  $findings
-     */
-    public function alertOnSecurityFindings(array $findings): void
-    {
-        foreach ($findings as $finding) {
-            if ($finding->isError() && str_ends_with($finding->check, ':admin')) {
-                $this->events->dispatch(new SuspiciousActivity('global', $finding->message));
-            }
-        }
     }
 }

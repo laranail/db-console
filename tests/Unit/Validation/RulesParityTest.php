@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Validator;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 use Simtabi\Laranail\DBConsole\Validation\Rules\HostRule;
+use Simtabi\Laranail\DBConsole\Validation\Rules\ScopeRule;
+use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Validation\Rules\UsernameRule;
+use Simtabi\Laranail\DBConsole\Validation\Rules\PrivilegeRule;
 use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 use Simtabi\Laranail\DBConsole\Validation\Rules\PasswordStrengthRule;
-use Simtabi\Laranail\DBConsole\Validation\Rules\PrivilegeRule;
-use Simtabi\Laranail\DBConsole\Validation\Rules\ScopeRule;
-use Simtabi\Laranail\DBConsole\Validation\Rules\UsernameRule;
 
 /**
- * @param  list<mixed>  $rules
+ * @param list<mixed> $rules
+ *
  * @return list<string> validation messages (empty when valid)
  */
 function validateField(mixed $value, array $rules): array

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
+use Throwable;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\Package\Tools\Services\Doctor\DoctorCheck;
 use Simtabi\Laranail\Package\Tools\Services\Doctor\DoctorResult;
 use Simtabi\Laranail\Package\Tools\Services\Doctor\DoctorStatus;
-use Throwable;
 
 /**
  * Adapter that surfaces the bespoke DBConsole doctor through the standard
@@ -26,30 +26,6 @@ use Throwable;
  */
 final class PackageToolsCheck implements DoctorCheck
 {
-    public function name(): string
-    {
-        return 'db-console:health';
-    }
-
-    public function description(): string
-    {
-        return 'DBConsole servers, TLS, admin scope, secret driver and catalog encryption.';
-    }
-
-    public function run(): DoctorResult
-    {
-        try {
-            $findings = app(DoctorService::class)->run();
-        } catch (Throwable $e) {
-            return DoctorResult::fail(
-                'DBConsole doctor could not run: ' . $e->getMessage(),
-                ['exception' => $e::class],
-            );
-        }
-
-        return self::aggregate($findings);
-    }
-
     /**
      * Map a bespoke severity to a package-tools doctor status: Info/Notice →
      * pass, Warning → warn, Error/Critical → fail.
@@ -57,8 +33,8 @@ final class PackageToolsCheck implements DoctorCheck
     public static function mapStatus(Severity $severity): DoctorStatus
     {
         return match ($severity) {
-            Severity::Info, Severity::Notice => DoctorStatus::Pass,
-            Severity::Warning => DoctorStatus::Warn,
+            Severity::Info, Severity::Notice    => DoctorStatus::Pass,
+            Severity::Warning                   => DoctorStatus::Warn,
             Severity::Error, Severity::Critical => DoctorStatus::Fail,
         };
     }
@@ -68,7 +44,7 @@ final class PackageToolsCheck implements DoctorCheck
      * status (fail beats warn beats pass) and listing the problem findings in
      * the result detail.
      *
-     * @param  list<DoctorFinding>  $findings
+     * @param list<DoctorFinding> $findings
      */
     public static function aggregate(array $findings): DoctorResult
     {
@@ -107,11 +83,35 @@ final class PackageToolsCheck implements DoctorCheck
         };
     }
 
+    public function name(): string
+    {
+        return 'db-console:health';
+    }
+
+    public function description(): string
+    {
+        return 'DBConsole servers, TLS, admin scope, secret driver and catalog encryption.';
+    }
+
+    public function run(): DoctorResult
+    {
+        try {
+            $findings = app(DoctorService::class)->run();
+        } catch (Throwable $e) {
+            return DoctorResult::fail(
+                'DBConsole doctor could not run: ' . $e->getMessage(),
+                ['exception' => $e::class],
+            );
+        }
+
+        return self::aggregate($findings);
+    }
+
     private static function rank(DoctorStatus $status): int
     {
         return match ($status) {
-            DoctorStatus::Fail => 2,
-            DoctorStatus::Warn => 1,
+            DoctorStatus::Fail                     => 2,
+            DoctorStatus::Warn                     => 1,
             DoctorStatus::Pass, DoctorStatus::Skip => 0,
         };
     }

@@ -11,11 +11,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
  */
 final class WeakPassword extends DomainException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::PasswordWeak;
-    }
-
     public static function because(string $reason, int $minLength): self
     {
         return new self(
@@ -23,5 +18,10 @@ final class WeakPassword extends DomainException
             userParams: ['reason' => $reason, 'min' => $minLength],
             context: ['reason' => $reason, 'min_length' => $minLength],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::PasswordWeak;
     }
 }

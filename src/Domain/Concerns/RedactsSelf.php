@@ -25,11 +25,6 @@ trait RedactsSelf
         return ['value' => self::REDACTED];
     }
 
-    public function jsonSerialize(): string
-    {
-        return self::REDACTED;
-    }
-
     /**
      * Secrets deliberately do not survive serialization (queues, sessions,
      * caches). The redacted placeholder is stored instead of the value.
@@ -42,10 +37,15 @@ trait RedactsSelf
     }
 
     /**
-     * @param  array<string, string>  $data
+     * @param array<string, string> $data
      */
     public function __unserialize(array $data): void
     {
         $this->value = self::REDACTED;
+    }
+
+    public function jsonSerialize(): string
+    {
+        return self::REDACTED;
     }
 }

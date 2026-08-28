@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 
 const STRONG_SAMPLE = 'Xk9$mQ2vLpW7#nR4t!';
 

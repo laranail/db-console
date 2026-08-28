@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Domain\Privileges;
 
 use InvalidArgumentException;
-use Simtabi\Laranail\DBConsole\Enums\ForbiddenPrivilege as ForbiddenPrivilegeEnum;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
-use Simtabi\Laranail\DBConsole\Exceptions\ForbiddenPrivilege;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
+use Simtabi\Laranail\DBConsole\Exceptions\ForbiddenPrivilege;
+use Simtabi\Laranail\DBConsole\Enums\ForbiddenPrivilege as ForbiddenPrivilegeEnum;
 
 /**
  * A validated, deduplicated set of privileges with its preset provenance.
@@ -24,7 +24,7 @@ final readonly class PrivilegeSet
     private array $privileges;
 
     /**
-     * @param  list<Privilege>  $privileges
+     * @param list<Privilege> $privileges
      */
     private function __construct(
         public PrivilegePreset $preset,
@@ -58,7 +58,7 @@ final readonly class PrivilegeSet
      * before unknown ones, so a GRANT OPTION attempt is always named as
      * forbidden rather than merely unknown.
      *
-     * @param  list<Privilege|string>  $privileges
+     * @param list<Privilege|string> $privileges
      */
     public static function custom(array $privileges): self
     {

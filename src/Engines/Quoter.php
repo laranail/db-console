@@ -26,8 +26,8 @@ final readonly class Quoter
     {
         return match ($engine) {
             EngineType::Mysql, EngineType::Mariadb => new self('`', '`', '`', '``'),
-            EngineType::Pgsql, EngineType::Sqlite => new self('"', '"', '"', '""'),
-            EngineType::Sqlsrv => new self('[', ']', ']', ']]'),
+            EngineType::Pgsql, EngineType::Sqlite  => new self('"', '"', '"', '""'),
+            EngineType::Sqlsrv                     => new self('[', ']', ']', ']]'),
         };
     }
 

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Override;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A webhook subscriber: a target URL, the event types it listens to, a
@@ -28,19 +28,6 @@ final class WebhookSubscription extends CatalogModel
     protected $guarded = [];
 
     /**
-     * @return array<string, string>
-     */
-    #[Override]
-    protected function casts(): array
-    {
-        return [
-            'events' => 'array',
-            'active' => 'boolean',
-            'failure_count' => 'integer',
-        ];
-    }
-
-    /**
      * @return HasMany<WebhookDelivery, $this>
      */
     public function deliveries(): HasMany
@@ -56,5 +43,18 @@ final class WebhookSubscription extends CatalogModel
     public function coversServer(string $server): bool
     {
         return in_array($this->server, [null, '', $server], true);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    #[Override]
+    protected function casts(): array
+    {
+        return [
+            'events'        => 'array',
+            'active'        => 'boolean',
+            'failure_count' => 'integer',
+        ];
     }
 }

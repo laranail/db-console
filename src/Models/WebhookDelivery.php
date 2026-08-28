@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 use Override;
+use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One delivery attempt: the subscription, the event, a payload hash (not the
@@ -29,6 +29,14 @@ final class WebhookDelivery extends CatalogModel
     protected $guarded = [];
 
     /**
+     * @return BelongsTo<WebhookSubscription, $this>
+     */
+    public function subscription(): BelongsTo
+    {
+        return $this->belongsTo(WebhookSubscription::class, 'subscription_id');
+    }
+
+    /**
      * @return array<string, string>
      */
     #[Override]
@@ -36,17 +44,9 @@ final class WebhookDelivery extends CatalogModel
     {
         return [
             'response_status' => 'integer',
-            'attempt' => 'integer',
-            'delivered_at' => 'datetime',
-            'failed_at' => 'datetime',
+            'attempt'         => 'integer',
+            'delivered_at'    => 'datetime',
+            'failed_at'       => 'datetime',
         ];
-    }
-
-    /**
-     * @return BelongsTo<WebhookSubscription, $this>
-     */
-    public function subscription(): BelongsTo
-    {
-        return $this->belongsTo(WebhookSubscription::class, 'subscription_id');
     }
 }

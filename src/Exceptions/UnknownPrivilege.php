@@ -8,11 +8,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class UnknownPrivilege extends DomainException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::PrivilegeUnknown;
-    }
-
     public static function forToken(string $token): self
     {
         return new self(
@@ -20,5 +15,10 @@ final class UnknownPrivilege extends DomainException
             userParams: ['privilege' => $token],
             context: ['privilege' => $token],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::PrivilegeUnknown;
     }
 }

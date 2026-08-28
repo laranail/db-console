@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
+use Aws\Result;
+use Aws\MockHandler;
 use Aws\CommandInterface;
 use Aws\Kms\KmsClient as AwsKms;
-use Aws\MockHandler;
-use Aws\Result;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\Drivers\KmsVault;
 use Simtabi\Laranail\DBConsole\Secrets\Kms\AwsKmsClient;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\ArraySecretStore;
 
 /*
@@ -37,13 +37,14 @@ it('drives the full envelope round-trip through the real aws-sdk KMS client', fu
     });
     $mock->append(
         // decrypt: return the remembered plaintext data key
-        fn (CommandInterface $cmd): Result => new Result(['Plaintext' => $holder->dataKey]));
+        fn (CommandInterface $cmd): Result => new Result(['Plaintext' => $holder->dataKey]),
+    );
 
     $realSdk = new AwsKms([
-        'region' => 'us-east-1',
-        'version' => 'latest',
+        'region'      => 'us-east-1',
+        'version'     => 'latest',
         'credentials' => ['key' => 'test', 'secret' => 'test'],
-        'handler' => $mock,
+        'handler'     => $mock,
     ]);
 
     $adapter = new AwsKmsClient(['key_id' => 'alias/db-console', 'region' => 'us-east-1']);

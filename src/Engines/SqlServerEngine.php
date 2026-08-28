@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
-use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * SQL Server splits accounts into a server-level LOGIN and a per-database
@@ -26,14 +26,14 @@ final class SqlServerEngine implements Engine
 {
     /** @var array<string, string> */
     private const array PRIVILEGE_MAP = [
-        'select' => 'SELECT',
-        'insert' => 'INSERT',
-        'update' => 'UPDATE',
-        'delete' => 'DELETE',
+        'select'     => 'SELECT',
+        'insert'     => 'INSERT',
+        'update'     => 'UPDATE',
+        'delete'     => 'DELETE',
         'references' => 'REFERENCES',
-        'execute' => 'EXECUTE',
-        'create' => 'CREATE TABLE',
-        'alter' => 'ALTER',
+        'execute'    => 'EXECUTE',
+        'create'     => 'CREATE TABLE',
+        'alter'      => 'ALTER',
     ];
 
     public function type(): EngineType

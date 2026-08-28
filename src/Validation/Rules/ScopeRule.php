@@ -21,13 +21,6 @@ final class ScopeRule implements ValidationRule
 {
     private const string DATABASE_PATTERN = '/^[A-Za-z0-9_]{0,63}\*?$/';
 
-    public function validate(string $attribute, mixed $value, Closure $fail): void
-    {
-        if (! is_string($value) || ! self::isValid($value)) {
-            $fail((string) __('laranail-db-console::validation.scope', ['attribute' => $attribute]));
-        }
-    }
-
     public static function isValid(string $value): bool
     {
         if ($value === 'global') {
@@ -56,5 +49,12 @@ final class ScopeRule implements ValidationRule
         }
 
         return false;
+    }
+
+    public function validate(string $attribute, mixed $value, Closure $fail): void
+    {
+        if (! is_string($value) || ! self::isValid($value)) {
+            $fail((string) __('laranail-db-console::validation.scope', ['attribute' => $attribute]));
+        }
     }
 }

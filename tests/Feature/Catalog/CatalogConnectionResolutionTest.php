@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 use Simtabi\Laranail\DBConsole\Models\DbServer;
+use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 
 /*
  * The catalog is host-agnostic: with no connection configured it rides the

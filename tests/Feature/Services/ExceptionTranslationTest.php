@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
-use Simtabi\Laranail\DBConsole\Exceptions\ConnectionException;
-use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
+use Simtabi\Laranail\DBConsole\Exceptions\ConnectionException;
 
 /*
  * Exception translation that needs no live server: a dead port proves every
@@ -22,13 +22,13 @@ beforeEach(function (): void {
 
 it('translates an unreachable host into ServerUnreachable', function (): void {
     config()->set('database.connections.db_console_admin', [
-        'driver' => 'mysql',
-        'host' => '127.0.0.1',
-        'port' => 59999,   // nothing listening
+        'driver'   => 'mysql',
+        'host'     => '127.0.0.1',
+        'port'     => 59999,   // nothing listening
         'database' => 'x',
         'username' => 'u',
         'password' => 'p',
-        'prefix' => '',
+        'prefix'   => '',
     ]);
     config()->set('laranail.db-console.servers.dead', [
         'engine' => 'mysql', 'connection' => 'db_console_admin', 'tls' => ['enabled' => false],
@@ -40,7 +40,7 @@ it('translates an unreachable host into ServerUnreachable', function (): void {
 
 it('every connection failure is a translated DBConsole ConnectionException, never a raw PDOException', function (): void {
     config()->set('database.connections.db_console_admin', [
-        'driver' => 'mysql', 'host' => '127.0.0.1', 'port' => 59998,
+        'driver'   => 'mysql', 'host' => '127.0.0.1', 'port' => 59998,
         'database' => 'x', 'username' => 'u', 'password' => 'p', 'prefix' => '',
     ]);
     config()->set('laranail.db-console.servers.dead2', [

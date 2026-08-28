@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 /**
  * A compensating action itself failed — the server may be in a partial
@@ -13,13 +13,8 @@ use Throwable;
  */
 final class RollbackFailed extends ExecutionException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::RollbackFailed;
-    }
-
     /**
-     * @param  array<string, mixed>  $context
+     * @param array<string, mixed> $context
      */
     public static function whileCompensating(string $step, array $context = [], ?Throwable $previous = null): self
     {
@@ -29,5 +24,10 @@ final class RollbackFailed extends ExecutionException
             context: [...$context, 'step' => $step],
             previous: $previous,
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::RollbackFailed;
     }
 }

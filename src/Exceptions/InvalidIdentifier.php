@@ -8,15 +8,10 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class InvalidIdentifier extends DomainException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::IdentifierInvalid;
-    }
-
     /**
-     * @param  string  $kind  what was being validated ("database name", "username", "host")
-     * @param  string  $value  the rejected input
-     * @param  string  $requirement  the allow-list requirement, in plain words
+     * @param string $kind what was being validated ("database name", "username", "host")
+     * @param string $value the rejected input
+     * @param string $requirement the allow-list requirement, in plain words
      */
     public static function forValue(string $kind, string $value, string $requirement): self
     {
@@ -25,5 +20,10 @@ final class InvalidIdentifier extends DomainException
             userParams: ['kind' => $kind, 'value' => $value, 'requirement' => $requirement],
             context: ['kind' => $kind, 'value' => $value],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::IdentifierInvalid;
     }
 }

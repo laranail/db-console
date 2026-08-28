@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Encryption;
 
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Enums\AtRestStatus;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Enums\AtRestStatus;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 
 /**
  * Reads and reports at-rest encryption status per database (section 8, scope
@@ -33,7 +33,7 @@ final readonly class AtRestStatusReader
         try {
             return match ($engine->type()) {
                 EngineType::Mysql, EngineType::Mariadb => $this->readMysql($connection, $database),
-                EngineType::Sqlsrv => $this->readSqlServer($connection, $database),
+                EngineType::Sqlsrv                     => $this->readSqlServer($connection, $database),
                 // Postgres has no built-in TDE; SQLite at-rest is the catalog's
                 // SQLCipher story, not a managed-server readout.
                 EngineType::Pgsql, EngineType::Sqlite => AtRestStatus::Unsupported,

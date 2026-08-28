@@ -4,18 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class OperationFailed extends ExecutionException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::OperationFailed;
-    }
-
     /**
-     * @param  array<string, mixed>  $context  sanitized driver detail for the log channel
+     * @param array<string, mixed> $context sanitized driver detail for the log channel
      */
     public static function atServer(array $context = [], ?Throwable $previous = null): self
     {
@@ -25,5 +20,10 @@ final class OperationFailed extends ExecutionException
             context: $context,
             previous: $previous,
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::OperationFailed;
     }
 }

@@ -7,11 +7,11 @@ namespace Simtabi\Laranail\DBConsole\Tests;
 use Illuminate\Foundation\Application;
 use Laravel\Sanctum\SanctumServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
+use Spatie\Permission\PermissionServiceProvider;
 use Simtabi\Laranail\Console\Providers\ConsoleServiceProvider;
 use Simtabi\Laranail\DBConsole\Providers\DBConsoleServiceProvider;
 use Simtabi\Laranail\Enumerator\Providers\EnumeratorServiceProvider;
 use Simtabi\Laranail\Package\Tools\Providers\PackageToolsServiceProvider;
-use Spatie\Permission\PermissionServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
@@ -50,9 +50,9 @@ abstract class TestCase extends Orchestra
 
         $config->set('database.default', 'testing');
         $config->set('database.connections.testing', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
+            'driver'                  => 'sqlite',
+            'database'                => ':memory:',
+            'prefix'                  => '',
             'foreign_key_constraints' => true,
         ]);
 
@@ -64,9 +64,9 @@ abstract class TestCase extends Orchestra
         // host-agnostic default is covered by CatalogConnectionResolutionTest.
         $config->set('laranail.db-console.catalog.connection', 'db_console_catalog');
         $config->set('database.connections.db_console_catalog', [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
+            'driver'                  => 'sqlite',
+            'database'                => ':memory:',
+            'prefix'                  => '',
             'foreign_key_constraints' => true,
         ]);
     }

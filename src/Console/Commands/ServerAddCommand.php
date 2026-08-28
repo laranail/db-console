@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Models\DbServer;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 
 /**
  * Register a catalog-backed server (added at runtime, editable).
@@ -30,11 +30,11 @@ final class ServerAddCommand extends DBConsoleCommand
         }
 
         DbServer::query()->updateOrCreate(['name' => $name], [
-            'engine' => $engine,
+            'engine'         => $engine,
             'connection_ref' => $this->opt('connection'),
-            'host' => is_string($this->option('host')) ? $this->option('host') : null,
-            'port' => is_numeric($this->option('port')) ? (int) $this->option('port') : null,
-            'is_managed' => true,
+            'host'           => is_string($this->option('host')) ? $this->option('host') : null,
+            'port'           => is_numeric($this->option('port')) ? (int) $this->option('port') : null,
+            'is_managed'     => true,
         ]);
 
         $this->components->info("Server '{$name}' registered ({$engine->value}). Run doctor to health-check it.");

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
-use Illuminate\Database\Eloquent\Model;
 use Override;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Simtabi\Laranail\DbTools\Observers\AuditObserver;
 
 /**
@@ -24,6 +24,16 @@ abstract class CatalogModel extends Model
     protected string $baseTable = '';
 
     #[Override]
+    public static function booted(): void
+    {
+        $observer = AuditObserver::class;
+        if (class_exists($observer)) {
+            /** @var class-string $observer */
+            static::observe($observer);
+        }
+    }
+
+    #[Override]
     public function getConnectionName(): ?string
     {
         return (string) config('laranail.db-console.catalog.connection', 'db_console_catalog');
@@ -33,16 +43,6 @@ abstract class CatalogModel extends Model
     public function getTable(): string
     {
         return $this->prefix() . $this->baseTable;
-    }
-
-    #[Override]
-    public static function booted(): void
-    {
-        $observer = AuditObserver::class;
-        if (class_exists($observer)) {
-            /** @var class-string $observer */
-            static::observe($observer);
-        }
     }
 
     protected function prefix(): string

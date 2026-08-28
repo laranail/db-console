@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Support\Carbon;
 use Override;
-use Simtabi\Laranail\DBConsole\Database\Factories\AuditLogFactory;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Model;
 use Simtabi\Laranail\Enumerator\Casts\AsEnum;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
+use Simtabi\Laranail\DBConsole\Database\Factories\AuditLogFactory;
 
 /**
  * The append-only audit trail: who did what, to what, on which server, with
@@ -40,9 +40,9 @@ final class AuditLog extends CatalogModel
     /** @use HasFactory<AuditLogFactory> */
     use HasFactory;
 
-    protected string $baseTable = 'audit_log';
-
     public const ?string UPDATED_AT = null;
+
+    protected string $baseTable = 'audit_log';
 
     protected $guarded = [];
 
@@ -60,19 +60,6 @@ final class AuditLog extends CatalogModel
     }
 
     /**
-     * @return array<string, string>
-     */
-    #[Override]
-    protected function casts(): array
-    {
-        return [
-            'action' => AsEnum::of(OperationType::class),
-            'engine' => AsEnum::of(EngineType::class),
-            'outcome' => AsEnum::of(OperationOutcome::class),
-        ];
-    }
-
-    /**
      * @return MorphTo<Model, $this>
      */
     public function actor(): MorphTo
@@ -83,5 +70,18 @@ final class AuditLog extends CatalogModel
     protected static function newFactory(): AuditLogFactory
     {
         return AuditLogFactory::new();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    #[Override]
+    protected function casts(): array
+    {
+        return [
+            'action'  => AsEnum::of(OperationType::class),
+            'engine'  => AsEnum::of(EngineType::class),
+            'outcome' => AsEnum::of(OperationOutcome::class),
+        ];
     }
 }

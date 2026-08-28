@@ -8,11 +8,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 final class UnsupportedOperation extends EngineException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::UnsupportedOperation;
-    }
-
     public static function forEngine(string $engine, string $operation): self
     {
         return new self(
@@ -20,5 +15,10 @@ final class UnsupportedOperation extends EngineException
             userParams: ['engine' => $engine, 'operation' => $operation],
             context: ['engine' => $engine, 'operation' => $operation],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::UnsupportedOperation;
     }
 }

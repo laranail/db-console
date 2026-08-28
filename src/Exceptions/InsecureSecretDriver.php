@@ -13,11 +13,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
  */
 final class InsecureSecretDriver extends SecretsException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::InsecureSecretDriver;
-    }
-
     public static function appKeyInProduction(): self
     {
         return new self(
@@ -25,5 +20,10 @@ final class InsecureSecretDriver extends SecretsException
             userParams: [],
             context: ['driver' => 'app_key', 'environment' => 'production'],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::InsecureSecretDriver;
     }
 }

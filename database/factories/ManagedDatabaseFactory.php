@@ -22,11 +22,11 @@ final class ManagedDatabaseFactory extends Factory
         // Names pass the DbName allow-list (letters, digits, underscore).
         return [
             'server_name' => 'srv_' . $this->faker->lexify('????'),
-            'name' => 'db_' . $this->faker->unique()->lexify('??????'),
-            'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'is_managed' => true,
-            'version' => 1,
+            'name'        => 'db_' . $this->faker->unique()->lexify('??????'),
+            'charset'     => 'utf8mb4',
+            'collation'   => 'utf8mb4_unicode_ci',
+            'is_managed'  => true,
+            'version'     => 1,
         ];
     }
 

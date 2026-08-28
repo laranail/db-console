@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use Illuminate\Log\Events\MessageLogged;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Notification;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
-use Simtabi\Laranail\DBConsole\Events\AccountPasswordRotated;
+use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
-use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
+use Simtabi\Laranail\DBConsole\Events\AccountPasswordRotated;
 use Simtabi\Laranail\DBConsole\Notifications\CredentialRotatedNotification;
 use Simtabi\Laranail\DBConsole\Notifications\DestructiveActionNotification;
 

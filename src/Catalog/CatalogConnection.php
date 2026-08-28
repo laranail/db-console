@@ -44,9 +44,9 @@ final readonly class CatalogConnection
         // in the table NAMES (migrations + models) via catalog.prefix, so it
         // lives in exactly one place and never doubles up.
         $definition = [
-            'driver' => 'sqlite',
-            'database' => $database,
-            'prefix' => '',
+            'driver'                  => 'sqlite',
+            'database'                => $database,
+            'prefix'                  => '',
             'foreign_key_constraints' => true,
         ];
 

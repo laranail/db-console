@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
-use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * The MySQL account-management dialect. MariaDB shares it (MariaDbEngine
@@ -34,24 +34,24 @@ class MySqlEngine implements Engine, HostScopingEngine
      * @var array<string, string>
      */
     private const array PRIVILEGE_MAP = [
-        'select' => 'SELECT',
-        'insert' => 'INSERT',
-        'update' => 'UPDATE',
-        'delete' => 'DELETE',
-        'create' => 'CREATE',
-        'alter' => 'ALTER',
-        'drop' => 'DROP',
-        'index' => 'INDEX',
-        'references' => 'REFERENCES',
+        'select'                  => 'SELECT',
+        'insert'                  => 'INSERT',
+        'update'                  => 'UPDATE',
+        'delete'                  => 'DELETE',
+        'create'                  => 'CREATE',
+        'alter'                   => 'ALTER',
+        'drop'                    => 'DROP',
+        'index'                   => 'INDEX',
+        'references'              => 'REFERENCES',
         'create_temporary_tables' => 'CREATE TEMPORARY TABLES',
-        'lock_tables' => 'LOCK TABLES',
-        'execute' => 'EXECUTE',
-        'create_view' => 'CREATE VIEW',
-        'show_view' => 'SHOW VIEW',
-        'create_routine' => 'CREATE ROUTINE',
-        'alter_routine' => 'ALTER ROUTINE',
-        'event' => 'EVENT',
-        'trigger' => 'TRIGGER',
+        'lock_tables'             => 'LOCK TABLES',
+        'execute'                 => 'EXECUTE',
+        'create_view'             => 'CREATE VIEW',
+        'show_view'               => 'SHOW VIEW',
+        'create_routine'          => 'CREATE ROUTINE',
+        'alter_routine'           => 'ALTER ROUTINE',
+        'event'                   => 'EVENT',
+        'trigger'                 => 'TRIGGER',
     ];
 
     public function type(): EngineType

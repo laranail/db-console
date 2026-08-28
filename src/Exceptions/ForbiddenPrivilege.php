@@ -13,11 +13,6 @@ use Simtabi\Laranail\DBConsole\Enums\ForbiddenPrivilege as ForbiddenPrivilegeEnu
  */
 final class ForbiddenPrivilege extends DomainException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::PrivilegeForbidden;
-    }
-
     public static function forPrivilege(ForbiddenPrivilegeEnum $privilege): self
     {
         return new self(
@@ -25,5 +20,10 @@ final class ForbiddenPrivilege extends DomainException
             userParams: ['privilege' => $privilege->label()],
             context: ['privilege' => $privilege->value],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::PrivilegeForbidden;
     }
 }

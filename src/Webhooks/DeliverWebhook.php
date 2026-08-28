@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Webhooks;
 
+use Throwable;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Queue\InteractsWithQueue;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Models\WebhookDelivery;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
 use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
-use Throwable;
 
 /**
  * Delivers one pre-signed, secret-free payload to one subscription, with
@@ -54,7 +54,7 @@ final class DeliverWebhook implements ShouldQueue
         try {
             $response = $http->timeout($timeout)
                 ->withHeaders([
-                    'X-DBConsole-Event' => $this->eventName,
+                    'X-DBConsole-Event'     => $this->eventName,
                     'X-DBConsole-Signature' => $this->signature,
                 ])
                 ->withBody($this->body, 'application/json')
@@ -84,8 +84,8 @@ final class DeliverWebhook implements ShouldQueue
             $subscription->forceFill(['active' => false])->save();
             $log->write(Severity::Warning, 'webhook.auto_disabled', [
                 'subscription' => $subscription->id,
-                'url' => $subscription->url,
-                'reason' => $reason,
+                'url'          => $subscription->url,
+                'reason'       => $reason,
             ]);
             event(new SuspiciousActivity('global', "webhook {$subscription->id} auto-disabled after {$this->attempt} failures"));
 
@@ -102,12 +102,12 @@ final class DeliverWebhook implements ShouldQueue
     {
         WebhookDelivery::query()->create([
             'subscription_id' => $subscription->id,
-            'event' => $this->eventName,
-            'payload_hash' => $payloadHash,
+            'event'           => $this->eventName,
+            'payload_hash'    => $payloadHash,
             'response_status' => $status,
-            'attempt' => $this->attempt,
-            'delivered_at' => $success ? now() : null,
-            'failed_at' => $success ? null : now(),
+            'attempt'         => $this->attempt,
+            'delivered_at'    => $success ? now() : null,
+            'failed_at'       => $success ? null : now(),
         ]);
     }
 }

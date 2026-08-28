@@ -12,11 +12,6 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
  */
 final class StaleModel extends ExecutionException
 {
-    public function code(): ExceptionCode
-    {
-        return ExceptionCode::OperationFailed;
-    }
-
     public static function forRecord(string $table, string $key): self
     {
         return new self(
@@ -24,5 +19,10 @@ final class StaleModel extends ExecutionException
             userParams: ['table' => $table],
             context: ['table' => $table, 'key' => $key],
         );
+    }
+
+    public function code(): ExceptionCode
+    {
+        return ExceptionCode::OperationFailed;
     }
 }

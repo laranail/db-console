@@ -4,18 +4,18 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Access\Drivers;
 
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
-use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
-use Simtabi\Laranail\DBConsole\Access\ResolvedAssignment;
-use Simtabi\Laranail\DBConsole\Access\Scope;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
-use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
-use Simtabi\Laranail\DBConsole\Enums\ScopeType;
-use Simtabi\Laranail\DBConsole\Models\Permission;
 use Simtabi\Laranail\DBConsole\Models\Role;
+use Simtabi\Laranail\DBConsole\Access\Scope;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Simtabi\Laranail\DBConsole\Enums\ScopeType;
+use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use Simtabi\Laranail\DBConsole\Models\Permission;
 use Simtabi\Laranail\DBConsole\Models\RoleAssignment;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Access\ResolvedAssignment;
+use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 
 /**
  * RBAC backed by DBConsole's own tables (roles, permissions, pivot,
@@ -49,10 +49,10 @@ final class BuiltinRbacDriver implements RbacDriver
 
         RoleAssignment::query()->updateOrCreate([
             'assignee_type' => $assignee::class,
-            'assignee_id' => (string) $assignee->getAuthIdentifier(),
-            'role' => $role,
-            'scope_type' => $parsed->type->value,
-            'scope_ref' => $this->scopeRef($parsed),
+            'assignee_id'   => (string) $assignee->getAuthIdentifier(),
+            'role'          => $role,
+            'scope_type'    => $parsed->type->value,
+            'scope_ref'     => $this->scopeRef($parsed),
         ]);
     }
 
@@ -141,8 +141,8 @@ final class BuiltinRbacDriver implements RbacDriver
     private function scopeRef(Scope $scope): ?string
     {
         return match ($scope->type) {
-            ScopeType::Global => null,
-            ScopeType::Server => $scope->server,
+            ScopeType::Global   => null,
+            ScopeType::Server   => $scope->server,
             ScopeType::Database => $scope->server . '/' . $scope->databasePattern,
         };
     }

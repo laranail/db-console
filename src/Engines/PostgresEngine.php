@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
-use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * PostgreSQL uses roles, not user@host accounts: a login is a ROLE WITH
@@ -27,16 +27,16 @@ final class PostgresEngine implements Engine
 {
     /** @var array<string, string> */
     private const array PRIVILEGE_MAP = [
-        'select' => 'SELECT',
-        'insert' => 'INSERT',
-        'update' => 'UPDATE',
-        'delete' => 'DELETE',
+        'select'     => 'SELECT',
+        'insert'     => 'INSERT',
+        'update'     => 'UPDATE',
+        'delete'     => 'DELETE',
         'references' => 'REFERENCES',
-        'trigger' => 'TRIGGER',
+        'trigger'    => 'TRIGGER',
         // Postgres grants CREATE/TEMP at the database level and the rest at
         // table/schema level; the ones without a direct table-grant analogue
         // map to the closest standard privilege.
-        'create' => 'CREATE',
+        'create'  => 'CREATE',
         'execute' => 'EXECUTE',
     ];
 

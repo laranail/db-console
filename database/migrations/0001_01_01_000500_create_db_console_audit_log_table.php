@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Database\Schema\Builder;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Schema\Builder;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Migrations\Migration;
 
 /**
  * Append-only audit trail. created_at only (no updated_at); A6 attaches an

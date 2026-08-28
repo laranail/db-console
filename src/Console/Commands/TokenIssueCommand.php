@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Api\TokenManager;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 

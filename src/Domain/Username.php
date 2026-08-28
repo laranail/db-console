@@ -12,9 +12,9 @@ use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
  */
 final readonly class Username
 {
-    private const string PATTERN = '/^[A-Za-z0-9_]{1,32}$/';
-
     public const string REQUIREMENT = '1-32 characters of letters, digits, or underscore';
+
+    private const string PATTERN = '/^[A-Za-z0-9_]{1,32}$/';
 
     public function __construct(public string $value)
     {

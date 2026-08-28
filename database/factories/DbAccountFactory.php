@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Database\Factories;
 
-use Illuminate\Database\Eloquent\Factories\Factory;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends Factory<DbAccount>
@@ -23,10 +23,10 @@ final class DbAccountFactory extends Factory
     {
         return [
             'server_name' => 'srv_' . $this->faker->lexify('????'),
-            'username' => 'usr_' . $this->faker->unique()->lexify('?????'),
-            'host' => $this->faker->randomElement(['localhost', '%', '10.0.%']),
-            'is_managed' => true,
-            'version' => 1,
+            'username'    => 'usr_' . $this->faker->unique()->lexify('?????'),
+            'host'        => $this->faker->randomElement(['localhost', '%', '10.0.%']),
+            'is_managed'  => true,
+            'version'     => 1,
         ];
     }
 }
