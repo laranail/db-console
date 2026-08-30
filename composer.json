@@ -100,7 +100,7 @@
             "@phpstan",
             "@rector"
         ],
-        "audit": "composer audit",
+        "composer-audit": "@composer audit",
         "format": "@pint-fix"
     },
     "extra": {
