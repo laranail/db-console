@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Drivers;
 
-use Throwable;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Throwable;
 
 /**
  * Envelope encryption. A fresh 256-bit data key encrypts the secret locally
@@ -51,12 +51,12 @@ final readonly class KmsVault implements SecretVault
         }
 
         $envelope = [
-            'v'           => 1,
-            'provider'    => $this->kms->provider(),
+            'v' => 1,
+            'provider' => $this->kms->provider(),
             'wrapped_key' => base64_encode($this->kms->wrap($dataKey)),
-            'iv'          => base64_encode($iv),
-            'tag'         => base64_encode($tag),
-            'ciphertext'  => base64_encode($ciphertext),
+            'iv' => base64_encode($iv),
+            'tag' => base64_encode($tag),
+            'ciphertext' => base64_encode($ciphertext),
         ];
 
         $this->store->put($ref, (string) json_encode($envelope));

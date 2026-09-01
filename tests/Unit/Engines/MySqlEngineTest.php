@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Engines\MySqlEngine;
-use Simtabi\Laranail\DBConsole\Engines\MariaDbEngine;
-use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Engines\MariaDbEngine;
+use Simtabi\Laranail\DBConsole\Engines\MySqlEngine;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 
 const PW = 'Xk9$mQ2vLpW7#nR4t!';
 
@@ -77,7 +77,7 @@ describe('exact account statements', function (): void {
     it('creates an account at a host', function (): void {
         $statements = engine()->createAccount(new Username('shop_user'), new Host('10.0.%'), new Password(PW))->all();
 
-        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'10.0.%' IDENTIFIED BY '" . PW . "'");
+        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'10.0.%' IDENTIFIED BY '".PW."'");
     });
 
     it('redacts the password in the display form (never the real value)', function (): void {
@@ -95,7 +95,7 @@ describe('exact account statements', function (): void {
     it('sets a password, redacting the display form', function (): void {
         $statements = engine()->setPassword(new Username('shop_user'), new Host('%'), new Password(PW))->all();
 
-        expect($statements[0]->sql)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '" . PW . "'")
+        expect($statements[0]->sql)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '".PW."'")
             ->and($statements[0]->redacted)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '[redacted]'");
     });
 
@@ -129,7 +129,7 @@ describe('exact grant statements with preset translation', function (): void {
 
         expect($sql[0])->toBe(
             'GRANT SELECT, SHOW VIEW, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, '
-            . "CREATE TEMPORARY TABLES, EXECUTE ON `shop_prod`.* TO 'app'@'%'",
+            ."CREATE TEMPORARY TABLES, EXECUTE ON `shop_prod`.* TO 'app'@'%'",
         );
     });
 

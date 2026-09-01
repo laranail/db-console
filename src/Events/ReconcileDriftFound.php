@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 
 /**
  * Reconciliation found drift between the catalog and the live server

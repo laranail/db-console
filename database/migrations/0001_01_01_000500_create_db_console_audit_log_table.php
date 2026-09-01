@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Builder;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Builder;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Append-only audit trail. created_at only (no updated_at); A6 attaches an
@@ -48,6 +48,6 @@ return new class extends Migration
 
     private function table(): string
     {
-        return ((string) config('laranail.db-console.catalog.prefix', 'db_console_')) . 'audit_log';
+        return ((string) config('laranail.db-console.catalog.prefix', 'db_console_')).'audit_log';
     }
 };

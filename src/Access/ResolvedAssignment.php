@@ -17,7 +17,7 @@ use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 final readonly class ResolvedAssignment
 {
     /**
-     * @param list<ConsolePermission> $permissions
+     * @param  list<ConsolePermission>  $permissions
      */
     public function __construct(
         public string $role,

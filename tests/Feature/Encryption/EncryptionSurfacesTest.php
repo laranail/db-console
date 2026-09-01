@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
-use Simtabi\Laranail\DBConsole\Enums\TlsStatus;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
+use Simtabi\Laranail\DBConsole\Enums\TlsStatus;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 
 beforeEach(function (): void {
     $this->migrateCatalog();

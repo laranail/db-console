@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Stores;
 
-use Illuminate\Database\Query\Builder;
 use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\Query\Builder;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
 
 /**

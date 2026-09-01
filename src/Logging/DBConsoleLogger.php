@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Logging;
 
-use Throwable;
+use Illuminate\Contracts\Config\Repository as Config;
 use Psr\Log\LoggerInterface;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Events\DBConsoleEvent;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Throwable;
 
 /**
  * Structured logging on a dedicated channel (default db-console), so
@@ -30,15 +30,15 @@ final readonly class DBConsoleLogger
     public function event(DBConsoleEvent $event): void
     {
         $this->write($event->severity(), $event->operation()->value, [
-            'server'  => $event->server,
-            'target'  => $event->target(),
+            'server' => $event->server,
+            'target' => $event->target(),
             'outcome' => $event->outcome()->value,
             ...$event->context,
         ]);
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     public function success(string $action, string $server, array $context = []): void
     {
@@ -53,15 +53,15 @@ final readonly class DBConsoleLogger
             : Severity::Error;
 
         $this->write($severity, $action, [
-            'server'       => $server,
-            'code'         => $exception->code()->value,
+            'server' => $server,
+            'code' => $exception->code()->value,
             'user_message' => $exception->userMessage(),
             ...$exception->context(),
         ]);
     }
 
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     public function write(Severity $severity, string $action, array $context): void
     {

@@ -40,7 +40,7 @@ final readonly class SecretRotator
         }
 
         $this->events->dispatch(new SecretsRotated('global', [
-            'target'  => $this->vault->driver(),
+            'target' => $this->vault->driver(),
             'rotated' => $count,
         ]));
 

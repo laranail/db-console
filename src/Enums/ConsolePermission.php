@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * CONSOLE permissions: what an operator may do with the tool. Entirely
@@ -86,6 +86,6 @@ enum ConsolePermission: string implements Enumerator, Translatable
      */
     public function ability(): string
     {
-        return 'db-console.' . $this->value;
+        return 'db-console.'.$this->value;
     }
 }

@@ -30,15 +30,15 @@ final readonly class Capabilities
     public function toArray(): array
     {
         return [
-            'can_create_database'        => $this->canCreateDatabase,
-            'can_create_account'         => $this->canCreateAccount,
+            'can_create_database' => $this->canCreateDatabase,
+            'can_create_account' => $this->canCreateAccount,
             'can_scope_accounts_by_host' => $this->canScopeAccountsByHost,
-            'can_grant_table_level'      => $this->canGrantTableLevel,
-            'can_rotate_password'        => $this->canRotatePassword,
-            'can_read_at_rest_status'    => $this->encryption->canReadAtRestStatus,
+            'can_grant_table_level' => $this->canGrantTableLevel,
+            'can_rotate_password' => $this->canRotatePassword,
+            'can_read_at_rest_status' => $this->encryption->canReadAtRestStatus,
             'can_require_tls_on_account' => $this->encryption->canRequireTlsOnAccount,
-            'at_rest_mechanism'          => $this->encryption->atRestMechanism,
-            'account_model_note'         => $this->accountModelNote,
+            'at_rest_mechanism' => $this->encryption->atRestMechanism,
+            'account_model_note' => $this->accountModelNote,
         ];
     }
 }

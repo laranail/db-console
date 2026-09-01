@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Simtabi\Laranail\Enumerator\Rules\EnumValue;
 use Simtabi\Laranail\DBConsole\Enums\WebhookEvent;
 use Simtabi\Laranail\DBConsole\Validation\Rules\ServerNameRule;
+use Simtabi\Laranail\Enumerator\Rules\EnumValue;
 
 /**
  * Creating or updating a webhook subscription. The signing secret is
@@ -27,11 +27,11 @@ final class WebhookRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'url'      => ['required', 'url:https,http', 'max:2048'],
-            'events'   => ['required', 'array', 'min:1'],
+            'url' => ['required', 'url:https,http', 'max:2048'],
+            'events' => ['required', 'array', 'min:1'],
             'events.*' => ['required', 'string', EnumValue::for(WebhookEvent::class)],
-            'server'   => ['nullable', 'string', new ServerNameRule],
-            'active'   => ['nullable', 'boolean'],
+            'server' => ['nullable', 'string', new ServerNameRule],
+            'active' => ['nullable', 'boolean'],
         ];
     }
 }

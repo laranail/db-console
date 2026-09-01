@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Simtabi\Laranail\DBConsole\Validation\RuleProvider;
-use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
-use Simtabi\Laranail\DBConsole\Validation\Requests\GrantRequest;
+use Illuminate\Support\Facades\Validator;
 use Simtabi\Laranail\DBConsole\Validation\Requests\AttachRequest;
-use Simtabi\Laranail\DBConsole\Validation\Requests\WebhookRequest;
-use Simtabi\Laranail\DBConsole\Validation\Requests\TokenIssueRequest;
-use Simtabi\Laranail\DBConsole\Validation\Requests\DropDatabaseRequest;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateAccountRequest;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateDatabaseRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\DropDatabaseRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\GrantRequest;
 use Simtabi\Laranail\DBConsole\Validation\Requests\RoleAssignmentRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\TokenIssueRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\WebhookRequest;
+use Simtabi\Laranail\DBConsole\Validation\RuleProvider;
+use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 
 /**
- * @param class-string<FormRequest> $request
- * @param array<string, mixed> $data
+ * @param  class-string<FormRequest>  $request
+ * @param  array<string, mixed>  $data
  */
 function validateRequest(string $request, array $data): Illuminate\Validation\Validator
 {
@@ -94,7 +94,7 @@ describe('FormRequests enforce the shared rules', function (): void {
                 ['username' => "bad'user", 'host' => '10.0.%'],
             ],
             'databases' => ['analytics'],
-            'preset'    => 'read_only',
+            'preset' => 'read_only',
         ]);
 
         expect($validator->fails())->toBeTrue()

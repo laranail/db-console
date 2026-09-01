@@ -3,15 +3,15 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
-use Simtabi\Laranail\DBConsole\Models\AuditLog;
 use Simtabi\Laranail\DBConsole\Audit\AuditChain;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
+use Simtabi\Laranail\DBConsole\Models\AuditLog;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 
 beforeEach(function (): void {

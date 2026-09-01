@@ -37,7 +37,7 @@ trait RedactsSelf
     }
 
     /**
-     * @param array<string, string> $data
+     * @param  array<string, string>  $data
      */
     public function __unserialize(array $data): void
     {

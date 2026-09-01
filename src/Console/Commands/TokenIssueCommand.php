@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Simtabi\Laranail\DBConsole\Api\TokenManager;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
@@ -40,9 +40,9 @@ final class TokenIssueCommand extends DBConsoleCommand
             return self::FAILURE;
         }
 
-        $this->success('Token issued with abilities: ' . implode(', ', $issued['abilities']));
+        $this->success('Token issued with abilities: '.implode(', ', $issued['abilities']));
         $this->line('');
-        $this->components->warn('Token (shown once — store it now): ' . $issued['token']);
+        $this->components->warn('Token (shown once — store it now): '.$issued['token']);
 
         return self::SUCCESS;
     }

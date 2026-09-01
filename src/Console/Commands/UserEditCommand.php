@@ -6,8 +6,8 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Services\AccountManager;
 
 /**
  * Edit account config; --new-host runs the grant-preserving recreate.
@@ -44,7 +44,7 @@ final class UserEditCommand extends DBConsoleCommand
         $this->success("Changed host for '{$user}' from '{$host}' to '{$newHost}' (grants preserved).");
         $generated = $result->takeGeneratedPassword();
         if ($generated !== null) {
-            $this->components->warn('New password (shown once): ' . $generated);
+            $this->components->warn('New password (shown once): '.$generated);
         }
 
         return self::SUCCESS;

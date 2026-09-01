@@ -14,7 +14,7 @@ namespace Simtabi\Laranail\DBConsole\Services\Results;
 final readonly class BatchResult
 {
     /**
-     * @param list<array{user: string, host: string, database: string, ok: bool, error: ?string}> $pairings
+     * @param  list<array{user: string, host: string, database: string, ok: bool, error: ?string}>  $pairings
      */
     public function __construct(public array $pairings) {}
 

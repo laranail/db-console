@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Kms;
 
-use Throwable;
 use Aws\Kms\KmsClient as AwsKms;
 use Simtabi\Laranail\DBConsole\Enums\KmsProvider;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
+use Throwable;
 
 /**
  * AWS KMS wrap/unwrap over the optional aws/aws-sdk-php package. When the
@@ -22,14 +22,14 @@ final class AwsKmsClient implements KmsClient
     private ?AwsKms $sdk = null;
 
     /**
-     * @param array{key_id: ?string, region: ?string} $config
+     * @param  array{key_id: ?string, region: ?string}  $config
      */
     public function __construct(private readonly array $config) {}
 
     public function wrap(string $plaintextDataKey): string
     {
         $result = $this->sdk()->encrypt([
-            'KeyId'     => $this->keyId(),
+            'KeyId' => $this->keyId(),
             'Plaintext' => $plaintextDataKey,
         ]);
 

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Kms;
 
-use Throwable;
 use Simtabi\Laranail\DBConsole\Enums\KmsProvider;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\KmsClient;
+use Throwable;
 
 /**
  * GCP Cloud KMS wrap/unwrap over the optional google/cloud-kms package.
@@ -19,7 +19,7 @@ final class GcpKmsClient implements KmsClient
     private ?object $sdk = null;
 
     /**
-     * @param array{key_id: ?string, region: ?string} $config the key_id is the full CryptoKey resource name
+     * @param  array{key_id: ?string, region: ?string}  $config  the key_id is the full CryptoKey resource name
      */
     public function __construct(private readonly array $config) {}
 

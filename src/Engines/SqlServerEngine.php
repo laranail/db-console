@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 
 /**
  * SQL Server splits accounts into a server-level LOGIN and a per-database
@@ -26,14 +26,14 @@ final class SqlServerEngine implements Engine
 {
     /** @var array<string, string> */
     private const array PRIVILEGE_MAP = [
-        'select'     => 'SELECT',
-        'insert'     => 'INSERT',
-        'update'     => 'UPDATE',
-        'delete'     => 'DELETE',
+        'select' => 'SELECT',
+        'insert' => 'INSERT',
+        'update' => 'UPDATE',
+        'delete' => 'DELETE',
         'references' => 'REFERENCES',
-        'execute'    => 'EXECUTE',
-        'create'     => 'CREATE TABLE',
-        'alter'      => 'ALTER',
+        'execute' => 'EXECUTE',
+        'create' => 'CREATE TABLE',
+        'alter' => 'ALTER',
     ];
 
     public function type(): EngineType
@@ -61,10 +61,10 @@ final class SqlServerEngine implements Engine
     public function createDatabase(DbName $db, Charset $charset): StatementList
     {
         $q = Quoter::for($this->type());
-        $sql = 'CREATE DATABASE ' . $q->identifier($db->value);
+        $sql = 'CREATE DATABASE '.$q->identifier($db->value);
 
         if ($charset->collation !== null) {
-            $sql .= ' COLLATE ' . $charset->collation;
+            $sql .= ' COLLATE '.$charset->collation;
         }
 
         return new StatementList(Statement::plain($sql));
@@ -74,7 +74,7 @@ final class SqlServerEngine implements Engine
     {
         $q = Quoter::for($this->type());
 
-        return new StatementList(Statement::plain('DROP DATABASE ' . $q->identifier($db->value)));
+        return new StatementList(Statement::plain('DROP DATABASE '.$q->identifier($db->value)));
     }
 
     public function listDatabases(): StatementList
@@ -91,7 +91,7 @@ final class SqlServerEngine implements Engine
 
         return new StatementList(
             Statement::sensitive(
-                sql: "CREATE LOGIN {$login} WITH PASSWORD = " . $q->literal($p->reveal()),
+                sql: "CREATE LOGIN {$login} WITH PASSWORD = ".$q->literal($p->reveal()),
                 redacted: "CREATE LOGIN {$login} WITH PASSWORD = '[redacted]'",
             ),
             Statement::plain("CREATE USER {$login} FOR LOGIN {$login}"),
@@ -116,7 +116,7 @@ final class SqlServerEngine implements Engine
 
         return new StatementList(
             Statement::sensitive(
-                sql: "ALTER LOGIN {$login} WITH PASSWORD = " . $q->literal($p->reveal()),
+                sql: "ALTER LOGIN {$login} WITH PASSWORD = ".$q->literal($p->reveal()),
                 redacted: "ALTER LOGIN {$login} WITH PASSWORD = '[redacted]'",
             ),
         );
@@ -134,7 +134,7 @@ final class SqlServerEngine implements Engine
         $q = Quoter::for($this->type());
 
         return new StatementList(
-            Statement::plain('GRANT ' . $this->privilegeList($s) . ' TO ' . $q->identifier($u->value)),
+            Statement::plain('GRANT '.$this->privilegeList($s).' TO '.$q->identifier($u->value)),
         );
     }
 
@@ -143,7 +143,7 @@ final class SqlServerEngine implements Engine
         $q = Quoter::for($this->type());
 
         return new StatementList(
-            Statement::plain('REVOKE ' . $this->privilegeList($s) . ' FROM ' . $q->identifier($u->value)),
+            Statement::plain('REVOKE '.$this->privilegeList($s).' FROM '.$q->identifier($u->value)),
         );
     }
 
@@ -152,8 +152,8 @@ final class SqlServerEngine implements Engine
         return new StatementList(
             Statement::plain(
                 'SELECT permission_name, state_desc FROM sys.database_permissions p'
-                . ' JOIN sys.database_principals pr ON p.grantee_principal_id = pr.principal_id'
-                . ' WHERE pr.name = ' . Quoter::for($this->type())->literal($u->value),
+                .' JOIN sys.database_principals pr ON p.grantee_principal_id = pr.principal_id'
+                .' WHERE pr.name = '.Quoter::for($this->type())->literal($u->value),
             ),
         );
     }

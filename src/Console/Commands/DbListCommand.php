@@ -33,7 +33,7 @@ final class DbListCommand extends DBConsoleCommand
             $this->line("  {$name}");
         }
 
-        $this->components->info(count($names) . " database(s) on '{$server}'.");
+        $this->components->info(count($names)." database(s) on '{$server}'.");
 
         return self::SUCCESS;
     }

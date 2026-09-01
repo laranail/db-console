@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
-use Override;
 use Illuminate\Foundation\Http\FormRequest;
+use Override;
 use Simtabi\Laranail\DBConsole\Validation\Rules\HostRule;
 use Simtabi\Laranail\DBConsole\Validation\Rules\UsernameRule;
 
@@ -27,8 +27,8 @@ final class DropAccountRequest extends FormRequest
     {
         return [
             'username' => ['required', 'string', new UsernameRule],
-            'host'     => ['required', 'string', new HostRule],
-            'confirm'  => ['required', 'string', 'same:username'],
+            'host' => ['required', 'string', new HostRule],
+            'confirm' => ['required', 'string', 'same:username'],
         ];
     }
 

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 
 /**
  * A gate denied a requested operation. Recorded so "who tried to do what
@@ -17,7 +17,7 @@ use Simtabi\Laranail\DBConsole\Enums\OperationType;
 final class AuthorizationDenied extends DBConsoleEvent
 {
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     public function __construct(
         string $server,

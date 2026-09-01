@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Access\Contracts;
 
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Access\ResolvedAssignment;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * The RBAC storage seam. Two implementations behind one contract

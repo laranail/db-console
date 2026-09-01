@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Throwable;
-use PDOException;
 use Illuminate\Database\QueryException;
+use PDOException;
+use Throwable;
 
 /**
  * Translates low-level driver/PDO exceptions into the DBConsole hierarchy
@@ -31,7 +31,7 @@ final class ExceptionTranslator
     private const array PRIVILEGE_ERRNOS = [1044, 1142, 1227, 1370];
 
     /**
-     * @param array<string, mixed> $context extra sanitized context merged into the translated exception
+     * @param  array<string, mixed>  $context  extra sanitized context merged into the translated exception
      */
     public static function from(Throwable $e, array $context = []): DBConsoleException
     {
@@ -53,8 +53,8 @@ final class ExceptionTranslator
         $errno = self::driverErrno($pdo);
         $driverContext = [
             ...$context,
-            'sqlstate'       => $sqlState,
-            'driver_errno'   => $errno,
+            'sqlstate' => $sqlState,
+            'driver_errno' => $errno,
             'driver_message' => $pdo->getMessage(),
         ];
         $server = isset($context['server']) && is_string($context['server']) ? $context['server'] : 'unknown';

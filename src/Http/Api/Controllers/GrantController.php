@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Http\Api\Controllers;
 
 use Illuminate\Http\JsonResponse;
-use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
-use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Validation\Requests\GrantRequest;
 
 /**

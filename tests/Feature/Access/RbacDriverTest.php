@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Schema;
+use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
+use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
+use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
-use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
-use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
-use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
 
 /**
  * Build a driver by name, wiring the storage each needs. Both share

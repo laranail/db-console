@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets;
 
-use Stringable;
 use JsonSerializable;
 use SensitiveParameter;
 use Simtabi\Laranail\DBConsole\Domain\Concerns\RedactsSelf;
+use Stringable;
 
 /**
  * Arbitrary secret material (admin credentials, webhook signing secrets)

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Events\Contracts;
 
-use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 
 /**
  * Marker + shape for every DBConsole domain event. Listeners bind to THIS

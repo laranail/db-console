@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Override;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Override;
 
 /**
  * A webhook subscriber: a target URL, the event types it listens to, a
@@ -52,8 +52,8 @@ final class WebhookSubscription extends CatalogModel
     protected function casts(): array
     {
         return [
-            'events'        => 'array',
-            'active'        => 'boolean',
+            'events' => 'array',
+            'active' => 'boolean',
             'failure_count' => 'integer',
         ];
     }

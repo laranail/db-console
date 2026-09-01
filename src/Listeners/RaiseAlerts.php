@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Listeners;
 
-use Throwable;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Contracts\Config\Repository as Config;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Throwable;
 
 /**
  * The high-severity subset (drop failures, RollbackFailed, SuspiciousActivity,
@@ -31,11 +31,11 @@ final readonly class RaiseAlerts
         }
 
         // Always record the alert on the log channel at its severity.
-        $this->log->write($event->severity(), 'alert.' . $event->operation()->value, [
-            'server'  => $event->serverName(),
-            'target'  => $event->target(),
+        $this->log->write($event->severity(), 'alert.'.$event->operation()->value, [
+            'server' => $event->serverName(),
+            'target' => $event->target(),
             'outcome' => $event->outcome()->value,
-            'alert'   => true,
+            'alert' => true,
         ]);
 
         $webhook = $this->config->get('laranail.db-console.alerts.webhook');
@@ -64,9 +64,9 @@ final readonly class RaiseAlerts
             // reach into a free-text exception message, so strip the known secret
             // here and keep the exception class for diagnosis.
             $this->log->write($event->severity(), 'alert.delivery_failed', [
-                'server'    => $event->serverName(),
+                'server' => $event->serverName(),
                 'exception' => $e::class,
-                'error'     => str_replace($webhook, '[redacted-webhook]', $e->getMessage()),
+                'error' => str_replace($webhook, '[redacted-webhook]', $e->getMessage()),
             ]);
         }
     }

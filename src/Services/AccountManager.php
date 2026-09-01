@@ -6,27 +6,27 @@ namespace Simtabi\Laranail\DBConsole\Services;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Engines\Engine;
+use Simtabi\Laranail\DBConsole\Engines\HostScopingEngine;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
 use Simtabi\Laranail\DBConsole\Events\AccountDropped;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
-use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
-use Simtabi\Laranail\DBConsole\Engines\HostScopingEngine;
 use Simtabi\Laranail\DBConsole\Events\AccountHostChanged;
-use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
-use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
-use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
 use Simtabi\Laranail\DBConsole\Events\AccountPasswordRotated;
+use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
+use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
-use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
+use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
 
 /**
  * Creates, lists, drops, and rotates database accounts on a registered
@@ -242,14 +242,14 @@ final readonly class AccountManager
 
                     $connection->run($statements, [
                         'operation' => OperationType::AccountHostChanged->value,
-                        'target'    => "{$user->value}@{$newHost->value}",
+                        'target' => "{$user->value}@{$newHost->value}",
                     ]);
                 },
                 function () use ($engine, $connection, $user, $newHost): void {
                     $connection->run($engine->dropAccount($user, $newHost), [
                         'operation' => OperationType::AccountDrop->value,
-                        'target'    => "{$user->value}@{$newHost->value}",
-                        'rollback'  => true,
+                        'target' => "{$user->value}@{$newHost->value}",
+                        'rollback' => true,
                     ]);
                 },
             ),
@@ -266,7 +266,7 @@ final readonly class AccountManager
                 function () use ($engine, $connection, $user, $oldHost): void {
                     $connection->run($engine->dropAccount($user, $oldHost), [
                         'operation' => OperationType::AccountDrop->value,
-                        'target'    => "{$user->value}@{$oldHost->value}",
+                        'target' => "{$user->value}@{$oldHost->value}",
                     ]);
                 },
             ),
@@ -275,13 +275,13 @@ final readonly class AccountManager
         $this->catalog->recordHostChange($server, $user, $oldHost, $newHost);
         $this->log->success(OperationType::AccountHostChanged->value, $server, [
             'target' => $user->value,
-            'from'   => $oldHost->value,
-            'to'     => $newHost->value,
+            'from' => $oldHost->value,
+            'to' => $newHost->value,
         ]);
         $this->events->dispatch(new AccountHostChanged($server, [
             'target' => $user->value,
-            'from'   => $oldHost->value,
-            'to'     => $newHost->value,
+            'from' => $oldHost->value,
+            'to' => $newHost->value,
         ]));
 
         return OperationResult::succeeded(
@@ -366,7 +366,7 @@ final readonly class AccountManager
         $this->log->failure($operation->value, $server, $e);
         $this->events->dispatch(new OperationFailedEvent($server, $operation, [
             'target' => $target,
-            'code'   => $e->code()->value,
+            'code' => $e->code()->value,
         ]));
 
         throw $e;

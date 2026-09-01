@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\Console\Tools\Commands\Command;
 use Illuminate\Contracts\Config\Repository as Config;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\Console\Tools\Commands\Command;
 use Simtabi\Laranail\Console\Tools\Commands\Concerns\SupportsNamespacedNames;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 
 /**
  * Base for every DBConsole artisan command. Extends the laranail/console

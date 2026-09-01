@@ -25,8 +25,8 @@ final class RoleAssignmentRequest extends FormRequest
     {
         return [
             'user_id' => ['required'],
-            'role'    => ['required', 'string', 'max:64'],
-            'scope'   => ['required', 'string', new ScopeRule],
+            'role' => ['required', 'string', 'max:64'],
+            'scope' => ['required', 'string', new ScopeRule],
         ];
     }
 }

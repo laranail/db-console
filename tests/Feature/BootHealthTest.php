@@ -14,6 +14,6 @@ it('boots with no degraded package builders', function (): void {
     $report = app(BootReport::class);
 
     expect($report->isHealthy())->toBeTrue(
-        'package booted degraded: ' . json_encode($report->degraded()),
+        'package booted degraded: '.json_encode($report->degraded()),
     );
 });

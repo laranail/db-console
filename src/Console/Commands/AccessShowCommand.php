@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Illuminate\Database\Eloquent\Model;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * Show what an operator can do, and where.
@@ -40,7 +40,7 @@ final class AccessShowCommand extends DBConsoleCommand
         foreach ($assignments as $assignment) {
             $permissions = array_map(static fn (ConsolePermission $p): string => $p->value, $assignment->permissions);
             $this->line("<comment>{$assignment->role}</comment> @ {$assignment->scope->toString()}");
-            $this->line('  ' . implode(', ', $permissions));
+            $this->line('  '.implode(', ', $permissions));
         }
 
         return self::SUCCESS;

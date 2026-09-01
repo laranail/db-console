@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Models\Grant;
-use Simtabi\Laranail\DBConsole\Models\DbServer;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Enums\GrantScope;
-use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Exceptions\StaleModel;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Models\DbServer;
+use Simtabi\Laranail\DBConsole\Models\Grant;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 
 beforeEach(function (): void {
@@ -40,10 +40,10 @@ describe('enum casts', function (): void {
         $account = DbAccount::factory()->create(['server_name' => $server->name]);
         $database = ManagedDatabase::factory()->create(['server_name' => $server->name]);
         $grant = Grant::factory()->create([
-            'account_id'  => $account->id,
+            'account_id' => $account->id,
             'database_id' => $database->id,
-            'preset'      => PrivilegePreset::ReadWrite,
-            'scope'       => GrantScope::Database,
+            'preset' => PrivilegePreset::ReadWrite,
+            'scope' => GrantScope::Database,
         ]);
 
         expect($grant->fresh()->preset)->toBe(PrivilegePreset::ReadWrite)
@@ -56,7 +56,7 @@ describe('encrypted topology columns', function (): void {
     it('stores account username/host as ciphertext, readable through the model', function (): void {
         $account = DbAccount::factory()->create([
             'username' => 'shop_user',
-            'host'     => '10.0.%',
+            'host' => '10.0.%',
         ]);
 
         // Raw column is ciphertext; the model decrypts transparently.

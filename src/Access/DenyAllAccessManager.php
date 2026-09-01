@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Access;
 
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * The shipped default until RBAC is configured: deny everyone. This is the

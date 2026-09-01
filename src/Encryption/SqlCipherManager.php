@@ -20,9 +20,9 @@ use Simtabi\Laranail\DBConsole\Enums\CatalogEncryptionMode;
 final readonly class SqlCipherManager
 {
     /**
-     * @param bool $sqlcipherEnabled config toggle (catalog_encryption.sqlcipher.enabled)
-     * @param ?string $cipherKey the DB_CONSOLE_CIPHER_KEY, if set
-     * @param bool $catalogIsSqlite whether the catalog connection is SQLite
+     * @param  bool  $sqlcipherEnabled  config toggle (catalog_encryption.sqlcipher.enabled)
+     * @param  ?string  $cipherKey  the DB_CONSOLE_CIPHER_KEY, if set
+     * @param  bool  $catalogIsSqlite  whether the catalog connection is SQLite
      */
     public function __construct(
         private bool $sqlcipherEnabled,
@@ -78,10 +78,10 @@ final readonly class SqlCipherManager
         }
 
         $reason = match (true) {
-            ! $this->catalogIsSqlite      => 'catalog is not on SQLite; whole-file encryption is SQLite-specific (encrypted columns still apply)',
-            ! $this->sqlcipherEnabled     => 'whole-file SQLCipher is disabled (catalog_encryption.sqlcipher.enabled=false)',
+            ! $this->catalogIsSqlite => 'catalog is not on SQLite; whole-file encryption is SQLite-specific (encrypted columns still apply)',
+            ! $this->sqlcipherEnabled => 'whole-file SQLCipher is disabled (catalog_encryption.sqlcipher.enabled=false)',
             ! $this->extensionAvailable() => 'the pdo_sqlcipher extension is not present; only encrypted columns are available',
-            default                       => 'no DB_CONSOLE_CIPHER_KEY set; only encrypted columns are active',
+            default => 'no DB_CONSOLE_CIPHER_KEY set; only encrypted columns are active',
         };
 
         return ['mode' => $this->mode()->value, 'whole_file' => false, 'reason' => $reason];

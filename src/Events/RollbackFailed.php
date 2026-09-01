@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 
 /**
  * A compensating action itself failed — the server may be in a partial
@@ -16,7 +16,7 @@ use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
 final class RollbackFailed extends DBConsoleEvent
 {
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     public function __construct(
         string $server,

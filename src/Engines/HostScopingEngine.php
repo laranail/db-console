@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Engines;
 
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
 
 /**
  * The extra dialect an engine needs to support a grant-preserving host

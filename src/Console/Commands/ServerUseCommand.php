@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 
 /**
  * Set the sticky default server for subsequent commands. The default is

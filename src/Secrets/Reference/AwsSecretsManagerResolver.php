@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Reference;
 
-use Throwable;
 use Aws\SecretsManager\SecretsManagerClient;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Throwable;
 
 /**
  * Resolves an AWS Secrets Manager pointer (a secret name or ARN) via the
@@ -21,7 +21,7 @@ final class AwsSecretsManagerResolver implements ReferenceResolver
     private ?SecretsManagerClient $sdk = null;
 
     /**
-     * @param array{region: ?string} $config
+     * @param  array{region: ?string}  $config
      */
     public function __construct(private readonly array $config = ['region' => null]) {}
 

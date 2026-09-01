@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
-use Simtabi\Laranail\DBConsole\Models\Role;
-use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use Simtabi\Laranail\DBConsole\Models\Role;
 
 beforeEach(function (): void {
     $this->migrateCatalog();

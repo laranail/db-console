@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * RBAC scope granularity, widest to narrowest. A wider scope covers every
@@ -38,8 +38,8 @@ enum ScopeType: string implements Enumerator, Translatable
     private function width(): int
     {
         return match ($this) {
-            self::Global   => 0,
-            self::Server   => 1,
+            self::Global => 0,
+            self::Server => 1,
             self::Database => 2,
         };
     }

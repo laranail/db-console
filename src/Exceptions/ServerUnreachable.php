@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Throwable;
 use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
+use Throwable;
 
 final class ServerUnreachable extends ConnectionException
 {

@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets;
 
+use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Encryption\Encrypter;
 use Illuminate\Contracts\Foundation\Application;
-use Simtabi\Laranail\DBConsole\Enums\KmsProvider;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Simtabi\Laranail\DBConsole\Enums\KmsProvider;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Exceptions\InsecureSecretDriver;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
+use Simtabi\Laranail\DBConsole\Secrets\Drivers\AppKeyVault;
+use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
 use Simtabi\Laranail\DBConsole\Secrets\Drivers\KmsVault;
+use Simtabi\Laranail\DBConsole\Secrets\Drivers\ReferenceVault;
 use Simtabi\Laranail\DBConsole\Secrets\Kms\AwsKmsClient;
 use Simtabi\Laranail\DBConsole\Secrets\Kms\GcpKmsClient;
-use Simtabi\Laranail\DBConsole\Secrets\Drivers\AppKeyVault;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
-use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
-use Simtabi\Laranail\DBConsole\Secrets\Drivers\ReferenceVault;
-use Simtabi\Laranail\DBConsole\Exceptions\InsecureSecretDriver;
-use Simtabi\Laranail\DBConsole\Secrets\Reference\DopplerResolver;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
-use Simtabi\Laranail\DBConsole\Secrets\Reference\VaultReferenceResolver;
 use Simtabi\Laranail\DBConsole\Secrets\Reference\AwsSecretsManagerResolver;
+use Simtabi\Laranail\DBConsole\Secrets\Reference\DopplerResolver;
+use Simtabi\Laranail\DBConsole\Secrets\Reference\VaultReferenceResolver;
 
 /**
  * Resolves the active SecretVault from config, and enforces the one
@@ -67,8 +67,8 @@ final readonly class SecretVaultManager
                 $this->container->make(Encrypter::class),
                 $this->store,
             ),
-            SecretDriver::Kms       => new KmsVault($this->makeKmsClient(), $this->store),
-            SecretDriver::Vault     => $this->makeHashiCorpVault(),
+            SecretDriver::Kms => new KmsVault($this->makeKmsClient(), $this->store),
+            SecretDriver::Vault => $this->makeHashiCorpVault(),
             SecretDriver::Reference => new ReferenceVault($this->makeReferenceResolver(), $this->store),
         };
     }
@@ -79,7 +79,7 @@ final readonly class SecretVaultManager
 
         return SecretDriver::tryFrom($value)
             ?? throw SecretDriverMisconfigured::forDriver($value, 'unknown secret driver; expected one of: '
-                . implode(', ', SecretDriver::values()));
+                .implode(', ', SecretDriver::values()));
     }
 
     private function makeKmsClient(): AwsKmsClient|GcpKmsClient
@@ -113,7 +113,7 @@ final readonly class SecretVaultManager
         $kms = (array) $this->config->get('laranail.db-console.secrets.kms', []);
 
         return match ($provider) {
-            'vault'   => new VaultReferenceResolver($this->makeHashiCorpVault()),
+            'vault' => new VaultReferenceResolver($this->makeHashiCorpVault()),
             'doppler' => new DopplerResolver(
                 $this->container->make(HttpFactory::class),
                 ['token' => $this->config->get('laranail.db-console.secrets.reference.token')],
@@ -123,19 +123,18 @@ final readonly class SecretVaultManager
     }
 
     /**
-     * @param array<string, mixed> $vault
-     *
+     * @param  array<string, mixed>  $vault
      * @return array{address: ?string, auth: string, role_id: ?string, secret_id: ?string, token: ?string, mount: string, path_prefix: string}
      */
     private function vaultConfig(array $vault): array
     {
         return [
-            'address'     => isset($vault['address']) ? (string) $vault['address'] : null,
-            'auth'        => (string) ($vault['auth'] ?? 'approle'),
-            'role_id'     => isset($vault['role_id']) ? (string) $vault['role_id'] : null,
-            'secret_id'   => isset($vault['secret_id']) ? (string) $vault['secret_id'] : null,
-            'token'       => isset($vault['token']) ? (string) $vault['token'] : null,
-            'mount'       => (string) ($vault['mount'] ?? 'secret'),
+            'address' => isset($vault['address']) ? (string) $vault['address'] : null,
+            'auth' => (string) ($vault['auth'] ?? 'approle'),
+            'role_id' => isset($vault['role_id']) ? (string) $vault['role_id'] : null,
+            'secret_id' => isset($vault['secret_id']) ? (string) $vault['secret_id'] : null,
+            'token' => isset($vault['token']) ? (string) $vault['token'] : null,
+            'mount' => (string) ($vault['mount'] ?? 'secret'),
             'path_prefix' => (string) ($vault['path_prefix'] ?? 'db-console'),
         ];
     }

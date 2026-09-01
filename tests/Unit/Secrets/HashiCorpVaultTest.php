@@ -2,27 +2,26 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Http;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Support\Facades\Http;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 
 /**
- * @param array<string, mixed> $overrides
- *
+ * @param  array<string, mixed>  $overrides
  * @return array{address: ?string, auth: string, role_id: ?string, secret_id: ?string, token: ?string, mount: string, path_prefix: string}
  */
 function vaultConfig(array $overrides = []): array
 {
     return array_merge([
-        'address'     => 'https://vault.example.com',
-        'auth'        => 'token',
-        'role_id'     => null,
-        'secret_id'   => null,
-        'token'       => 'root-token',
-        'mount'       => 'secret',
+        'address' => 'https://vault.example.com',
+        'auth' => 'token',
+        'role_id' => null,
+        'secret_id' => null,
+        'token' => 'root-token',
+        'mount' => 'secret',
         'path_prefix' => 'db-console',
     ], $overrides);
 }
