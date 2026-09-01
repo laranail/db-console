@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 
 /**
  * Repeated failures, or doctor finding a root-like admin. A security signal
@@ -15,7 +15,7 @@ use Simtabi\Laranail\DBConsole\Enums\OperationType;
 final class SuspiciousActivity extends DBConsoleEvent
 {
     /**
-     * @param array<string, mixed> $context
+     * @param  array<string, mixed>  $context
      */
     public function __construct(
         string $server,

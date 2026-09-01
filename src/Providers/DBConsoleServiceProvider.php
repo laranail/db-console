@@ -4,58 +4,58 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Providers;
 
+use Composer\InstalledVersions;
+use Illuminate\Contracts\Auth\Access\Gate;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\ConnectionEstablished;
 use Override;
 use Psr\Log\LoggerInterface;
-use Composer\InstalledVersions;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Contracts\Auth\Access\Gate;
-use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\Package\Tools\Package;
-use Simtabi\Laranail\DBConsole\Doctor\Checks;
-use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Models\AuditLog;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
-use Illuminate\Database\ConnectionResolverInterface;
-use Simtabi\Laranail\DBConsole\Backup\BackupService;
-use Illuminate\Contracts\Config\Repository as Config;
-use Illuminate\Database\Events\ConnectionEstablished;
-use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
-use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
-use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
+use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
+use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
+use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
 use Simtabi\Laranail\DBConsole\Audit\AuditLogObserver;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
+use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
+use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
+use Simtabi\Laranail\DBConsole\Doctor\Checks;
+use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
+use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
+use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
+use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
+use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
+use Simtabi\Laranail\DBConsole\Http\Middleware\ApiGuard;
+use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
+use Simtabi\Laranail\DBConsole\Listeners\SendNotifications;
 use Simtabi\Laranail\DBConsole\Listeners\WriteAuditLog;
+use Simtabi\Laranail\DBConsole\Listeners\WriteChannelLog;
 use Simtabi\Laranail\DBConsole\Logging\ContextScrubber;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
-use Simtabi\Laranail\DBConsole\Services\AccountManager;
-use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
-use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
-use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
-use Simtabi\Laranail\DBConsole\Http\Middleware\ApiGuard;
-use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
-use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhooks;
-use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
-use Simtabi\Laranail\DBConsole\Listeners\WriteChannelLog;
-use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
-use Simtabi\Laranail\DBConsole\Services\ReconcileService;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
-use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
-use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
-use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
-use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
-use Simtabi\Laranail\DBConsole\Listeners\SendNotifications;
-use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
-use Simtabi\Laranail\Package\Tools\Commands\InstallCommand;
-use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
-use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
+use Simtabi\Laranail\DBConsole\Models\AuditLog;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
-use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
-use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
-use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
-use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
-use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
-use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
+use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Services\AccountManager;
+use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
+use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
+use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
+use Simtabi\Laranail\DBConsole\Services\ReconcileService;
+use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
+use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhooks;
+use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
+use Simtabi\Laranail\Package\Tools\Commands\InstallCommand;
+use Simtabi\Laranail\Package\Tools\Package;
 use Simtabi\Laranail\Package\Tools\Providers\PackageServiceProvider;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\AboutSectionDefinition;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\InstallCommandDefinition;
@@ -155,7 +155,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $namespace = 'Simtabi\\Laranail\\DBConsole\\Console\\Commands\\';
 
         return array_map(
-            static fn (string $class): string => $namespace . $class,
+            static fn (string $class): string => $namespace.$class,
             [
                 'DoctorCommand',
                 'DbCreateCommand', 'DbListCommand', 'DbDropCommand',
@@ -187,7 +187,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
             ) ?? RbacDriverEnum::Builtin;
 
             return match ($driver) {
-                RbacDriverEnum::Spatie  => $app->make(SpatieRbacDriver::class),
+                RbacDriverEnum::Spatie => $app->make(SpatieRbacDriver::class),
                 RbacDriverEnum::Builtin => $app->make(BuiltinRbacDriver::class),
             };
         });
@@ -275,7 +275,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
             return new DatabaseSecretStore(
                 $app->make(ConnectionResolverInterface::class),
                 (string) $config->get('laranail.db-console.catalog.connection', 'db_console_catalog'),
-                ($config->get('laranail.db-console.catalog.prefix', 'db_console_')) . 'secrets',
+                ($config->get('laranail.db-console.catalog.prefix', 'db_console_')).'secrets',
             );
         });
 

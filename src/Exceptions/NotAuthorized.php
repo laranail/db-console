@@ -22,7 +22,7 @@ final class NotAuthorized extends AuthorizationException
     /**
      * A token may never carry abilities its issuer does not hold.
      *
-     * @param list<string> $abilities
+     * @param  list<string>  $abilities
      */
     public static function forTokenAbilities(array $abilities): self
     {

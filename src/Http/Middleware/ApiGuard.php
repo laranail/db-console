@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Http\Middleware;
 
 use Closure;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The single front door to the REST API (section 22). Off by default; when on

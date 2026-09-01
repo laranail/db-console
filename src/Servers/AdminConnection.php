@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Servers;
 
-use Throwable;
 use Illuminate\Database\ConnectionInterface;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
+use Throwable;
 
 /**
  * The only thing in the package that touches a managed server. Wraps the
@@ -32,7 +32,7 @@ final readonly class AdminConnection
      * secret material (CREATE USER ... IDENTIFIED BY ...) execute their real
      * SQL; only the redacted form is ever surfaced elsewhere.
      *
-     * @param array<string, mixed> $context sanitized context for error translation
+     * @param  array<string, mixed>  $context  sanitized context for error translation
      */
     public function run(StatementList $statements, array $context = []): void
     {
@@ -49,8 +49,7 @@ final readonly class AdminConnection
      * Run a read query and return rows. Reads are live — the server is the
      * source of truth, not the catalog.
      *
-     * @param array<string, mixed> $context
-     *
+     * @param  array<string, mixed>  $context
      * @return list<array<string, mixed>>
      */
     public function select(string $sql, array $context = []): array
@@ -72,8 +71,8 @@ final readonly class AdminConnection
      * A single scalar from a parameterized read (bindings are bound, never
      * interpolated) — used for metadata checks like "is this database empty".
      *
-     * @param list<scalar> $bindings
-     * @param array<string, mixed> $context
+     * @param  list<scalar>  $bindings
+     * @param  array<string, mixed>  $context
      */
     public function scalar(string $sql, array $bindings = [], array $context = []): mixed
     {

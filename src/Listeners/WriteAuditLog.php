@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Listeners;
 
 use Illuminate\Contracts\Auth\Guard;
-use Illuminate\Database\DatabaseManager;
-use Simtabi\Laranail\DBConsole\Models\AuditLog;
-use Simtabi\Laranail\DBConsole\Audit\AuditChain;
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Database\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Audit\AuditChain;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
+use Simtabi\Laranail\DBConsole\Models\AuditLog;
 
 /**
  * Appends one hash-chained row to the audit trail for every domain event.
@@ -40,15 +40,15 @@ final readonly class WriteAuditLog
             $engine = $event->auditContext()['engine'] ?? null;
 
             $row = new AuditLog([
-                'action'            => $event->operation(),
-                'target'            => $event->target(),
-                'server'            => $event->serverName(),
-                'engine'            => is_string($engine) ? $engine : null,
-                'outcome'           => $event->outcome(),
+                'action' => $event->operation(),
+                'target' => $event->target(),
+                'server' => $event->serverName(),
+                'engine' => is_string($engine) ? $engine : null,
+                'outcome' => $event->outcome(),
                 'sanitized_message' => $this->sanitizedMessage($event),
-                'actor_type'        => $this->actorType(),
-                'actor_id'          => $this->actorId(),
-                'ip'                => $this->ip(),
+                'actor_type' => $this->actorType(),
+                'actor_id' => $this->actorId(),
+                'ip' => $this->ip(),
             ]);
             $row->created_at = now();
 

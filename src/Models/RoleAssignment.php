@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Override;
 use Illuminate\Database\Eloquent\Model;
-use Simtabi\Laranail\Enumerator\Casts\AsEnum;
-use Simtabi\Laranail\DBConsole\Enums\ScopeType;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Override;
+use Simtabi\Laranail\DBConsole\Enums\ScopeType;
+use Simtabi\Laranail\Enumerator\Casts\AsEnum;
 
 /**
  * The (assignee, role, scope) triple that grants console access — the row the
@@ -45,9 +45,9 @@ final class RoleAssignment extends CatalogModel
     public function scopeString(): string
     {
         return match ($this->scope_type) {
-            ScopeType::Global   => 'global',
-            ScopeType::Server   => 'server:' . $this->scope_ref,
-            ScopeType::Database => 'database:' . $this->scope_ref,
+            ScopeType::Global => 'global',
+            ScopeType::Server => 'server:'.$this->scope_ref,
+            ScopeType::Database => 'database:'.$this->scope_ref,
         };
     }
 

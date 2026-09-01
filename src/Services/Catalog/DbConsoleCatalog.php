@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Services\Catalog;
 
 use Illuminate\Contracts\Auth\Guard;
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Models\Grant;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\GrantScope;
-use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Models\Grant;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Results\AccountGrant;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * The Eloquent-backed catalog. Records what DBConsole did — ownership and
@@ -32,8 +32,8 @@ final readonly class DbConsoleCatalog implements Catalog
         ManagedDatabase::query()->updateOrCreate(
             ['server_name' => $server, 'name' => $db->value],
             [
-                'charset'    => $charset,
-                'collation'  => $collation,
+                'charset' => $charset,
+                'collation' => $collation,
                 'is_managed' => true,
                 'created_by' => $this->actorId(),
             ],
@@ -56,12 +56,12 @@ final readonly class DbConsoleCatalog implements Catalog
         }
 
         DbAccount::query()->create([
-            'server_name'   => $server,
-            'username'      => $user->value,
-            'host'          => $host->value,
+            'server_name' => $server,
+            'username' => $user->value,
+            'host' => $host->value,
             'username_hash' => $this->accountHash($server, $user, $host),
-            'is_managed'    => true,
-            'created_by'    => $this->actorId(),
+            'is_managed' => true,
+            'created_by' => $this->actorId(),
         ]);
     }
 
@@ -81,7 +81,7 @@ final readonly class DbConsoleCatalog implements Catalog
     {
         $account = $this->findAccount($server, $user, $oldHost);
         $account?->forceFill([
-            'host'          => $newHost->value,
+            'host' => $newHost->value,
             'username_hash' => $this->accountHash($server, $user, $newHost),
         ])->save();
     }
@@ -101,9 +101,9 @@ final readonly class DbConsoleCatalog implements Catalog
         Grant::query()->updateOrCreate(
             ['account_id' => $account->id, 'database_id' => $database->id],
             [
-                'preset'     => $set->preset,
+                'preset' => $set->preset,
                 'privileges' => $set->values(),
-                'scope'      => GrantScope::Database,
+                'scope' => GrantScope::Database,
                 'granted_by' => $this->actorId(),
             ],
         );

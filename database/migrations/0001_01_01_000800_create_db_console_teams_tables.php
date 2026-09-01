@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Builder;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Builder;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Teams stub tables. Ship DISABLED (rbac.teams.enabled=false) so the schema
@@ -52,6 +52,6 @@ return new class extends Migration
 
     private function table(string $name): string
     {
-        return ((string) config('laranail.db-console.catalog.prefix', 'db_console_')) . $name;
+        return ((string) config('laranail.db-console.catalog.prefix', 'db_console_')).$name;
     }
 };

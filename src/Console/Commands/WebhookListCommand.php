@@ -23,7 +23,7 @@ final class WebhookListCommand extends DBConsoleCommand
         foreach (WebhookSubscription::query()->get() as $s) {
             $state = $s->active ? 'active' : 'disabled';
             $this->line("{$s->id}  [{$state}]  {$s->url}");
-            $this->line('  events: ' . implode(', ', $s->events) . ($s->server !== null ? "  · server: {$s->server}" : ''));
+            $this->line('  events: '.implode(', ', $s->events).($s->server !== null ? "  · server: {$s->server}" : ''));
         }
 
         return self::SUCCESS;

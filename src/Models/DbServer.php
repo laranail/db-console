@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Override;
-use Simtabi\Laranail\Enumerator\Casts\AsEnum;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Override;
 use Simtabi\Laranail\DBConsole\Database\Factories\DbServerFactory;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
+use Simtabi\Laranail\Enumerator\Casts\AsEnum;
 
 /**
  * A registered server: name, engine, host/port, label, and a reference to
@@ -69,9 +69,9 @@ final class DbServer extends CatalogModel
             'engine' => AsEnum::of(EngineType::class),
             // Topology columns are encrypted at rest (defense in depth); the
             // toggle is honored via the encrypted casts below.
-            'host'       => 'encrypted',
+            'host' => 'encrypted',
             'is_managed' => 'boolean',
-            'version'    => 'integer',
+            'version' => 'integer',
         ];
     }
 }

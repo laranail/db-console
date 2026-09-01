@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Events;
 
-use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 
 /**
@@ -19,7 +19,7 @@ use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 abstract class DBConsoleEvent implements RecordsToAudit
 {
     /**
-     * @param array<string, mixed> $context sanitized detail; never secrets
+     * @param  array<string, mixed>  $context  sanitized detail; never secrets
      */
     public function __construct(
         public readonly string $server,

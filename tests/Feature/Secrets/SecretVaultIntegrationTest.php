@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
-use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
+use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
 
 beforeEach(function (): void {

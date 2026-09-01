@@ -30,6 +30,6 @@ final class Team extends CatalogModel
         /** @var class-string<Model> $userModel */
         $userModel = (string) config('laranail.db-console.rbac.user_model', '\App\Models\User');
 
-        return $this->belongsToMany($userModel, $this->prefix() . 'team_user', 'team_id', 'user_id');
+        return $this->belongsToMany($userModel, $this->prefix().'team_user', 'team_id', 'user_id');
     }
 }

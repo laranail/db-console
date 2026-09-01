@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Drivers;
 
-use Throwable;
-use Illuminate\Http\Client\PendingRequest;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\PendingRequest;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Enums\VaultAuthMethod;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Throwable;
 
 /**
  * The secret lives in HashiCorp Vault (KV v2); the catalog holds nothing
@@ -82,7 +82,7 @@ final class HashiCorpVault implements SecretVault
     }
 
     /**
-     * @param array<string, mixed> $data
+     * @param  array<string, mixed>  $data
      */
     private function write(string $path, array $data): void
     {
@@ -169,17 +169,17 @@ final class HashiCorpVault implements SecretVault
 
     private function path(string $ref): string
     {
-        return trim($this->config['path_prefix'] ?? 'db-console', '/') . '/' . ltrim($ref, '/');
+        return trim($this->config['path_prefix'] ?? 'db-console', '/').'/'.ltrim($ref, '/');
     }
 
     private function dataUrl(string $path): string
     {
-        return '/v1/' . $this->mount() . '/data/' . $path;
+        return '/v1/'.$this->mount().'/data/'.$path;
     }
 
     private function metadataUrl(string $path): string
     {
-        return '/v1/' . $this->mount() . '/metadata/' . $path;
+        return '/v1/'.$this->mount().'/metadata/'.$path;
     }
 
     private function mount(): string

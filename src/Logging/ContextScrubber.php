@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Logging;
 
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Domain\Password;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 
 /**
  * A second line of defense over the self-redacting value objects: walks a
@@ -25,8 +25,7 @@ final class ContextScrubber
     private const string REDACTED = '[redacted]';
 
     /**
-     * @param array<array-key, mixed> $context
-     *
+     * @param  array<array-key, mixed>  $context
      * @return array<array-key, mixed>
      */
     public function scrub(array $context): array

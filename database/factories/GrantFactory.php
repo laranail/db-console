@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Database\Factories;
 
-use Simtabi\Laranail\DBConsole\Models\Grant;
-use Simtabi\Laranail\DBConsole\Enums\GrantScope;
-use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Simtabi\Laranail\DBConsole\Enums\GrantScope;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Models\Grant;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 
 /**
@@ -33,11 +33,11 @@ final class GrantFactory extends Factory
         ]);
 
         return [
-            'account_id'  => DbAccount::factory(),
+            'account_id' => DbAccount::factory(),
             'database_id' => ManagedDatabase::factory(),
-            'preset'      => $preset,
-            'privileges'  => $this->privilegesFor($preset),
-            'scope'       => GrantScope::Database,
+            'preset' => $preset,
+            'privileges' => $this->privilegesFor($preset),
+            'scope' => GrantScope::Database,
         ];
     }
 
@@ -48,7 +48,7 @@ final class GrantFactory extends Factory
     public function preset(PrivilegePreset $preset): self
     {
         return $this->state([
-            'preset'     => $preset,
+            'preset' => $preset,
             'privileges' => $this->privilegesFor($preset),
         ]);
     }

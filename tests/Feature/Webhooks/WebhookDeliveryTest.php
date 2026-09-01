@@ -5,15 +5,15 @@ declare(strict_types=1);
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
-use Simtabi\Laranail\DBConsole\Webhooks\SignedPayload;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhook;
 use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhooks;
-use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
+use Simtabi\Laranail\DBConsole\Webhooks\SignedPayload;
 
 beforeEach(function (): void {
     $this->migrateCatalog();
@@ -23,11 +23,11 @@ beforeEach(function (): void {
     app(SecretVault::class)->store('webhook:test', new Secret($this->secret));
 
     $this->sub = WebhookSubscription::query()->create([
-        'url'           => 'https://hooks.example.com/db',
-        'events'        => ['database.dropped'],
-        'secret_ref'    => 'webhook:test',
-        'active'        => true,
-        'server'        => null,
+        'url' => 'https://hooks.example.com/db',
+        'events' => ['database.dropped'],
+        'secret_ref' => 'webhook:test',
+        'active' => true,
+        'server' => null,
         'failure_count' => 0,
     ]);
 });
@@ -66,7 +66,7 @@ it('signs the payload with HMAC and never includes a secret', function (): void 
     );
 
     // Signature verifies against the shared secret.
-    $expected = 'sha256=' . hash_hmac('sha256', $payload->body, $this->secret);
+    $expected = 'sha256='.hash_hmac('sha256', $payload->body, $this->secret);
     expect($payload->signature)->toBe($expected)
         // The body carries the FACT, never the signing secret or any password.
         ->and($payload->body)->not->toContain($this->secret)

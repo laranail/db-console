@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 
 /**
@@ -36,8 +36,8 @@ abstract class DBConsoleNotification extends Notification
             ->subject($this->subject())
             ->line($this->body())
             ->line("Server: {$event->serverName()}")
-            ->line('Target: ' . ($event->target() ?? 'n/a'))
-            ->line('Outcome: ' . $event->outcome()->value);
+            ->line('Target: '.($event->target() ?? 'n/a'))
+            ->line('Outcome: '.$event->outcome()->value);
     }
 
     /**
@@ -47,9 +47,9 @@ abstract class DBConsoleNotification extends Notification
     {
         return [
             'operation' => $this->event->operation()->value,
-            'server'    => $this->event->serverName(),
-            'target'    => $this->event->target(),
-            'outcome'   => $this->event->outcome()->value,
+            'server' => $this->event->serverName(),
+            'target' => $this->event->target(),
+            'outcome' => $this->event->outcome()->value,
         ];
     }
 

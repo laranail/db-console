@@ -26,9 +26,9 @@ final class EditAccountRequest extends FormRequest
     {
         return [
             'username' => ['required', 'string', new UsernameRule],
-            'host'     => ['required', 'string', new HostRule],
+            'host' => ['required', 'string', new HostRule],
             'new_host' => ['required', 'string', 'different:host', new HostRule],
-            'rotate'   => ['nullable', 'boolean'],
+            'rotate' => ['nullable', 'boolean'],
         ];
     }
 }

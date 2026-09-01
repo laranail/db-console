@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Validation\Rules;
 
 use Closure;
-use Simtabi\Laranail\DBConsole\Domain\Host;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**

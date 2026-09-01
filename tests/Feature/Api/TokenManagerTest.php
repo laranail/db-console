@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Schema;
+use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Api\TokenManager;
-use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
-use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 
 /**
  * A stub AccessManager granting exactly the listed permissions at global

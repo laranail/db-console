@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Override;
-use Illuminate\Support\Carbon;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
+use Override;
 use Simtabi\Laranail\DBConsole\Database\Factories\DbAccountFactory;
+use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
 
 /**
  * A database user/role. Records username, host, and last_password_rotated_at
@@ -65,11 +65,11 @@ final class DbAccount extends CatalogModel
     {
         return [
             // Username/host are topology; encrypted at rest (defense in depth).
-            'username'                 => 'encrypted',
-            'host'                     => 'encrypted',
+            'username' => 'encrypted',
+            'host' => 'encrypted',
             'last_password_rotated_at' => 'datetime',
-            'is_managed'               => 'boolean',
-            'version'                  => 'integer',
+            'is_managed' => 'boolean',
+            'version' => 'integer',
         ];
     }
 }

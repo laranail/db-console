@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 
@@ -18,36 +18,36 @@ use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 function injectionCorpus(): array
 {
     return [
-        'backtick'                => ['shop`db'],
-        'double backtick escape'  => ['shop``db'],
-        'single quote'            => ["shop'db"],
-        'double quote'            => ['shop"db'],
-        'semicolon piggyback'     => ['shop;DROP TABLE users'],
+        'backtick' => ['shop`db'],
+        'double backtick escape' => ['shop``db'],
+        'single quote' => ["shop'db"],
+        'double quote' => ['shop"db'],
+        'semicolon piggyback' => ['shop;DROP TABLE users'],
         'semicolon drop database' => ['shop_db; DROP DATABASE shop'],
-        'line comment'            => ['shop--db'],
-        'block comment'           => ['shop/*db*/'],
-        'space'                   => ['shop db'],
-        'tab'                     => ["shop\tdb"],
-        'newline'                 => ["shop\ndb"],
-        'carriage return'         => ["shop\rdb"],
-        'null byte'               => ["shop\0db"],
-        'dot qualifier'           => ['mysql.user'],
-        'percent wildcard'        => ['shop%db'],
-        'asterisk'                => ['shop*'],
-        'parentheses'             => ['shop(db)'],
-        'angle brackets'          => ['shop<db>'],
-        'square brackets'         => ['shop[db]'],
-        'backslash'               => ['shop\\db'],
-        'dollar interpolation'    => ['shop${db}'],
-        'at sign'                 => ['user@host'],
-        'equals'                  => ['shop=db'],
-        'cyrillic homoglyph o'    => ['shоp'],
-        'cyrillic homoglyph h'    => ['sһop'],
-        'fullwidth latin'         => ['ｓhop'],
-        'zero-width space'        => ["shop\u{200B}db"],
-        'combining accent'        => ["shop\u{0301}"],
-        'emoji'                   => ['shop💣'],
-        'empty string'            => [''],
+        'line comment' => ['shop--db'],
+        'block comment' => ['shop/*db*/'],
+        'space' => ['shop db'],
+        'tab' => ["shop\tdb"],
+        'newline' => ["shop\ndb"],
+        'carriage return' => ["shop\rdb"],
+        'null byte' => ["shop\0db"],
+        'dot qualifier' => ['mysql.user'],
+        'percent wildcard' => ['shop%db'],
+        'asterisk' => ['shop*'],
+        'parentheses' => ['shop(db)'],
+        'angle brackets' => ['shop<db>'],
+        'square brackets' => ['shop[db]'],
+        'backslash' => ['shop\\db'],
+        'dollar interpolation' => ['shop${db}'],
+        'at sign' => ['user@host'],
+        'equals' => ['shop=db'],
+        'cyrillic homoglyph o' => ['shоp'],
+        'cyrillic homoglyph h' => ['sһop'],
+        'fullwidth latin' => ['ｓhop'],
+        'zero-width space' => ["shop\u{200B}db"],
+        'combining accent' => ["shop\u{0301}"],
+        'emoji' => ['shop💣'],
+        'empty string' => [''],
     ];
 }
 
@@ -75,22 +75,22 @@ describe('Host rejects hostile input', function (): void {
     it('throws InvalidIdentifier', function (string $input): void {
         new Host($input);
     })->with([
-        'backtick'                 => ['10.0.%`'],
-        'single quote'             => ["10.0.0.1'"],
-        'double quote'             => ['10.0.0.1"'],
-        'semicolon piggyback'      => ['localhost;DROP TABLE users'],
-        'space'                    => ['local host'],
-        'newline'                  => ["10.0.\n%"],
-        'null byte'                => ["localhost\0"],
-        'at sign'                  => ['user@10.0.0.1'],
-        'slash comment'            => ['10.0/*x*/.1'],
-        'backslash'                => ['host\\name'],
-        'parentheses'              => ['host()'],
-        'cyrillic homoglyph'       => ['lоcalhost'],
-        'zero-width space'         => ["local\u{200B}host"],
+        'backtick' => ['10.0.%`'],
+        'single quote' => ["10.0.0.1'"],
+        'double quote' => ['10.0.0.1"'],
+        'semicolon piggyback' => ['localhost;DROP TABLE users'],
+        'space' => ['local host'],
+        'newline' => ["10.0.\n%"],
+        'null byte' => ["localhost\0"],
+        'at sign' => ['user@10.0.0.1'],
+        'slash comment' => ['10.0/*x*/.1'],
+        'backslash' => ['host\\name'],
+        'parentheses' => ['host()'],
+        'cyrillic homoglyph' => ['lоcalhost'],
+        'zero-width space' => ["local\u{200B}host"],
         'ipv6 (unsupported in v1)' => ['::1'],
-        'empty string'             => [''],
-        'overlong (256 chars)'     => [str_repeat('a', 256)],
+        'empty string' => [''],
+        'overlong (256 chars)' => [str_repeat('a', 256)],
     ])->throws(InvalidIdentifier::class);
 });
 

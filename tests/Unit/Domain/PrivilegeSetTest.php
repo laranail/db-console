@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Enums\Privilege;
-use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
-use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
-use Simtabi\Laranail\DBConsole\Exceptions\ForbiddenPrivilege;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Enums\ForbiddenPrivilege as ForbiddenPrivilegeEnum;
+use Simtabi\Laranail\DBConsole\Enums\Privilege;
+use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Exceptions\ForbiddenPrivilege;
+use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
 
 describe('preset composition (section 12 table)', function (): void {
     it('ReadOnly is read data + views', function (): void {

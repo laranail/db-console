@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Listeners;
 
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 
 /**
  * Writes a structured entry to the dedicated db-console log channel for
@@ -20,8 +20,8 @@ final readonly class WriteChannelLog
     public function handle(RecordsToAudit $event): void
     {
         $this->log->write($event->severity(), $event->operation()->value, [
-            'server'  => $event->serverName(),
-            'target'  => $event->target(),
+            'server' => $event->serverName(),
+            'target' => $event->target(),
             'outcome' => $event->outcome()->value,
             ...$event->auditContext(),
         ]);

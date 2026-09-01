@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Encryption;
 
+use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\TlsStatus;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 
 /**
@@ -68,11 +68,11 @@ final readonly class TlsChecker
         return match ($this->status($server)) {
             TlsStatus::Off => [[
                 'severity' => Severity::Error,
-                'message'  => "TLS is OFF on non-local server '{$server}'. Admin credentials cross this connection; enable TLS (tls.enabled=true).",
+                'message' => "TLS is OFF on non-local server '{$server}'. Admin credentials cross this connection; enable TLS (tls.enabled=true).",
             ]],
             TlsStatus::Unverified => [[
                 'severity' => Severity::Warning,
-                'message'  => "TLS on server '{$server}' does not verify the server certificate (tls.verify=false); enable verification.",
+                'message' => "TLS on server '{$server}' does not verify the server certificate (tls.verify=false); enable verification.",
             ]],
             default => [],
         };

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Illuminate\Database\Eloquent\Model;
 use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * Dry-run a permission at a scope for an operator (allowed/denied + why).
