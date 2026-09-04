@@ -14,7 +14,7 @@ use Simtabi\Laranail\DBConsole\Enums\EngineType;
 final readonly class ServerDefinition
 {
     /**
-     * @param  array{enabled: bool, verify: bool, ca: ?string, cert: ?string, key: ?string}  $tls
+     * @param array{enabled: bool, verify: bool, ca: ?string, cert: ?string, key: ?string} $tls
      */
     public function __construct(
         public string $name,

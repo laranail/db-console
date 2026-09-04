@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 /**
  * A credential could not be resolved from the vault/KMS at use-time.

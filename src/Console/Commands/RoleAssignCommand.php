@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
-use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Validation\Rules\ScopeRule;
+use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 
 /**
  * Assign a console role to an operator at a scope.

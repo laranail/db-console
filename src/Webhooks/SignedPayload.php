@@ -23,10 +23,10 @@ final readonly class SignedPayload
     public static function build(RecordsToAudit $domainEvent, string $eventName, string $secret, string $occurredAt): self
     {
         $body = (string) json_encode([
-            'event' => $eventName,
-            'server' => $domainEvent->serverName(),
-            'target' => $domainEvent->target(),
-            'outcome' => $domainEvent->outcome()->value,
+            'event'       => $eventName,
+            'server'      => $domainEvent->serverName(),
+            'target'      => $domainEvent->target(),
+            'outcome'     => $domainEvent->outcome()->value,
             'occurred_at' => $occurredAt,
         ], JSON_UNESCAPED_SLASHES);
 
@@ -35,7 +35,7 @@ final readonly class SignedPayload
         return new self(
             event: $eventName,
             body: $body,
-            signature: $algo.'='.hash_hmac($algo, $body, $secret),
+            signature: $algo . '=' . hash_hmac($algo, $body, $secret),
         );
     }
 

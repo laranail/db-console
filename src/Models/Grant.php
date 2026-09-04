@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
-use Simtabi\Laranail\DBConsole\Database\Factories\GrantFactory;
-use Simtabi\Laranail\DBConsole\Enums\GrantScope;
-use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\Enumerator\Casts\AsEnum;
+use Simtabi\Laranail\DBConsole\Enums\GrantScope;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Simtabi\Laranail\DBConsole\Database\Factories\GrantFactory;
 
 /**
  * A privilege assignment: which account holds which preset/privileges on
@@ -62,8 +62,8 @@ final class Grant extends CatalogModel
     protected function casts(): array
     {
         return [
-            'preset' => AsEnum::of(PrivilegePreset::class),
-            'scope' => AsEnum::of(GrantScope::class),
+            'preset'     => AsEnum::of(PrivilegePreset::class),
+            'scope'      => AsEnum::of(GrantScope::class),
             'privileges' => 'array',
         ];
     }

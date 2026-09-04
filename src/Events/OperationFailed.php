@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
 
 /**
  * A privileged operation failed. Severity is critical for destructive
@@ -16,7 +16,7 @@ use Simtabi\Laranail\DBConsole\Enums\Severity;
 final class OperationFailed extends DBConsoleEvent
 {
     /**
-     * @param  array<string, mixed>  $context
+     * @param array<string, mixed> $context
      */
     public function __construct(
         string $server,

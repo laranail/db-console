@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 use Simtabi\Laranail\DBConsole\Models\DbServer;
+use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 
 /*
  * The catalog is host-agnostic: with no connection configured it rides the
@@ -33,7 +33,7 @@ it('rides the host default connection when no catalog connection is configured',
         ->and((new DbServer)->getConnectionName())->toBe('host_default');
 
     // Migrations target that connection; the db_console_ tables land there.
-    $this->loadMigrationsFrom(__DIR__.'/../../../database/migrations');
+    $this->loadMigrationsFrom(__DIR__ . '/../../../database/migrations');
     expect(DbServer::query()->count())->toBe(0);   // table exists, empty
 });
 

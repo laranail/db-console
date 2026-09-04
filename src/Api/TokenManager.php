@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Api;
 
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
+use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 
 /**
  * Issues API tokens (Sanctum personal access tokens) whose abilities are the
@@ -22,7 +22,8 @@ final readonly class TokenManager
     public function __construct(private AccessManager $access) {}
 
     /**
-     * @param  list<string>  $abilities  requested ConsolePermission values
+     * @param list<string> $abilities requested ConsolePermission values
+     *
      * @return array{token: string, abilities: list<string>}
      */
     public function issue(Authenticatable $operator, string $name, array $abilities): array

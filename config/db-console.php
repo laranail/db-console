@@ -44,11 +44,11 @@ return [
                 // doctor errors (not just warns) if a non-local server has
                 // TLS off.
                 'enabled' => (bool) env('DB_CONSOLE_PRIMARY_TLS', true),
-                'verify' => true,
-                'ca' => env('DB_CONSOLE_PRIMARY_TLS_CA'),
+                'verify'  => true,
+                'ca'      => env('DB_CONSOLE_PRIMARY_TLS_CA'),
                 // cert/key optional, for mutual TLS:
                 'cert' => env('DB_CONSOLE_PRIMARY_TLS_CERT'),
-                'key' => env('DB_CONSOLE_PRIMARY_TLS_KEY'),
+                'key'  => env('DB_CONSOLE_PRIMARY_TLS_KEY'),
             ],
 
             'at_rest' => [
@@ -65,7 +65,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'databases' => [
-        'default_charset' => 'utf8mb4',
+        'default_charset'   => 'utf8mb4',
         'default_collation' => 'utf8mb4_unicode_ci',
     ],
 
@@ -75,7 +75,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'accounts' => [
-        'default_host' => 'localhost',
+        'default_host'        => 'localhost',
         'password_min_length' => 16,
     ],
 
@@ -94,8 +94,8 @@ return [
     */
     'catalog' => [
         'connection' => env('DB_CONSOLE_CATALOG_CONNECTION'),
-        'prefix' => 'db_console_',
-        'database' => env('DB_CONSOLE_CATALOG_PATH', storage_path('db-console/catalog.sqlite')),
+        'prefix'     => 'db_console_',
+        'database'   => env('DB_CONSOLE_CATALOG_PATH', storage_path('db-console/catalog.sqlite')),
     ],
 
     /*
@@ -113,18 +113,18 @@ return [
 
         'kms' => [
             'provider' => env('DB_CONSOLE_KMS_PROVIDER', 'aws'), // KmsProvider enum: aws | gcp
-            'key_id' => env('DB_CONSOLE_KMS_KEY_ID'),
-            'region' => env('DB_CONSOLE_KMS_REGION'),
+            'key_id'   => env('DB_CONSOLE_KMS_KEY_ID'),
+            'region'   => env('DB_CONSOLE_KMS_REGION'),
             // Uses the standard AWS/GCP SDK credential chain (IAM role preferred).
         ],
 
         'vault' => [
-            'address' => env('DB_CONSOLE_VAULT_ADDR'),
-            'auth' => env('DB_CONSOLE_VAULT_AUTH', 'approle'), // VaultAuthMethod enum: approle | token
-            'role_id' => env('DB_CONSOLE_VAULT_ROLE_ID'),
-            'secret_id' => env('DB_CONSOLE_VAULT_SECRET_ID'),
-            'token' => env('DB_CONSOLE_VAULT_TOKEN'),
-            'mount' => env('DB_CONSOLE_VAULT_MOUNT', 'secret'),
+            'address'     => env('DB_CONSOLE_VAULT_ADDR'),
+            'auth'        => env('DB_CONSOLE_VAULT_AUTH', 'approle'), // VaultAuthMethod enum: approle | token
+            'role_id'     => env('DB_CONSOLE_VAULT_ROLE_ID'),
+            'secret_id'   => env('DB_CONSOLE_VAULT_SECRET_ID'),
+            'token'       => env('DB_CONSOLE_VAULT_TOKEN'),
+            'mount'       => env('DB_CONSOLE_VAULT_MOUNT', 'secret'),
             'path_prefix' => env('DB_CONSOLE_VAULT_PATH', 'db-console'),
         ],
 
@@ -149,7 +149,7 @@ return [
         // file/backup, NOT an on-box attacker.
         'sqlcipher' => [
             'enabled' => (bool) env('DB_CONSOLE_SQLCIPHER', false),
-            'key' => env('DB_CONSOLE_CIPHER_KEY'),
+            'key'     => env('DB_CONSOLE_CIPHER_KEY'),
         ],
     ],
 
@@ -184,11 +184,11 @@ return [
     |--------------------------------------------------------------------------
     */
     'api' => [
-        'enabled' => (bool) env('DB_CONSOLE_API', false),
-        'path' => env('DB_CONSOLE_API_PATH', 'api/db-console'),
-        'auth' => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
-        'allowed_ips' => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
-        'rate_limit' => env('DB_CONSOLE_API_RATE', '60,1'), // requests, per minutes
+        'enabled'       => (bool) env('DB_CONSOLE_API', false),
+        'path'          => env('DB_CONSOLE_API_PATH', 'api/db-console'),
+        'auth'          => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
+        'allowed_ips'   => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
+        'rate_limit'    => env('DB_CONSOLE_API_RATE', '60,1'), // requests, per minutes
         'require_https' => true,
         // Destructive endpoints require a confirmation field in the body.
         'confirm_destructive' => true,
@@ -200,11 +200,11 @@ return [
     |--------------------------------------------------------------------------
     */
     'webhooks' => [
-        'enabled' => (bool) env('DB_CONSOLE_WEBHOOKS', false),
-        'queue' => true,
-        'timeout' => 5,
+        'enabled'      => (bool) env('DB_CONSOLE_WEBHOOKS', false),
+        'queue'        => true,
+        'timeout'      => 5,
         'max_attempts' => 5, // retries with backoff, then auto-disable + alert
-        'sign_with' => 'sha256', // HMAC over the payload using each subscription's secret
+        'sign_with'    => 'sha256', // HMAC over the payload using each subscription's secret
     ],
 
     /*
@@ -224,9 +224,9 @@ return [
     | Requires laranail/db-tools; disabled with a clear notice when absent.
     */
     'backup' => [
-        'enabled' => true,
-        'before_drop' => true,
-        'disk' => env('DB_CONSOLE_BACKUP_DISK', 'local'),
+        'enabled'        => true,
+        'before_drop'    => true,
+        'disk'           => env('DB_CONSOLE_BACKUP_DISK', 'local'),
         'retention_days' => 30,
     ],
 
@@ -239,12 +239,12 @@ return [
     */
     'notifications' => [
         'recipients' => [
-            'routine' => [],
+            'routine'     => [],
             'destructive' => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
-            'security' => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
+            'security'    => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
         ],
         'quiet_hours' => null,
-        'queue' => true,
+        'queue'       => true,
     ],
 
     /*
@@ -263,7 +263,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'audit' => [
-        'enabled' => true,
+        'enabled'    => true,
         'hash_chain' => true,
     ],
 

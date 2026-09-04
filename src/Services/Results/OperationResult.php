@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Services\Results;
 
-use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
 
 /**
  * The result of a service operation: its outcome, the operation type, and a
@@ -16,7 +16,7 @@ use Simtabi\Laranail\DBConsole\Enums\OperationType;
 final readonly class OperationResult
 {
     /**
-     * @param  array<string, scalar|null>  $data  secret-free identity/detail
+     * @param array<string, scalar|null> $data secret-free identity/detail
      */
     public function __construct(
         public OperationType $operation,
@@ -28,7 +28,7 @@ final readonly class OperationResult
     ) {}
 
     /**
-     * @param  array<string, scalar|null>  $data  secret-free identity/detail
+     * @param array<string, scalar|null> $data secret-free identity/detail
      */
     public static function succeeded(
         OperationType $operation,

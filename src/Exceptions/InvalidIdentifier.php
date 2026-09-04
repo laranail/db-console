@@ -9,9 +9,9 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 final class InvalidIdentifier extends DomainException
 {
     /**
-     * @param  string  $kind  what was being validated ("database name", "username", "host")
-     * @param  string  $value  the rejected input
-     * @param  string  $requirement  the allow-list requirement, in plain words
+     * @param string $kind what was being validated ("database name", "username", "host")
+     * @param string $value the rejected input
+     * @param string $requirement the allow-list requirement, in plain words
      */
     public static function forValue(string $kind, string $value, string $requirement): self
     {

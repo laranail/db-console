@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
-use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * PostgreSQL uses roles, not user@host accounts: a login is a ROLE WITH
@@ -27,16 +27,16 @@ final class PostgresEngine implements Engine
 {
     /** @var array<string, string> */
     private const array PRIVILEGE_MAP = [
-        'select' => 'SELECT',
-        'insert' => 'INSERT',
-        'update' => 'UPDATE',
-        'delete' => 'DELETE',
+        'select'     => 'SELECT',
+        'insert'     => 'INSERT',
+        'update'     => 'UPDATE',
+        'delete'     => 'DELETE',
         'references' => 'REFERENCES',
-        'trigger' => 'TRIGGER',
+        'trigger'    => 'TRIGGER',
         // Postgres grants CREATE/TEMP at the database level and the rest at
         // table/schema level; the ones without a direct table-grant analogue
         // map to the closest standard privilege.
-        'create' => 'CREATE',
+        'create'  => 'CREATE',
         'execute' => 'EXECUTE',
     ];
 
@@ -68,8 +68,8 @@ final class PostgresEngine implements Engine
 
         return new StatementList(
             Statement::plain(
-                'CREATE DATABASE '.$q->identifier($db->value)
-                .' ENCODING '.$q->literal(strtoupper($charset->value)),
+                'CREATE DATABASE ' . $q->identifier($db->value)
+                . ' ENCODING ' . $q->literal(strtoupper($charset->value)),
             ),
         );
     }
@@ -78,7 +78,7 @@ final class PostgresEngine implements Engine
     {
         $q = Quoter::for($this->type());
 
-        return new StatementList(Statement::plain('DROP DATABASE '.$q->identifier($db->value)));
+        return new StatementList(Statement::plain('DROP DATABASE ' . $q->identifier($db->value)));
     }
 
     public function listDatabases(): StatementList
@@ -95,7 +95,7 @@ final class PostgresEngine implements Engine
 
         return new StatementList(
             Statement::sensitive(
-                sql: "CREATE ROLE {$role} WITH LOGIN PASSWORD ".$q->literal($p->reveal()),
+                sql: "CREATE ROLE {$role} WITH LOGIN PASSWORD " . $q->literal($p->reveal()),
                 redacted: "CREATE ROLE {$role} WITH LOGIN PASSWORD '[redacted]'",
             ),
         );
@@ -105,7 +105,7 @@ final class PostgresEngine implements Engine
     {
         $q = Quoter::for($this->type());
 
-        return new StatementList(Statement::plain('DROP ROLE '.$q->identifier($u->value)));
+        return new StatementList(Statement::plain('DROP ROLE ' . $q->identifier($u->value)));
     }
 
     public function setPassword(Username $u, Host $h, Password $p): StatementList
@@ -115,7 +115,7 @@ final class PostgresEngine implements Engine
 
         return new StatementList(
             Statement::sensitive(
-                sql: "ALTER ROLE {$role} WITH PASSWORD ".$q->literal($p->reveal()),
+                sql: "ALTER ROLE {$role} WITH PASSWORD " . $q->literal($p->reveal()),
                 redacted: "ALTER ROLE {$role} WITH PASSWORD '[redacted]'",
             ),
         );
@@ -134,9 +134,9 @@ final class PostgresEngine implements Engine
         $role = $q->identifier($u->value);
 
         return new StatementList(
-            Statement::plain('GRANT CONNECT ON DATABASE '.$q->identifier($db->value)." TO {$role}"),
+            Statement::plain('GRANT CONNECT ON DATABASE ' . $q->identifier($db->value) . " TO {$role}"),
             Statement::plain(
-                'GRANT '.$this->privilegeList($s)." ON ALL TABLES IN SCHEMA public TO {$role}",
+                'GRANT ' . $this->privilegeList($s) . " ON ALL TABLES IN SCHEMA public TO {$role}",
             ),
         );
     }
@@ -148,7 +148,7 @@ final class PostgresEngine implements Engine
 
         return new StatementList(
             Statement::plain(
-                'REVOKE '.$this->privilegeList($s)." ON ALL TABLES IN SCHEMA public FROM {$role}",
+                'REVOKE ' . $this->privilegeList($s) . " ON ALL TABLES IN SCHEMA public FROM {$role}",
             ),
         );
     }
@@ -158,7 +158,7 @@ final class PostgresEngine implements Engine
         return new StatementList(
             Statement::plain(
                 'SELECT table_schema, table_name, privilege_type FROM information_schema.role_table_grants'
-                .' WHERE grantee = '.Quoter::for($this->type())->literal($u->value),
+                . ' WHERE grantee = ' . Quoter::for($this->type())->literal($u->value),
             ),
         );
     }

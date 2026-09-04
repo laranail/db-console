@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * The closed set of machine-readable error codes. Every DBConsoleException
@@ -68,7 +68,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
             self::AuthenticationFailed,
             self::InsufficientPrivilege,
             self::OperationFailed => 502,
-            default => 500,
+            default               => 500,
         };
     }
 }
