@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Simtabi\Laranail\DBConsole\Exceptions\InsecureSecretDriver;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Exceptions\InsecureSecretDriver;
 
 /*
  * The boot-time guard: app_key is refused in production without the

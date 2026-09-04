@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Http\Api\Controllers;
 
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
 use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
 use Simtabi\Laranail\DBConsole\Validation\Requests\WebhookRequest;
-use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
 
 /**
  * Webhook subscriptions API. Creating a subscription mints a signing secret,
@@ -20,11 +20,11 @@ final class WebhookController
     public function index(): JsonResponse
     {
         $data = WebhookSubscription::query()->get()->map(static fn (WebhookSubscription $s): array => [
-            'id' => $s->id,
-            'url' => $s->url,
-            'events' => $s->events,
-            'active' => $s->active,
-            'server' => $s->server,
+            'id'            => $s->id,
+            'url'           => $s->url,
+            'events'        => $s->events,
+            'active'        => $s->active,
+            'server'        => $s->server,
             'failure_count' => $s->failure_count,
         ])->all();
 
@@ -43,9 +43,9 @@ final class WebhookController
         );
 
         return new JsonResponse([
-            'id' => $subscription->id,
-            'url' => $subscription->url,
-            'events' => $subscription->events,
+            'id'             => $subscription->id,
+            'url'            => $subscription->url,
+            'events'         => $subscription->events,
             'signing_secret' => $secret,   // shown once
         ], 201);
     }

@@ -7,8 +7,8 @@ namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Simtabi\Laranail\DBConsole\Enums\Charset;
 use Simtabi\Laranail\DBConsole\Enums\Collation;
-use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 use Simtabi\Laranail\Enumerator\Rules\EnumValue;
+use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 
 /**
  * The single validation definition for creating a database — used directly
@@ -29,8 +29,8 @@ final class CreateDatabaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', new IdentifierRule],
-            'charset' => ['nullable', 'string', EnumValue::for(Charset::class)],
+            'name'      => ['required', 'string', new IdentifierRule],
+            'charset'   => ['nullable', 'string', EnumValue::for(Charset::class)],
             'collation' => ['nullable', 'string', EnumValue::for(Collation::class)],
         ];
     }

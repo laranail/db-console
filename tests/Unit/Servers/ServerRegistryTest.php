@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Engines\MySqlEngine;
 use Simtabi\Laranail\DBConsole\Engines\PostgresEngine;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
-use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
+use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
 
 function registry(): ServerRegistry
 {

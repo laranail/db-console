@@ -3,12 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
-use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AccountController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AuditController;
-use Simtabi\Laranail\DBConsole\Http\Api\Controllers\DatabaseController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\GrantController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\ServerController;
+use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AccountController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\WebhookController;
+use Simtabi\Laranail\DBConsole\Http\Api\Controllers\DatabaseController;
 
 /*
  * DBConsole REST API. Loaded only when laranail.db-console.api.enabled is

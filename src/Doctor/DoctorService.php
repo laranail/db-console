@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
-use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Probes the deployment for security and health problems (scenario A). For
@@ -66,7 +66,7 @@ final readonly class DoctorService
             $findings[] = new DoctorFinding("server:{$server}:tls", $problem['severity'], $problem['message']);
         }
         if ($this->tls->problems($server) === []) {
-            $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': ".$this->tls->status($server)->value.'.');
+            $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': " . $this->tls->status($server)->value . '.');
         }
 
         $findings[] = $this->checkAdminPrivileges($server);
@@ -74,7 +74,7 @@ final readonly class DoctorService
         $capabilities = $this->registry->engine($server)->capabilities();
         $findings[] = DoctorFinding::ok(
             "server:{$server}:capabilities",
-            "Capabilities on '{$server}': ".$this->summariseCapabilities($capabilities->toArray()),
+            "Capabilities on '{$server}': " . $this->summariseCapabilities($capabilities->toArray()),
         );
 
         return $findings;
@@ -84,7 +84,7 @@ final readonly class DoctorService
      * Raise a SuspiciousActivity alert for each root-like admin found (a
      * security warning per section 10).
      *
-     * @param  list<DoctorFinding>  $findings
+     * @param list<DoctorFinding> $findings
      */
     public function alertOnSecurityFindings(array $findings): void
     {
@@ -159,12 +159,12 @@ final readonly class DoctorService
 
         return DoctorFinding::ok(
             'catalog:encryption',
-            'Catalog encryption: '.$report['mode'].($report['reason'] !== null ? " ({$report['reason']})" : ''),
+            'Catalog encryption: ' . $report['mode'] . ($report['reason'] !== null ? " ({$report['reason']})" : ''),
         );
     }
 
     /**
-     * @param  array<string, bool|string|null>  $capabilities
+     * @param array<string, bool|string|null> $capabilities
      */
     private function summariseCapabilities(array $capabilities): string
     {

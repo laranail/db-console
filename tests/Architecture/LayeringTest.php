@@ -62,7 +62,7 @@ test('the core ships no Blade views, Livewire components, or UI assets (headless
  */
 function nonEngineFilesMintingStatements(): array
 {
-    $srcDir = dirname(__DIR__, 2).'/src';
+    $srcDir = dirname(__DIR__, 2) . '/src';
     $offenders = [];
 
     $iterator = new RecursiveIteratorIterator(
@@ -78,12 +78,12 @@ function nonEngineFilesMintingStatements(): array
         }
 
         $path = (string) $file->getRealPath();
-        $relative = str_replace($srcDir.DIRECTORY_SEPARATOR, '', $path);
+        $relative = str_replace($srcDir . DIRECTORY_SEPARATOR, '', $path);
         // The sanctioned producers, and the Statement definition itself.
-        if (str_starts_with($relative, 'Engines'.DIRECTORY_SEPARATOR)) {
+        if (str_starts_with($relative, 'Engines' . DIRECTORY_SEPARATOR)) {
             continue;
         }
-        if ($relative === 'Domain'.DIRECTORY_SEPARATOR.'Statement.php') {
+        if ($relative === 'Domain' . DIRECTORY_SEPARATOR . 'Statement.php') {
             continue;
         }
 
@@ -103,9 +103,9 @@ test('only Engines mint statements — nothing outside Engines/ calls the Statem
 test('the Statement factory scan actually detects a violation (guards against a tautology)', function (): void {
     // A control: a temp file in a non-engine dir that mints a Statement is
     // caught. This proves the scan above is not vacuously green.
-    $srcDir = dirname(__DIR__, 2).'/src';
-    $probeDir = $srcDir.'/Services';
-    $probe = $probeDir.'/__ArchProbe.php';
+    $srcDir = dirname(__DIR__, 2) . '/src';
+    $probeDir = $srcDir . '/Services';
+    $probe = $probeDir . '/__ArchProbe.php';
 
     if (! is_dir($probeDir)) {
         mkdir($probeDir, 0o755, true);

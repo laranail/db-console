@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * The curated collation options offered by the create-database flow
@@ -51,9 +51,9 @@ enum Collation: string implements Enumerator, Translatable
                 self::Utf8mb40900AiCi, self::Utf8mb4Bin,
             ],
             Charset::Utf8mb3 => [self::Utf8mb3GeneralCi],
-            Charset::Latin1 => [self::Latin1SwedishCi],
-            Charset::Binary => [self::Binary],
-            default => [],
+            Charset::Latin1  => [self::Latin1SwedishCi],
+            Charset::Binary  => [self::Binary],
+            default          => [],
         };
     }
 }

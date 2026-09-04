@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Domain;
 
+use Stringable;
 use JsonSerializable;
 use SensitiveParameter;
-use Simtabi\Laranail\DBConsole\Domain\Concerns\RedactsSelf;
 use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
-use Stringable;
+use Simtabi\Laranail\DBConsole\Domain\Concerns\RedactsSelf;
 
 /**
  * An account password: strength-checked on construction, self-redacting on

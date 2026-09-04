@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * The privileged operations DBConsole performs — the vocabulary of the
@@ -63,7 +63,7 @@ enum OperationType: string implements Enumerator, Translatable
     {
         return match ($this) {
             self::DatabaseDrop, self::AccountDrop => true,
-            default => false,
+            default                               => false,
         };
     }
 }

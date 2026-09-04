@@ -26,8 +26,8 @@ final readonly class Quoter
     {
         return match ($engine) {
             EngineType::Mysql, EngineType::Mariadb => new self('`', '`', '`', '``'),
-            EngineType::Pgsql, EngineType::Sqlite => new self('"', '"', '"', '""'),
-            EngineType::Sqlsrv => new self('[', ']', ']', ']]'),
+            EngineType::Pgsql, EngineType::Sqlite  => new self('"', '"', '"', '""'),
+            EngineType::Sqlsrv                     => new self('[', ']', ']', ']]'),
         };
     }
 
@@ -36,7 +36,7 @@ final readonly class Quoter
      */
     public function identifier(string $value): string
     {
-        return $this->open.str_replace($this->escapeFrom, $this->escapeTo, $value).$this->close;
+        return $this->open . str_replace($this->escapeFrom, $this->escapeTo, $value) . $this->close;
     }
 
     /**
@@ -45,6 +45,6 @@ final readonly class Quoter
      */
     public function literal(string $value): string
     {
-        return "'".str_replace("'", "''", $value)."'";
+        return "'" . str_replace("'", "''", $value) . "'";
     }
 }

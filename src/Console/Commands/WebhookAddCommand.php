@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Add a webhook subscription; prints its signing secret once.
@@ -41,7 +41,7 @@ final class WebhookAddCommand extends DBConsoleCommand
         }
 
         $this->success("Webhook {$subscription->id} added.");
-        $this->components->warn('Signing secret (shown once): '.$secret);
+        $this->components->warn('Signing secret (shown once): ' . $secret);
 
         return self::SUCCESS;
     }

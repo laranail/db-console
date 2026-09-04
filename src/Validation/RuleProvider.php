@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Validation;
 
-use Illuminate\Foundation\Http\FormRequest;
 use InvalidArgumentException;
+use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * The single source of field→rules per operation. Every caller — the REST
@@ -20,7 +20,8 @@ final class RuleProvider
      * The field→rules array for an operation, identified by its
      * FormRequest class.
      *
-     * @param  class-string<FormRequest>  $requestClass
+     * @param class-string<FormRequest> $requestClass
+     *
      * @return array<string, list<mixed>>
      */
     public static function for(string $requestClass): array
@@ -53,7 +54,8 @@ final class RuleProvider
      * The rules for one field of an operation — what a Prompter validator
      * or a Livewire property binds to.
      *
-     * @param  class-string<FormRequest>  $requestClass
+     * @param class-string<FormRequest> $requestClass
+     *
      * @return list<mixed>
      */
     public static function field(string $requestClass, string $field): array
@@ -72,7 +74,8 @@ final class RuleProvider
      * their own Validator (CLI prompts, Livewire) show the same wording the
      * FormRequest would.
      *
-     * @param  class-string<FormRequest>  $requestClass
+     * @param class-string<FormRequest> $requestClass
+     *
      * @return array<string, string>
      */
     public static function messages(string $requestClass): array

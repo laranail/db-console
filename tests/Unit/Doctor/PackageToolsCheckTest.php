@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorFinding;
 use Simtabi\Laranail\DBConsole\Doctor\PackageToolsCheck;
-use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\Package\Tools\Services\Doctor\DoctorStatus;
 
 describe('bespoke finding → DoctorResult mapping', function (): void {
