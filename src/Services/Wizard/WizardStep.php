@@ -16,8 +16,8 @@ use Closure;
 final readonly class WizardStep
 {
     /**
-     * @param  Closure(): mixed  $forward
-     * @param  ?Closure(): void  $compensate  null = nothing to undo (e.g. a failed grant)
+     * @param Closure(): mixed $forward
+     * @param ?Closure(): void $compensate null = nothing to undo (e.g. a failed grant)
      */
     public function __construct(
         public string $label,

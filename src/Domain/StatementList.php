@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Domain;
 
-use ArrayIterator;
 use Countable;
-use IteratorAggregate;
 use Traversable;
+use ArrayIterator;
+use IteratorAggregate;
 
 /**
  * An ordered list of statements produced by an engine. Immutable; only

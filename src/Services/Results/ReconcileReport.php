@@ -13,10 +13,10 @@ namespace Simtabi\Laranail\DBConsole\Services\Results;
 final readonly class ReconcileReport
 {
     /**
-     * @param  list<string>  $orphanDatabases  catalog databases missing on the server
-     * @param  list<string>  $unmanagedDatabases  live databases with no catalog row
-     * @param  list<string>  $orphanAccounts  catalog accounts missing on the server
-     * @param  list<string>  $unmanagedAccounts  live accounts with no catalog row
+     * @param list<string> $orphanDatabases catalog databases missing on the server
+     * @param list<string> $unmanagedDatabases live databases with no catalog row
+     * @param list<string> $orphanAccounts catalog accounts missing on the server
+     * @param list<string> $unmanagedAccounts live accounts with no catalog row
      */
     public function __construct(
         public string $server,

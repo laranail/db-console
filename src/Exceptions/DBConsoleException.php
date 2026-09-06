@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Exceptions;
 
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use RuntimeException;
-use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Throwable;
+use RuntimeException;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 /**
  * Base of every DBConsole exception. Carries a stable machine-readable code
@@ -22,8 +22,8 @@ use Throwable;
 abstract class DBConsoleException extends RuntimeException
 {
     /**
-     * @param  array<string, string|int|float>  $userParams  safe placeholders for the translated user message
-     * @param  array<string, mixed>  $context  structured log detail; never contains secrets
+     * @param array<string, string|int|float> $userParams safe placeholders for the translated user message
+     * @param array<string, mixed> $context structured log detail; never contains secrets
      */
     public function __construct(
         string $message,
@@ -44,7 +44,7 @@ abstract class DBConsoleException extends RuntimeException
      */
     public function userMessage(): string
     {
-        return (string) __('laranail-db-console::exceptions.'.$this->code()->value, $this->userParams);
+        return (string) __('laranail-db-console::exceptions.' . $this->code()->value, $this->userParams);
     }
 
     /**

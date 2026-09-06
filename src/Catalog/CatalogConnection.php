@@ -44,9 +44,9 @@ final readonly class CatalogConnection
         // in the table NAMES (migrations + models) via catalog.prefix, so it
         // lives in exactly one place and never doubles up.
         $definition = [
-            'driver' => 'sqlite',
-            'database' => $database,
-            'prefix' => '',
+            'driver'                  => 'sqlite',
+            'database'                => $database,
+            'prefix'                  => '',
             'foreign_key_constraints' => true,
         ];
 
@@ -76,6 +76,6 @@ final readonly class CatalogConnection
 
         // The key is quoted as a SQL string literal; PRAGMA key must run
         // before any other statement on the connection.
-        return ["PRAGMA key = '".str_replace("'", "''", $key)."'"];
+        return ["PRAGMA key = '" . str_replace("'", "''", $key) . "'"];
     }
 }

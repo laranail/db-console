@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Services;
 
+use Throwable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
-use Simtabi\Laranail\DBConsole\Events\RollbackFailed as RollbackFailedEvent;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Events\RollbackPerformed;
+use Simtabi\Laranail\DBConsole\Exceptions\RollbackFailed;
+use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
-use Simtabi\Laranail\DBConsole\Exceptions\RollbackFailed;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
-use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
-use Throwable;
+use Simtabi\Laranail\DBConsole\Events\RollbackFailed as RollbackFailedEvent;
 
 /**
  * Orchestrates multi-step operations with compensating rollback, because DDL
@@ -43,7 +43,8 @@ final readonly class WizardExecutor
      * reverse and re-throw the (translated) original failure. A rollback that
      * itself fails throws RollbackFailed instead.
      *
-     * @param  list<WizardStep>  $steps
+     * @param list<WizardStep> $steps
+     *
      * @return list<mixed> the forward results, in order, on full success
      */
     public function execute(string $server, OperationType $operation, array $steps): array
@@ -58,9 +59,9 @@ final readonly class WizardExecutor
                 $completed[] = $step;
             } catch (Throwable $e) {
                 $failure = ExceptionTranslator::from($e, [
-                    'server' => $server,
+                    'server'    => $server,
                     'operation' => $operation->value,
-                    'step' => $step->label,
+                    'step'      => $step->label,
                 ]);
 
                 $this->rollback($server, $operation, $completed, $failure);
@@ -76,7 +77,7 @@ final readonly class WizardExecutor
      * Run the compensations of completed steps in reverse. A compensation
      * failure is escalated as RollbackFailed.
      *
-     * @param  list<WizardStep>  $completed
+     * @param list<WizardStep> $completed
      */
     private function rollback(string $server, OperationType $operation, array $completed, DBConsoleException $failure): void
     {
@@ -89,15 +90,15 @@ final readonly class WizardExecutor
                 ($step->compensate)();
             } catch (Throwable $rollbackError) {
                 $escalated = RollbackFailed::whileCompensating($step->label, [
-                    'server' => $server,
-                    'operation' => $operation->value,
+                    'server'        => $server,
+                    'operation'     => $operation->value,
                     'original_code' => $failure->code()->value,
                 ], $rollbackError);
 
                 $this->log->failure($operation->value, $server, $escalated);
                 $this->events->dispatch(new RollbackFailedEvent($server, $operation, [
                     'target' => $step->label,
-                    'step' => $step->label,
+                    'step'   => $step->label,
                 ]));
 
                 throw $escalated;
@@ -106,7 +107,7 @@ final readonly class WizardExecutor
 
         $this->events->dispatch(new RollbackPerformed($server, $operation, [
             'target' => $failure->code()->value,
-            'steps' => count($completed),
+            'steps'  => count($completed),
         ]));
     }
 }

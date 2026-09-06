@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Servers;
 
-use Illuminate\Contracts\Config\Repository as Config;
+use Throwable;
 use Illuminate\Database\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
-use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
-use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
+use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
-use Throwable;
+use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
+use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
 
 /**
  * The multi-server entry point (section 5). Resolves a server name to an
@@ -150,7 +150,7 @@ final class ServerRegistry
      * once the catalog is available; keeps the registry the single resolution
      * point for config and dynamic servers alike.
      *
-     * @param  array<string, ServerDefinition>  $servers
+     * @param array<string, ServerDefinition> $servers
      */
     public function withCatalogServers(array $servers): void
     {
@@ -167,7 +167,7 @@ final class ServerRegistry
     }
 
     /**
-     * @param  array<string, mixed>  $raw
+     * @param array<string, mixed> $raw
      */
     private function definitionFromConfig(string $server, array $raw): ServerDefinition
     {
@@ -176,7 +176,7 @@ final class ServerRegistry
         if ($engine === null) {
             throw ServerMisconfigured::named(
                 $server,
-                "invalid engine '{$engineValue}'; expected one of: ".implode(', ', EngineType::values()),
+                "invalid engine '{$engineValue}'; expected one of: " . implode(', ', EngineType::values()),
             );
         }
 
@@ -192,10 +192,10 @@ final class ServerRegistry
             connection: (string) ($raw['connection'] ?? 'db_console_admin'),
             tls: [
                 'enabled' => (bool) ($tls['enabled'] ?? true),
-                'verify' => (bool) ($tls['verify'] ?? true),
-                'ca' => $this->stringOrNull($tls['ca'] ?? null),
-                'cert' => $this->stringOrNull($tls['cert'] ?? null),
-                'key' => $this->stringOrNull($tls['key'] ?? null),
+                'verify'  => (bool) ($tls['verify'] ?? true),
+                'ca'      => $this->stringOrNull($tls['ca'] ?? null),
+                'cert'    => $this->stringOrNull($tls['cert'] ?? null),
+                'key'     => $this->stringOrNull($tls['key'] ?? null),
             ],
             showAtRestStatus: (bool) ($atRest['show_status'] ?? true),
             editable: false,

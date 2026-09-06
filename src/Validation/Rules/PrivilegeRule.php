@@ -6,8 +6,8 @@ namespace Simtabi\Laranail\DBConsole\Validation\Rules;
 
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * Validates one privilege token through the PrivilegeSet guard: forbidden

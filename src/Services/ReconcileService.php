@@ -6,11 +6,11 @@ namespace Simtabi\Laranail\DBConsole\Services;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Events\ReconcileDriftFound;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Events\ReconcileDriftFound;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Results\ReconcileReport;
 
@@ -72,7 +72,7 @@ final readonly class ReconcileService
         if ($report->hasDrift()) {
             $this->events->dispatch(new ReconcileDriftFound($server, [
                 'target' => $server,
-                'drift' => $report->driftCount(),
+                'drift'  => $report->driftCount(),
             ]));
         }
 
@@ -83,7 +83,7 @@ final readonly class ReconcileService
      * Adopt unmanaged databases into the catalog as not-managed-by-DBConsole
      * rows (a record of "seen", not "created here"). Never touches the server.
      *
-     * @param  list<string>  $databases
+     * @param list<string> $databases
      */
     private function adopt(string $server, array $databases): int
     {
@@ -105,7 +105,8 @@ final readonly class ReconcileService
     /**
      * Account listings come back as "user@host"; reconcile on the username.
      *
-     * @param  list<string>  $accounts
+     * @param list<string> $accounts
+     *
      * @return list<string>
      */
     private function normalizeAccounts(array $accounts): array
@@ -117,7 +118,8 @@ final readonly class ReconcileService
     }
 
     /**
-     * @param  array<int, mixed>  $values
+     * @param array<int, mixed> $values
+     *
      * @return list<string>
      */
     private function strings(array $values): array

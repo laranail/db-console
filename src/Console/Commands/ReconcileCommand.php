@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Services\ReconcileService;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Diff the catalog against the live server and report drift (--adopt to pull
@@ -45,7 +45,7 @@ final class ReconcileCommand extends DBConsoleCommand
     }
 
     /**
-     * @param  list<string>  $items
+     * @param list<string> $items
      */
     private function section(string $title, array $items): void
     {

@@ -7,8 +7,8 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Create a database account. --generate prints a strong password once and
@@ -56,7 +56,7 @@ final class UserCreateCommand extends DBConsoleCommand
         $generated = $result->takeGeneratedPassword();
         if ($generated !== null) {
             $this->line('');
-            $this->components->warn('Password (shown once — store it now): '.$generated);
+            $this->components->warn('Password (shown once — store it now): ' . $generated);
         }
 
         return self::SUCCESS;

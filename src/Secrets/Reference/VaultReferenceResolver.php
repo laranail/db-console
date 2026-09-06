@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Reference;
 
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
-use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
 
 /**
  * Resolves a Vault pointer (a KV path) by reading it through the same

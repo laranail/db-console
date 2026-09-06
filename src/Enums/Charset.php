@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * The curated character-set options offered by the create-database flow.
@@ -51,7 +51,7 @@ enum Charset: string implements Enumerator, Translatable
             EngineType::Mysql, EngineType::Mariadb => [
                 self::Utf8mb4, self::Utf8mb3, self::Latin1, self::Ascii, self::Binary,
             ],
-            EngineType::Pgsql => [self::Utf8, self::Latin1, self::SqlAscii],
+            EngineType::Pgsql                      => [self::Utf8, self::Latin1, self::SqlAscii],
             EngineType::Sqlsrv, EngineType::Sqlite => [self::Utf8],
         };
     }

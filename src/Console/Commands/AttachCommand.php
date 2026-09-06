@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Domain\DbName;
+use ValueError;
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
-use ValueError;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * Attach one user to/from many databases in a single batch (repeatable --db).
@@ -60,7 +60,7 @@ final class AttachCommand extends DBConsoleCommand
             $this->components->error("failed: {$p['user']}@{$p['host']} · {$p['database']} — {$p['error']}");
         }
 
-        $this->line(count($result->succeeded()).' succeeded, '.count($result->failed()).' failed.');
+        $this->line(count($result->succeeded()) . ' succeeded, ' . count($result->failed()) . ' failed.');
 
         return $result->allSucceeded() ? self::SUCCESS : self::FAILURE;
     }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\Enumerator\Rules\EnumValue;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 
 /**
  * Minting an API token. Abilities are ConsolePermission values; the token
@@ -26,11 +26,11 @@ final class TokenIssueRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'user_id' => ['required'],
-            'name' => ['required', 'string', 'max:255'],
-            'abilities' => ['nullable', 'array', 'min:1'],
+            'user_id'     => ['required'],
+            'name'        => ['required', 'string', 'max:255'],
+            'abilities'   => ['nullable', 'array', 'min:1'],
             'abilities.*' => ['required', 'string', EnumValue::for(ConsolePermission::class)],
-            'expires_at' => ['nullable', 'date', 'after:now'],
+            'expires_at'  => ['nullable', 'date', 'after:now'],
         ];
     }
 }

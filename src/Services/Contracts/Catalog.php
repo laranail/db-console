@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Services\Contracts;
 
-use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Services\Results\AccountGrant;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /**
  * The catalog recording seam. Services record what they did through this

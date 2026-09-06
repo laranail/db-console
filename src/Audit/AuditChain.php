@@ -22,13 +22,13 @@ final class AuditChain
      * Compute the hash for a row given the previous hash and the row's
      * canonical, secret-free content.
      *
-     * @param  array<string, mixed>  $content
+     * @param array<string, mixed> $content
      */
     public function hash(?string $previousHash, array $content): string
     {
         $canonical = json_encode($this->canonicalize($content), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        return hash('sha256', ($previousHash ?? self::GENESIS).'|'.$canonical);
+        return hash('sha256', ($previousHash ?? self::GENESIS) . '|' . $canonical);
     }
 
     /**
@@ -40,16 +40,16 @@ final class AuditChain
     public function contentOf(AuditLog $row): array
     {
         return [
-            'action' => $row->action->value,
-            'target' => $row->target,
-            'server' => $row->server,
-            'engine' => $row->engine?->value,
-            'outcome' => $row->outcome->value,
+            'action'            => $row->action->value,
+            'target'            => $row->target,
+            'server'            => $row->server,
+            'engine'            => $row->engine?->value,
+            'outcome'           => $row->outcome->value,
             'sanitized_message' => $row->sanitized_message,
-            'actor_type' => $row->getAttribute('actor_type'),
-            'actor_id' => $row->getAttribute('actor_id'),
-            'ip' => $row->ip,
-            'created_at' => $row->created_at?->toIso8601String(),
+            'actor_type'        => $row->getAttribute('actor_type'),
+            'actor_id'          => $row->getAttribute('actor_id'),
+            'ip'                => $row->ip,
+            'created_at'        => $row->created_at?->toIso8601String(),
         ];
     }
 
@@ -82,7 +82,8 @@ final class AuditChain
     }
 
     /**
-     * @param  array<string, mixed>  $content
+     * @param array<string, mixed> $content
+     *
      * @return array<string, mixed>
      */
     private function canonicalize(array $content): array

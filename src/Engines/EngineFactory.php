@@ -15,11 +15,11 @@ final class EngineFactory
     public function make(EngineType $type): Engine
     {
         return match ($type) {
-            EngineType::Mysql => new MySqlEngine,
+            EngineType::Mysql   => new MySqlEngine,
             EngineType::Mariadb => new MariaDbEngine,
-            EngineType::Pgsql => new PostgresEngine,
-            EngineType::Sqlsrv => new SqlServerEngine,
-            EngineType::Sqlite => new SqliteEngine,
+            EngineType::Pgsql   => new PostgresEngine,
+            EngineType::Sqlsrv  => new SqlServerEngine,
+            EngineType::Sqlite  => new SqliteEngine,
         };
     }
 }

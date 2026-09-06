@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Enums;
 
-use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
-use Simtabi\Laranail\Enumerator\Attributes\Description;
 use Simtabi\Laranail\Enumerator\Attributes\Label;
 use Simtabi\Laranail\Enumerator\Contracts\Enumerator;
+use Simtabi\Laranail\Enumerator\Attributes\Description;
 use Simtabi\Laranail\Enumerator\Contracts\Translatable;
+use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * Curated privilege presets so nobody hand-writes grant strings. Presets are
@@ -68,7 +68,7 @@ enum PrivilegePreset: string implements Enumerator, Translatable
                 Privilege::CreateTemporaryTables,
                 Privilege::Execute,
             ],
-            self::Full => Privilege::cases(),
+            self::Full   => Privilege::cases(),
             self::Custom => [],
         };
     }

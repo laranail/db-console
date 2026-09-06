@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Override;
+use Illuminate\Foundation\Http\FormRequest;
 use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 
 /**
@@ -26,7 +26,7 @@ final class DropDatabaseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', new IdentifierRule],
+            'name'    => ['required', 'string', new IdentifierRule],
             'confirm' => ['required', 'string', 'same:name'],
         ];
     }

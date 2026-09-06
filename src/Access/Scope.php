@@ -72,9 +72,9 @@ final readonly class Scope
     public function toString(): string
     {
         return match ($this->type) {
-            ScopeType::Global => 'global',
-            ScopeType::Server => 'server:'.$this->server,
-            ScopeType::Database => 'database:'.$this->server.'/'.$this->databasePattern,
+            ScopeType::Global   => 'global',
+            ScopeType::Server   => 'server:' . $this->server,
+            ScopeType::Database => 'database:' . $this->server . '/' . $this->databasePattern,
         };
     }
 

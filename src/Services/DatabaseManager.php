@@ -5,21 +5,21 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Services;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Backup\BackupService;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
-use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
+use Simtabi\Laranail\DBConsole\Backup\BackupService;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
-use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
+use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
  * Creates, lists, and drops databases on a registered server. Like every
@@ -185,7 +185,7 @@ final readonly class DatabaseManager
         $this->log->failure($operation->value, $server, $e);
         $this->events->dispatch(new OperationFailedEvent($server, $operation, [
             'target' => $target,
-            'code' => $e->code()->value,
+            'code'   => $e->code()->value,
         ]));
 
         throw $e;

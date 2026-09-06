@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Override;
-use Simtabi\Laranail\DBConsole\Database\Factories\ManagedDatabaseFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
+use Simtabi\Laranail\DBConsole\Database\Factories\ManagedDatabaseFactory;
 
 /**
  * A database DBConsole created or adopted. is_managed distinguishes objects
@@ -65,7 +65,7 @@ final class ManagedDatabase extends CatalogModel
     {
         return [
             'is_managed' => 'boolean',
-            'version' => 'integer',
+            'version'    => 'integer',
         ];
     }
 }

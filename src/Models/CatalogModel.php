@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUlids;
-use Illuminate\Database\Eloquent\Model;
 use Override;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Simtabi\Laranail\DbTools\Observers\AuditObserver;
 
 /**
@@ -42,7 +42,7 @@ abstract class CatalogModel extends Model
     #[Override]
     public function getTable(): string
     {
-        return $this->prefix().$this->baseTable;
+        return $this->prefix() . $this->baseTable;
     }
 
     protected function prefix(): string

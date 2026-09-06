@@ -6,8 +6,8 @@ namespace Simtabi\Laranail\DBConsole\Authorization;
 
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 
 /**
  * Registers one gate ability per ConsolePermission (db-console.<permission>),

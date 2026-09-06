@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Events;
 
 use Override;
-use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
-use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
+use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Enums\OperationOutcome;
 
 /**
  * A multi-step operation was compensated cleanly (every object this run
@@ -17,7 +17,7 @@ use Simtabi\Laranail\DBConsole\Enums\Severity;
 final class RollbackPerformed extends DBConsoleEvent
 {
     /**
-     * @param  array<string, mixed>  $context
+     * @param array<string, mixed> $context
      */
     public function __construct(
         string $server,

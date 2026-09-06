@@ -7,8 +7,8 @@ namespace Simtabi\Laranail\DBConsole\Services\Access;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Events\AuthorizationDenied;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
+use Simtabi\Laranail\DBConsole\Events\AuthorizationDenied;
 
 /**
  * The single authorization entry point every service method calls. It

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Drivers;
 
-use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
-use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
-use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Throwable;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
+use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
 
 /**
  * The highest-assurance driver: NOTHING decryptable is stored. The catalog

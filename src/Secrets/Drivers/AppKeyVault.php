@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Secrets\Drivers;
 
+use Throwable;
 use Illuminate\Contracts\Encryption\Encrypter;
+use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
+use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretUnavailable;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
-use Simtabi\Laranail\DBConsole\Secrets\Secret;
-use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
-use Throwable;
 
 /**
  * The canonical driver: ciphertext in the catalog, the key is APP_KEY in

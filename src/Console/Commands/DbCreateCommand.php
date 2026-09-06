@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
-use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Create a database.
