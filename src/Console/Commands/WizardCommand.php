@@ -24,9 +24,6 @@ final class WizardCommand extends DBConsoleCommand
 
     protected $description = 'Create a database, an account, and a grant in one guided, rollback-safe flow';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:wizard'];
-
     public function handle(ProvisioningWizard $wizard): int
     {
         $db = $this->str('db');

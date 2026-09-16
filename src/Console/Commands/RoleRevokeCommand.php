@@ -17,9 +17,6 @@ final class RoleRevokeCommand extends DBConsoleCommand
 
     protected $description = 'Remove a role assignment';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:role:revoke'];
-
     public function handle(RbacDriver $driver): int
     {
         $userId = $this->opt('user');

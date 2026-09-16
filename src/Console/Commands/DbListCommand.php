@@ -15,9 +15,6 @@ final class DbListCommand extends DBConsoleCommand
 
     protected $description = 'List databases on a server (live from the server, not the catalog)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:db:list'];
-
     public function handle(DatabaseManager $databases): int
     {
         $server = $this->server();

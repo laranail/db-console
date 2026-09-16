@@ -19,9 +19,6 @@ final class UserPasswordCommand extends DBConsoleCommand
 
     protected $description = 'Rotate a database account password';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:user:password'];
-
     public function handle(AccountManager $accounts): int
     {
         $user = $this->str('user');

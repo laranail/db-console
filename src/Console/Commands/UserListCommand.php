@@ -15,9 +15,6 @@ final class UserListCommand extends DBConsoleCommand
 
     protected $description = 'List database accounts on a server';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:user:list'];
-
     public function handle(AccountManager $accounts): int
     {
         $server = $this->server();

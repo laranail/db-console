@@ -22,9 +22,6 @@ final class AttachCommand extends DBConsoleCommand
 
     protected $description = 'Attach a user to/from databases in one batch';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:attach'];
-
     public function handle(PrivilegeManager $privileges): int
     {
         $user = $this->str('user');

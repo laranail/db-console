@@ -18,9 +18,6 @@ final class DbCreateCommand extends DBConsoleCommand
 
     protected $description = 'Create a database on a server';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:db:create'];
-
     public function handle(DatabaseManager $databases): int
     {
         $name = $this->stringOption('name');

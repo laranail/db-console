@@ -18,9 +18,6 @@ final class RoleAssignCommand extends DBConsoleCommand
 
     protected $description = 'Assign a console role to an operator at a scope (global|server:NAME|database:NAME/DB)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:role:assign'];
-
     public function handle(RbacDriver $driver): int
     {
         $userId = $this->opt('user');

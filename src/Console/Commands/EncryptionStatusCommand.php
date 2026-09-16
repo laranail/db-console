@@ -16,9 +16,6 @@ final class EncryptionStatusCommand extends DBConsoleCommand
 
     protected $description = 'Report TLS status per server and the catalog encryption mode';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:encryption:status'];
-
     public function handle(TlsChecker $tls, SqlCipherManager $sqlcipher): int
     {
         $server = $this->server();

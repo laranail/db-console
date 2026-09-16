@@ -17,9 +17,6 @@ final class RoleCreateCommand extends DBConsoleCommand
 
     protected $description = 'Create a custom console role';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:role:create'];
-
     public function handle(): int
     {
         $name = $this->opt('name');

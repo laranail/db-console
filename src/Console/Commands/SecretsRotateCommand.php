@@ -15,9 +15,6 @@ final class SecretsRotateCommand extends DBConsoleCommand
 
     protected $description = 'Re-wrap every stored secret under the active driver\'s new key material';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:secrets:rotate'];
-
     public function handle(SecretRotator $rotator): int
     {
         $count = $rotator->rotateAll();

@@ -22,9 +22,6 @@ final class DetachCommand extends DBConsoleCommand
 
     protected $description = 'Detach a user to/from databases in one batch';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:detach'];
-
     public function handle(PrivilegeManager $privileges): int
     {
         $user = $this->str('user');

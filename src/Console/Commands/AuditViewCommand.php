@@ -15,9 +15,6 @@ final class AuditViewCommand extends DBConsoleCommand
 
     protected $description = 'Query the audit log';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:audit:view'];
-
     public function handle(): int
     {
         $query = AuditLog::query()->latest('created_at');

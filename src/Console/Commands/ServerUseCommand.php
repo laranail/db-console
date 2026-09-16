@@ -17,9 +17,6 @@ final class ServerUseCommand extends DBConsoleCommand
 
     protected $description = 'Set the sticky default server for subsequent commands';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:server:use'];
-
     public function handle(ServerRegistry $registry): int
     {
         $name = $this->arg('name');

@@ -22,9 +22,6 @@ final class RevokeCommand extends DBConsoleCommand
 
     protected $description = 'Revoke privileges from an account on a database';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:revoke'];
-
     public function handle(PrivilegeManager $privileges): int
     {
         $user = $this->str('user');

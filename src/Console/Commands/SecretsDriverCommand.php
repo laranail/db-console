@@ -16,9 +16,6 @@ final class SecretsDriverCommand extends DBConsoleCommand
 
     protected $description = 'Show the active secret driver and warn on insecure choices';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:secrets:driver'];
-
     public function handle(SecretVaultManager $manager): int
     {
         $driver = $manager->driverName();

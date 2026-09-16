@@ -18,9 +18,6 @@ final class AccessCheckCommand extends DBConsoleCommand
 
     protected $description = 'Dry-run a permission at a scope for an operator';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:access:check'];
-
     public function handle(AccessManager $access): int
     {
         $permission = ConsolePermission::tryFrom($this->opt('permission'));

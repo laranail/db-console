@@ -17,9 +17,6 @@ final class ReconcileCommand extends DBConsoleCommand
 
     protected $description = 'Reconcile the catalog against the live server (report-only; --adopt to record unmanaged)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:reconcile'];
-
     public function handle(ReconcileService $reconcile): int
     {
         try {
