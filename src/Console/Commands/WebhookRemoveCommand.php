@@ -16,9 +16,6 @@ final class WebhookRemoveCommand extends DBConsoleCommand
 
     protected $description = 'Remove a webhook subscription';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:webhook:remove'];
-
     public function handle(WebhookManager $webhooks): int
     {
         try {

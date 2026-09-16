@@ -16,9 +16,6 @@ final class WebhookAddCommand extends DBConsoleCommand
 
     protected $description = 'Add a webhook subscription (prints the signing secret once)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:webhook:add'];
-
     public function handle(WebhookManager $webhooks): int
     {
         $url = $this->opt('url');

@@ -18,9 +18,6 @@ final class DoctorCommand extends DBConsoleCommand
 
     protected $description = 'Health-check every registered server and report the security posture';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:doctor'];
-
     public function handle(DoctorService $doctor): int
     {
         $findings = $doctor->run();

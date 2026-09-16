@@ -18,9 +18,6 @@ final class AccessShowCommand extends DBConsoleCommand
 
     protected $description = 'Show an operator\'s resolved permissions per scope';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:access:show'];
-
     public function handle(RbacDriver $driver): int
     {
         $user = $this->resolveUser($this->opt('user'));

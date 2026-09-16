@@ -16,9 +16,6 @@ final class ServerAddCommand extends DBConsoleCommand
 
     protected $description = 'Register a catalog-backed server';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:server:add'];
-
     public function handle(): int
     {
         $name = $this->arg('name');

@@ -18,9 +18,6 @@ final class TokenIssueCommand extends DBConsoleCommand
 
     protected $description = 'Issue an API token (abilities cannot exceed the operator\'s own permissions)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:token:issue'];
-
     public function handle(TokenManager $tokens): int
     {
         $operator = $this->resolveUser($this->opt('user'));

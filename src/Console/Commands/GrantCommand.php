@@ -22,9 +22,6 @@ final class GrantCommand extends DBConsoleCommand
 
     protected $description = 'Grant a preset or custom privileges to an account on a database';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:grant'];
-
     public function handle(PrivilegeManager $privileges): int
     {
         $user = $this->str('user');

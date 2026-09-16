@@ -20,9 +20,6 @@ final class UserCreateCommand extends DBConsoleCommand
 
     protected $description = 'Create a database account';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:user:create'];
-
     public function handle(AccountManager $accounts): int
     {
         $user = $this->str('user');

@@ -18,9 +18,6 @@ final class DbDropCommand extends DBConsoleCommand
 
     protected $description = 'Drop a database (typed confirmation; backup-before-drop for non-empty databases)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:db:drop'];
-
     public function handle(DatabaseManager $databases): int
     {
         $name = $this->option('name');

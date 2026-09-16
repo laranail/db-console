@@ -15,9 +15,6 @@ final class WebhookListCommand extends DBConsoleCommand
 
     protected $description = 'List webhook subscriptions';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:webhook:list'];
-
     public function handle(): int
     {
         foreach (WebhookSubscription::query()->get() as $s) {

@@ -18,9 +18,6 @@ final class UserEditCommand extends DBConsoleCommand
 
     protected $description = 'Edit a database account (host change is a grant-preserving recreate)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:user:edit'];
-
     public function handle(AccountManager $accounts): int
     {
         $user = $this->str('user');

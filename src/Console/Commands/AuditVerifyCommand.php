@@ -15,9 +15,6 @@ final class AuditVerifyCommand extends DBConsoleCommand
 
     protected $description = 'Verify the audit trail hash-chain (tamper-evidence)';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:audit:verify'];
-
     public function handle(AuditChain $chain): int
     {
         $result = $chain->verify();

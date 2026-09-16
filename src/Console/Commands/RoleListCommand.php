@@ -17,9 +17,6 @@ final class RoleListCommand extends DBConsoleCommand
 
     protected $description = 'List console roles and their permissions';
 
-    /** @var list<string> */
-    protected array $commandAliases = ['db-console:role:list'];
-
     public function handle(RbacDriver $driver): int
     {
         foreach (ConsoleRole::cases() as $role) {
