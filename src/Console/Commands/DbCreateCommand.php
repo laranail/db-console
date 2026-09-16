@@ -44,11 +44,4 @@ final class DbCreateCommand extends DBConsoleCommand
 
         return self::SUCCESS;
     }
-
-    private function stringOption(string $key): string
-    {
-        $value = $this->option($key);
-
-        return is_string($value) ? $value : '';
-    }
 }

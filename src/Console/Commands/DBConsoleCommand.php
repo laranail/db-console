@@ -7,6 +7,7 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 use Simtabi\Laranail\Console\Tools\Commands\Command;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\Package\Tools\Commands\Concerns\ReadsOptions;
 use Simtabi\Laranail\Console\Tools\Commands\Concerns\SupportsNamespacedNames;
 
 /**
@@ -20,6 +21,7 @@ use Simtabi\Laranail\Console\Tools\Commands\Concerns\SupportsNamespacedNames;
  */
 abstract class DBConsoleCommand extends Command
 {
+    use ReadsOptions;
     use SupportsNamespacedNames;
 
     /**
@@ -27,8 +29,8 @@ abstract class DBConsoleCommand extends Command
      */
     protected function server(): string
     {
-        $server = $this->option('server');
-        if (is_string($server) && $server !== '') {
+        $server = $this->strOption('server');
+        if ($server !== null) {
             return $server;
         }
 

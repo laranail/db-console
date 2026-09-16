@@ -27,7 +27,7 @@ final class AttachCommand extends DBConsoleCommand
         $user = $this->str('user');
         $host = $this->str('host') ?: '%';
         /** @var list<string> $dbs */
-        $dbs = (array) $this->option('db');
+        $dbs = $this->arrayOption('db');
         $presetValue = $this->str('preset') ?: 'read_write';
 
         if ($user === '' || $dbs === []) {

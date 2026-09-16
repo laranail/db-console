@@ -29,7 +29,7 @@ final class TokenIssueCommand extends DBConsoleCommand
 
         try {
             /** @var list<string> $abilities */
-            $abilities = (array) $this->option('abilities');
+            $abilities = $this->arrayOption('abilities');
             $issued = $tokens->issue($operator, $this->opt('name') ?: 'api', $abilities);
         } catch (DBConsoleException $e) {
             $this->failure($e->userMessage());

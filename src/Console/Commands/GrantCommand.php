@@ -38,7 +38,7 @@ final class GrantCommand extends DBConsoleCommand
         try {
             $preset = PrivilegePreset::from($presetValue);
             /** @var list<string> $custom */
-            $custom = (array) $this->option('privileges');
+            $custom = $this->arrayOption('privileges');
             $set = $preset === PrivilegePreset::Custom ? PrivilegeSet::custom($custom) : PrivilegeSet::fromPreset($preset);
 
             $privileges->grant($this->server(), new Username($user), new Host($host), new DbName($db), $set);
