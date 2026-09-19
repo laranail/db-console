@@ -14,7 +14,7 @@ uses(AssertsDriverContract::class);
  * is no audit history" rather than like a bad argument.
  */
 it('falls back to the documented limit when --limit is not numeric', function (): void {
-    $source = (string) file_get_contents((string) (new ReflectionClass(AuditViewCommand::class))->getFileName());
+    $source = (string) file_get_contents((string) new ReflectionClass(AuditViewCommand::class)->getFileName());
 
     expect($source)->not->toContain("(int) \$this->option('limit')")
         ->and($source)->toContain("intOption('limit', 25)");
