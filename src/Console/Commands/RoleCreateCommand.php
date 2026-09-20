@@ -27,7 +27,7 @@ final class RoleCreateCommand extends DBConsoleCommand
         }
 
         /** @var list<string> $permissionValues */
-        $permissionValues = (array) $this->option('permissions');
+        $permissionValues = $this->arrayOption('permissions');
         $valid = [];
         foreach ($permissionValues as $value) {
             $permission = ConsolePermission::tryFrom($value);

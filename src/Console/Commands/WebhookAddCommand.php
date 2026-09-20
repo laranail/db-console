@@ -20,7 +20,7 @@ final class WebhookAddCommand extends DBConsoleCommand
     {
         $url = $this->opt('url');
         /** @var list<string> $events */
-        $events = (array) $this->option('events');
+        $events = $this->arrayOption('events');
 
         if ($url === '' || $events === []) {
             $this->failure('--url and at least one --events are required.');

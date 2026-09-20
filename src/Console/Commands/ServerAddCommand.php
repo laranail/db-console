@@ -29,8 +29,8 @@ final class ServerAddCommand extends DBConsoleCommand
         DbServer::query()->updateOrCreate(['name' => $name], [
             'engine'         => $engine,
             'connection_ref' => $this->opt('connection'),
-            'host'           => is_string($this->option('host')) ? $this->option('host') : null,
-            'port'           => is_numeric($this->option('port')) ? (int) $this->option('port') : null,
+            'host'           => $this->strOption('host'),
+            'port'           => $this->intOption('port'),
             'is_managed'     => true,
         ]);
 

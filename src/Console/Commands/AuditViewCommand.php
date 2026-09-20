@@ -28,7 +28,7 @@ final class AuditViewCommand extends DBConsoleCommand
             $query->where('action', $action);
         }
 
-        $rows = $query->limit((int) $this->option('limit'))->get();
+        $rows = $query->limit($this->intOption('limit', 25))->get();
         foreach ($rows as $row) {
             $this->line(sprintf(
                 '%s  %-24s %-14s %s → %s',
