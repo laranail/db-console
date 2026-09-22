@@ -1,9 +1,10 @@
 # laranail/db-console
 
-[![Packagist Version](https://img.shields.io/packagist/v/laranail/db-console.svg?style=flat-square)](https://packagist.org/packages/laranail/db-console)
 [![Tests](https://img.shields.io/github/actions/workflow/status/laranail/db-console/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/laranail/db-console/actions/workflows/tests.yml)
 [![Static analysis](https://img.shields.io/github/actions/workflow/status/laranail/db-console/static-analysis.yml?branch=main&label=static%20analysis&style=flat-square)](https://github.com/laranail/db-console/actions/workflows/static-analysis.yml)
 [![License MIT](https://img.shields.io/packagist/l/laranail/db-console.svg?style=flat-square)](LICENSE)
+
+`laranail/db-console` is not published to Packagist, so there is no registry-version badge to show — see [Install](#install).
 
 > Self-hosted, multi-server database, account, and privilege management for Laravel — guided, auditable flows over MySQL, MariaDB, PostgreSQL, SQL Server, and SQLite, with scoped RBAC, an encrypted catalog, a full CLI, and an optional REST API and webhooks.
 
