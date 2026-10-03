@@ -32,14 +32,26 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREAT
 
 `doctor` fails loudly if you point it at a root-like account.
 
-## Quick start
+## Quick start guide and usage
+
+### Getting started
+
+1. Set `DB_CONSOLE_OWNER_USER_ID` before running `php artisan db-console:install` (see Install), so the installer can assign the bootstrap Owner.
+2. Add a dedicated admin connection named `db_console_admin` to `config/database.php`, using the minimal admin account above. The `primary` server in `config/db-console.php` uses it by default; `DB_CONSOLE_ENGINE` and `DB_CONSOLE_CONNECTION` override the engine and connection name.
+3. Check the server before provisioning anything. TLS is mandatory by default, and `doctor` fails on a root-like account:
+
+   ```bash
+   php artisan laranail::db-console.doctor
+   ```
+
+### Usage
 
 Provision a database, a least-privilege account, and its grant in one rollback-safe flow:
 
 ```bash
 php artisan laranail::db-console.wizard \
   --server=primary --db=shop_prod --user=shop_app --host=% \
-  --preset=app_standard --generate
+  --preset=app_standard
 ```
 
 Or drive the services directly from your own code — the same services the CLI, the REST API, and the web UI all call:
@@ -49,6 +61,13 @@ use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Domain\{DbName, Charset};
 
 app(DatabaseManager::class)->create('primary', new DbName('shop_prod'), new Charset('utf8mb4'));
+```
+
+Read the tamper-evident audit trail:
+
+```bash
+php artisan laranail::db-console.audit:view --server=primary
+php artisan laranail::db-console.audit:verify   # checks the tamper-evident hash chain
 ```
 
 ## Mental model
