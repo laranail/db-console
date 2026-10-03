@@ -23,7 +23,7 @@ Admin work always runs over this dedicated connection, never your app's default.
 ```bash
 php artisan laranail::db-console.wizard \
   --server=primary --db=shop_prod --user=shop_app --host=% \
-  --preset=app_standard --generate
+  --preset=app_standard
 ```
 
 The wizard creates the database, the account, and the grant as one flow with compensating rollback: if a later step fails, the earlier steps it created are undone (an empty database it made is dropped; a pre-existing one is never touched). The generated password is shown once and never stored.
