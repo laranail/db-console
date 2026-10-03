@@ -1,5 +1,7 @@
 # Security policy
 
+Where this file is silent, the [laranail security policy](https://github.com/laranail/.github/blob/HEAD/SECURITY.md) applies.
+
 ## Supported versions
 
 Only the latest minor release of `laranail/db-console` receives security fixes.
