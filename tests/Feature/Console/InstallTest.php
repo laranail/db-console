@@ -13,7 +13,8 @@ beforeEach(function (): void {
 });
 
 it('registers the install command', function (): void {
-    expect(array_keys(Artisan::all()))->toContain('db-console:install');
+    // The scoped name, plus the pre-0.1 name kept as a deprecated forwarder.
+    expect(array_keys(Artisan::all()))->toContain('laranail::db-console.install', 'db-console:install');
 });
 
 it('seeds the shipped console roles (the install seed step, run directly)', function (): void {

@@ -13,7 +13,7 @@ use Simtabi\Laranail\DBConsole\Events\AuthorizationDenied;
 /**
  * The single authorization entry point every service method calls. It
  * delegates to Laravel's Gate against the DBConsole ability
- * (db-console.<permission>) at a scope, and translates a denial into the
+ * (laranail-db-console.<permission>) at a scope, and translates a denial into the
  * package's NotAuthorized exception. Every denial is also dispatched as an
  * AuthorizationDenied event, so "who tried to do what without access" is
  * audited alongside what succeeded (section 20).

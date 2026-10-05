@@ -1,6 +1,6 @@
 # Configuration
 
-Every `laranail.db-console.*` configuration key. Publish the file with `php artisan db-console:install` or `vendor:publish`.
+Every `laranail.db-console.*` configuration key. Publish the file with `php artisan laranail::db-console.install` or `vendor:publish`.
 
 ## Catalog
 

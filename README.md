@@ -16,8 +16,10 @@ Requires PHP `^8.4.1 || ^8.5` and Laravel `^13.0`. Headless by design: all logic
 
 ```bash
 composer require laranail/db-console
-php artisan db-console:install
+php artisan laranail::db-console.install
 ```
+
+`db-console:install` still works as a deprecated alias: it prints one line naming the replacement and runs it.
 
 The installer publishes the config, runs the catalog migrations, seeds the shipped console roles, assigns the bootstrap Owner (set `DB_CONSOLE_OWNER_USER_ID`), and runs `doctor` to health-check your servers.
 
@@ -36,7 +38,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREAT
 
 ### Getting started
 
-1. Set `DB_CONSOLE_OWNER_USER_ID` before running `php artisan db-console:install` (see Install), so the installer can assign the bootstrap Owner.
+1. Set `DB_CONSOLE_OWNER_USER_ID` before running `php artisan laranail::db-console.install` (see Install), so the installer can assign the bootstrap Owner.
 2. Add a dedicated admin connection named `db_console_admin` to `config/database.php`, using the minimal admin account above. The `primary` server in `config/db-console.php` uses it by default; `DB_CONSOLE_ENGINE` and `DB_CONSOLE_CONNECTION` override the engine and connection name.
 3. Check the server before provisioning anything. TLS is mandatory by default, and `doctor` fails on a root-like account:
 
