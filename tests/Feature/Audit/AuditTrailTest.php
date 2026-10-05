@@ -109,7 +109,7 @@ describe('deny decisions are audited (section 20)', function (): void {
 
         $row = AuditLog::query()->first();
         expect($row)->not->toBeNull()
-            ->and($row->target)->toBe('db-console.database.drop')
+            ->and($row->target)->toBe('laranail-db-console.database.drop')
             ->and($row->server)->toBe('prod-mysql');
     });
 

@@ -65,8 +65,9 @@ it('resolves labels through the enumerator toolkit', function (): void {
 });
 
 it('ConsolePermission abilities carry the db-console gate prefix', function (): void {
-    expect(ConsolePermission::Access->ability())->toBe('db-console.access')
-        ->and(ConsolePermission::DatabaseDrop->ability())->toBe('db-console.database.drop')
+    expect(ConsolePermission::Access->ability())->toBe('laranail-db-console.access')
+        ->and(ConsolePermission::DatabaseDrop->ability())->toBe('laranail-db-console.database.drop')
+        ->and(ConsolePermission::DatabaseDrop->deprecatedAbility())->toBe('db-console.database.drop')
         ->and(ConsolePermission::cases())->toHaveCount(21);
 });
 

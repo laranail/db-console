@@ -152,10 +152,12 @@ final class BuiltinRbacDriver implements RbacDriver
         return Role::query()->where('name', $role)->exists();
     }
 
+    /**
+     * A stored permission name in either form: `laranail-db-console.x`, or the pre-0.1
+     * `db-console.x` a role saved before the rename still carries.
+     */
     private function permissionFromAbility(string $ability): ?ConsolePermission
     {
-        $value = str_starts_with($ability, 'db-console.') ? substr($ability, strlen('db-console.')) : $ability;
-
-        return ConsolePermission::tryFrom($value);
+        return ConsolePermission::fromAbility($ability);
     }
 }

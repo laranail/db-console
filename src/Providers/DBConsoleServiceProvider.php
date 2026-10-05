@@ -57,6 +57,7 @@ use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
 use Simtabi\Laranail\Package\Tools\Providers\PackageServiceProvider;
+use Simtabi\Laranail\DBConsole\Console\Commands\DeprecatedInstallCommand;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\AboutSectionDefinition;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\InstallCommandDefinition;
 
@@ -101,14 +102,14 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * The db-console:install flow (scenario A): publish config + lang, run
+     * The laranail::db-console.install flow (scenario A): publish config + lang, run
      * migrations, seed the shipped console roles, assign Owner @ global to the
      * bootstrap operator (DB_CONSOLE_OWNER_USER_ID when set), then run doctor.
      */
     private function installDefinition(): InstallCommandDefinition
     {
         return InstallCommandDefinition::make()
-            ->named('db-console:install')
+            ->named(DeprecatedInstallCommand::REPLACEMENT)
             ->publishes('config', 'translations')
             ->runsMigrations()
             ->step('Seed console roles', function (InstallCommand $command): void {
@@ -168,6 +169,8 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
                 'RoleListCommand', 'RoleCreateCommand', 'RoleAssignCommand', 'RoleRevokeCommand',
                 'AccessShowCommand', 'AccessCheckCommand',
                 'TokenIssueCommand', 'WebhookListCommand', 'WebhookAddCommand', 'WebhookRemoveCommand',
+                // The pre-0.1 `db-console:install`, forwarding to laranail::db-console.install.
+                'DeprecatedInstallCommand',
             ],
         );
     }
