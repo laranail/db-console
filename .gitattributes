@@ -5,6 +5,8 @@
 /docker export-ignore
 /.editorconfig export-ignore
 /.gitattributes export-ignore
+/.gitguardian.yaml export-ignore
+/.gitleaks.toml export-ignore
 /.gitignore export-ignore
 /phpunit.xml export-ignore
 /phpstan.neon export-ignore
