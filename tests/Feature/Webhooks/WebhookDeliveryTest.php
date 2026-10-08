@@ -19,7 +19,7 @@ beforeEach(function (): void {
     $this->migrateCatalog();
     config()->set('laranail.db-console.webhooks.enabled', true);
 
-    $this->secret = 'whsec_test_0123456789abcdef';
+    $this->secret = 'test-secret-not-real';
     app(SecretVault::class)->store('webhook:test', new Secret($this->secret));
 
     $this->sub = WebhookSubscription::query()->create([
