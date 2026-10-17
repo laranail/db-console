@@ -28,7 +28,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, SessionEndingEngine
+final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, PasswordConstrainedEngine, SessionEndingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -187,6 +187,11 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
                 redacted: "CREATE ROLE {$role} WITH LOGIN PASSWORD '[redacted]'",
             ),
         );
+    }
+
+    public function assertAcceptsPassword(Password $p): void
+    {
+        ScramSha256::assertUsable($p->reveal());
     }
 
     public function dropAccount(Username $u, Host $h): StatementList
