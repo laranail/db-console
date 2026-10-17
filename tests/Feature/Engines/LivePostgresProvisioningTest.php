@@ -517,3 +517,28 @@ it('passes the restricted admin in the doctor and fails a superuser', function (
 
     expect($findings('live_pgsql_super')['server:live_pgsql_super:admin'])->toBe(Severity::Error);
 });
+
+it('warns that the restricted admin cannot force a drop, and passes a superuser', function (): void {
+    $findings = static function (string $server): array {
+        $out = [];
+        foreach (app(DoctorService::class)->checkServer($server) as $finding) {
+            $out[$finding->check] = $finding->severity;
+        }
+
+        return $out;
+    };
+
+    // CREATEDB CREATEROLE does not include pg_signal_backend, so ending
+    // another role's session before DROP ... WITH (FORCE) is refused.
+    expect($findings('live_pgsql'))->toMatchArray([
+        'server:live_pgsql:hosting'     => Severity::Info,
+        'server:live_pgsql:forced-drop' => Severity::Warning,
+    ]);
+
+    config()->set('database.connections.live_pgsql_super', livePgConnection('postgres', livePg('SUPERUSER'), livePg('SUPERUSER_PASSWORD')));
+    config()->set('laranail.db-console.servers.live_pgsql_super', [
+        'engine' => 'pgsql', 'connection' => 'live_pgsql_super', 'tls' => ['enabled' => false],
+    ]);
+
+    expect($findings('live_pgsql_super')['server:live_pgsql_super:forced-drop'])->toBe(Severity::Info);
+});
