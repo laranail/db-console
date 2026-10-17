@@ -17,9 +17,9 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Probes the deployment for security and health problems (scenario A). For
- * each registered server: reachability, TLS posture, the real capability set,
- * and — the doctrine-not-option check — whether the admin account is
- * root-like, in which case doctor FAILS with the exact minimal-grant fix so
+ * each registered server: its SSH tunnel (when it has one), reachability, TLS
+ * posture, the real capability set, and — the doctrine-not-option check —
+ * whether the admin account is root-like, in which case doctor FAILS with the exact minimal-grant fix so
  * setup won't quietly proceed insecure. Also reports the secret driver and
  * catalog encryption mode, and operator assurance.
  */
@@ -34,6 +34,7 @@ final readonly class DoctorService
         private PostgresAdminCheck $postgresAdmin,
         private HostingCheck $hosting,
         private OperatorSecurityCheck $operatorSecurity,
+        private TunnelCheck $tunnel,
     ) {}
 
     /**
@@ -58,7 +59,12 @@ final readonly class DoctorService
      */
     public function checkServer(string $server): array
     {
-        $findings = [];
+        // The tunnel first: when it cannot open, that is the finding, not a
+        // vaguer "unreachable" from the round trip that follows.
+        $findings = $this->tunnel->findings($server);
+        if (array_any($findings, static fn (DoctorFinding $finding): bool => $finding->isError())) {
+            return $findings;
+        }
 
         try {
             $this->registry->ensureReachable($server);

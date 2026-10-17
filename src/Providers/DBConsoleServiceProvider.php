@@ -29,6 +29,7 @@ use Illuminate\Database\Events\ConnectionEstablished;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
 use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
+use Simtabi\Laranail\DBConsole\Tunnels\TunnelManager;
 use Simtabi\Laranail\DBConsole\Audit\AuditLogObserver;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Listeners\WriteAuditLog;
@@ -114,6 +115,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->registerAuditPipeline();
         $this->registerGate();
         $this->registerApiRateLimiter();
+        $this->closeTunnelsOnTerminate();
     }
 
     /**
@@ -134,6 +136,20 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
             $key = $caller instanceof Authenticatable ? 'user:' . $caller->getAuthIdentifier() : 'ip:' . $request->ip();
 
             return Limit::perMinutes($minutes, $requests)->by($key);
+        });
+    }
+
+    /**
+     * Stop every SSH tunnel and restore each tunnelled admin connection when
+     * the application terminates. Only a registry that was resolved can have
+     * opened one.
+     */
+    private function closeTunnelsOnTerminate(): void
+    {
+        $this->app->terminating(function (): void {
+            if ($this->app->resolved(ServerRegistry::class)) {
+                $this->app->make(ServerRegistry::class)->closeTunnels();
+            }
         });
     }
 
@@ -350,6 +366,8 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
     private function registerServices(): void
     {
         $this->app->singleton(ServerRegistry::class);
+        // One tunnel per server per process; closed when the app terminates.
+        $this->app->singleton(TunnelManager::class);
 
         $this->app->singleton(DBConsoleLogger::class, fn ($app): DBConsoleLogger => new DBConsoleLogger(
             $app->make(LoggerInterface::class),

@@ -9,8 +9,10 @@ use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Illuminate\Database\ConfigurationUrlParser;
 use Simtabi\Laranail\DBConsole\Enums\TlsStatus;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Tunnels\TunnelledConnection;
 
 /**
  * TLS status and enforcement for admin connections (section 8, scope 3). TLS
@@ -77,6 +79,21 @@ final readonly class TlsChecker
     {
         $definition = $this->registry->definition($server);
         if ($definition->engine === EngineType::Sqlite) {
+            return true;
+        }
+
+        // Through a tunnel the session crosses the network inside SSH; what is
+        // left in the clear is the hop from the SSH host onward, which never
+        // leaves that host when the target is a socket or its loopback. The
+        // connection's own host is the tunnel's 127.0.0.1 and says nothing.
+        $target = $this->registry->tunnelTarget($server);
+        if ($target instanceof Endpoint) {
+            return $target->isLocalToItsHost();
+        }
+
+        /** @var array<string, mixed> $config */
+        $config = (array) $this->config->get("database.connections.{$definition->connection}", []);
+        if (TunnelledConnection::usesSocket($config)) {
             return true;
         }
 

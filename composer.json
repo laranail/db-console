@@ -65,6 +65,7 @@
         "pestphp/pest": "^4.0",
         "pestphp/pest-plugin-arch": "^4.0",
         "pestphp/pest-plugin-laravel": "^4.0",
+        "phpseclib/phpseclib": "^4.0.1",
         "phpstan/phpstan": "^2.0",
         "rector/rector": "^2.5.8",
         "roave/security-advisories": "dev-latest",
@@ -77,6 +78,7 @@
         "laravel/passport": "OAuth2 guard for the optional REST API (service-to-service access).",
         "laravel/sanctum": "Default token guard for the optional REST API.",
         "laravel/slack-notification-channel": "Sends notifications and alerts to Slack (notifications.channels with slack).",
+        "phpseclib/phpseclib": "Required by the phpseclib SSH tunnel driver (^4.0.1), for hosts without an ssh binary.",
         "spatie/laravel-permission": "Delegates console RBAC storage to Spatie when rbac.driver is set to spatie."
     },
     "autoload": {
