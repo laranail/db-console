@@ -270,3 +270,26 @@ describe('api.auth_failure_limit', function (): void {
         }
     });
 });
+
+describe('an account\'s grants', function (): void {
+    it('lists them, structured', function (): void {
+        mountDbConsoleApi();
+        FakeProvisioningEngine::addAccount('shop');
+        FakeProvisioningEngine::addGrant('shop', 'shop_prod');
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->getJson('/api/db-console/servers/fake/accounts/shop/grants?host=%25')
+            ->assertOk()
+            ->assertJsonPath('data.0.line', 'shop_prod')
+            ->assertJsonPath('data.0.readable', true);
+    });
+
+    it('is refused without account.view', function (): void {
+        mountDbConsoleApi();
+        $GLOBALS['apiDenied'] = [ConsolePermission::AccountView->ability()];
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->getJson('/api/db-console/servers/fake/accounts/shop/grants')
+            ->assertForbidden();
+    });
+});

@@ -10,6 +10,9 @@ use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
+use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
+use Simtabi\Laranail\DBConsole\Engines\PasswordConstrainedEngine;
+use Simtabi\Laranail\DBConsole\Engines\ServerVersionAwareEngine;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
@@ -32,8 +35,13 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * Identifiers are the package's own validated value objects, so interpolating
  * them here is as safe as it is in the real engines.
  */
-final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
+final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, PasswordConstrainedEngine, ServerVersionAwareEngine
 {
+    /** The server version the last database was created for, when asked for one. */
+    public static ?int $createdForVersion = null;
+
+    private ?int $version = null;
+
     public bool $failGrants = false;
 
     /**
@@ -42,6 +50,9 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
      * other process, its second fails as the duplicate would.
      */
     public bool $raceOnCreate = false;
+
+    /** Refuse every password, as Postgres refuses one SASLprep would rewrite. */
+    public bool $refusesPasswords = false;
 
     public static function install(string $server = 'fake', string $connection = 'fake_admin'): self
     {
@@ -76,6 +87,11 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
         DB::connection($connection)->insert('INSERT INTO fake_databases VALUES (?, ?)', [$name, $objects]);
     }
 
+    public static function addGrant(string $name, string $db, string $host = '%', string $connection = 'fake_admin'): void
+    {
+        DB::connection($connection)->insert('INSERT INTO fake_grants VALUES (?, ?, ?)', [$name, $host, $db]);
+    }
+
     public static function passwordOf(string $name, string $connection = 'fake_admin'): ?string
     {
         $sha = DB::connection($connection)->scalar('SELECT password_sha FROM fake_accounts WHERE name = ?', [$name]);
@@ -98,8 +114,22 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
         return new Capabilities(true, true, false, false, true, new EncryptionCapabilities(false, false));
     }
 
+    public function serverVersion(): StatementList
+    {
+        return new StatementList(Statement::plain('SELECT 150004'));
+    }
+
+    public function forServerVersion(int $version): static
+    {
+        $engine = clone $this;
+        $engine->version = $version;
+
+        return $engine;
+    }
+
     public function createDatabase(DbName $db, Charset $charset): StatementList
     {
+        self::$createdForVersion = $this->version;
         $insert = Statement::plain("INSERT INTO fake_databases (name) VALUES ('{$db->value}')");
 
         return $this->raceOnCreate
@@ -122,8 +152,17 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
         return new StatementList(Statement::plain("SELECT COALESCE(SUM(objects), 0) FROM fake_databases WHERE name = '{$db->value}'"));
     }
 
+    public function assertAcceptsPassword(Password $p): void
+    {
+        if ($this->refusesPasswords) {
+            throw WeakPassword::because('refused by the fake engine', Password::DEFAULT_MIN_LENGTH);
+        }
+    }
+
     public function createAccount(Username $u, Host $h, Password $p): StatementList
     {
+        // Late, as the real engine refuses: while building the statement.
+        $this->assertAcceptsPassword($p);
         $sha = hash('sha256', $p->reveal());
 
         if ($this->raceOnCreate) {

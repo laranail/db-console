@@ -10,15 +10,20 @@ use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Engines\PostgresEngine;
+use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
 use Simtabi\Laranail\DBConsole\Engines\SessionEndingEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
 use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnerDelegatingEngine;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
+use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
+use Simtabi\Laranail\DBConsole\Engines\ServerVersionAwareEngine;
+use Simtabi\Laranail\DBConsole\Engines\PasswordConstrainedEngine;
 use Simtabi\Laranail\DBConsole\Engines\DatabaseScopedGrantsEngine;
 
 function pgSql(iterable $list): array
@@ -458,28 +463,59 @@ it('lists database grants from the shared catalog and object grants inside each 
 
     expect($engine)->toBeInstanceOf(DatabaseScopedGrantsEngine::class)
         ->and($sql)->toHaveCount(4)
-        ->and($sql[0])->toStartWith('[admin] ')->toContain('pg_catalog.pg_database')->toContain('aclexplode(d.datacl)')
+        ->and($sql[0])->toStartWith('[admin] ')->toContain('pg_catalog.pg_database')->toContain('d.datacl')
         ->and($sql[1])->toStartWith('[admin] ')
         ->and($sql[2])->toStartWith('[analytics] ')
         ->and($sql[3])->toStartWith('[shop] ');
 
     foreach ([1, 2, 3] as $i) {
         expect($sql[$i])
-            ->toContain('aclexplode(n.nspacl)')         // schemas
-            ->toContain('aclexplode(c.relacl)')         // tables, views, sequences
-            ->toContain('aclexplode(p.proacl)')         // functions
+            ->toContain('n.nspacl')                     // schemas
+            ->toContain('c.relacl')                     // tables, views, sequences
+            ->toContain('p.proacl')                     // functions
             ->toContain('aclexplode(da.defaclacl)')     // default privileges
             ->toContain("rolname = 'report_user'")
-            ->not->toContain('information_schema');
+            ->not->toContain('information_schema.');    // no view that filters by the caller's roles
     }
+});
+
+// An explicit-grants listing left out what the role can actually do: its own
+// tables (ownership has no ACL entry while the ACL is the default), schema
+// public on PostgreSQL 14 (held through PUBLIC), and anything held through a
+// role it is a member of. Effective privileges come from the default ACL when
+// none is set, and every entry says where it comes from.
+it('lists effective privileges, saying which come through PUBLIC, ownership or another role', function () use ($engine): void {
+    [$databases, $objects] = pgSql($engine->showGrantsIn(new Username('report_user'), []));
+
+    foreach ([$databases, $objects] as $sql) {
+        expect($sql)
+            ->toContain('acldefault(')                  // a NULL ACL is the default one, owner included
+            ->toContain('pg_catalog.pg_has_role(')      // privileges of the roles it inherits
+            ->toContain("'PUBLIC'")
+            ->toContain("'owner'")
+            ->toContain('AS via');
+    }
+
+    expect($databases)->toContain('NOT d.datistemplate')
+        // PUBLIC holds USAGE on pg_catalog and EXECUTE on thousands of
+        // functions; listing them says nothing about the role.
+        ->and($objects)->toContain("n.nspname NOT IN ('pg_catalog', 'information_schema')")
+        ->and($objects)->toContain("n.nspname NOT LIKE 'pg\\_%'");
+});
+
+// Default privileges belong to the role that creates the objects; the line
+// has to name it, or "tables in schema public" reads as applying to all.
+it('names the creating role on a default-privileges line', function () use ($engine): void {
+    expect(pgSql($engine->showGrantsIn(new Username('report_user'), []))[1])
+        ->toContain("' for role ' || pg_catalog.pg_get_userbyid(da.defaclrole)");
 });
 
 it('lists the grants on the admin connection alone when given no other databases', function () use ($engine): void {
     $sql = pgScoped($engine->showGrants(new Username('report_user'), new Host('%')));
 
     expect($sql)->toHaveCount(2)
-        ->and($sql[0])->toStartWith('[admin] ')->toContain('aclexplode(d.datacl)')
-        ->and($sql[1])->toStartWith('[admin] ')->toContain('aclexplode(c.relacl)');
+        ->and($sql[0])->toStartWith('[admin] ')->toContain('d.datacl')
+        ->and($sql[1])->toStartWith('[admin] ')->toContain('c.relacl');
 });
 
 it('finds the databases to read grants in the way a drop finds what to release', function () use ($engine): void {
@@ -537,4 +573,65 @@ it('reads which roles hold sessions on a database, and whether the admin can end
         ->and($sql)->toContain('a.pid <> pg_backend_pid()')
         ->and($sql)->toContain("pg_has_role('pg_signal_backend', 'USAGE')")
         ->and($sql)->toContain('r.rolsuper AS superuser');
+});
+
+// Callers ask before changing anything (the wizard creates the database
+// first), so the engine answers without building a statement.
+it('says up front whether it can take a password', function () use ($engine): void {
+    expect($engine)->toBeInstanceOf(PasswordConstrainedEngine::class);
+
+    $engine->assertAcceptsPassword(Password::generate());
+
+    expect(fn () => $engine->assertAcceptsPassword(new Password("Pass\u{00A0}word-2026!X")))->toThrow(WeakPassword::class, 'SASLprep');
+});
+
+it('reads the port the server listens on with the admin profile', function () use ($engine): void {
+    expect(pgSql($engine->adminProfile())[0])->toContain('pg_catalog.inet_server_port() AS server_port');
+});
+
+it('reads the login roles the admin holds no ADMIN OPTION on', function () use ($engine): void {
+    expect(pgSql($engine->unmanageableRoles())[0])
+        ->toContain("pg_catalog.pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')")
+        ->toContain('r.rolcanlogin AND NOT r.rolsuper AND r.rolname <> current_user');
+});
+
+// A collation was ignored on Postgres. Postgres collates by locale, and the
+// package's collation names are MySQL's (utf8mb4_unicode_ci is the default
+// four call sites pass), so those still do not apply; C and POSIX, which
+// Postgres has everywhere, now do.
+it('creates a database in the C locale when asked for the C collation', function (string $collation) use ($engine): void {
+    expect(pgSql($engine->createDatabase(new DbName('shop'), new Charset('utf8', $collation))))
+        ->toBe(["CREATE DATABASE \"shop\" TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE '" . strtoupper($collation) . "' LC_CTYPE '" . strtoupper($collation) . "'"]);
+})->with(['C', 'POSIX', 'c']);
+
+it('leaves a MySQL collation name out, keeping the UTF8 default path', function () use ($engine): void {
+    expect(pgSql($engine->createDatabase(new DbName('shop'), new Charset('utf8mb4', 'utf8mb4_unicode_ci'))))
+        ->toBe(['CREATE DATABASE "shop" ENCODING \'UTF8\'']);
+});
+
+it('refuses a collation it would otherwise ignore', function () use ($engine): void {
+    expect(fn (): StatementList => $engine->createDatabase(new DbName('shop'), new Charset('utf8', 'en_US')))
+        ->toThrow(UnsupportedOperation::class, "collation 'en_US'");
+});
+
+// On a cluster initialised with ICU (initdb --locale-provider=icu, PG15+),
+// template0's provider is ICU, which has no SQL_ASCII. The C locale is a
+// libc one, so the database asks for libc.
+it('asks for the libc locale provider from 15 on, when it knows the version', function () use ($engine): void {
+    expect($engine)->toBeInstanceOf(ServerVersionAwareEngine::class)
+        ->and(pgSql($engine->forServerVersion(150000)->createDatabase(new DbName('legacy'), new Charset('sql_ascii'))))
+        ->toBe(["CREATE DATABASE \"legacy\" TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C' LOCALE_PROVIDER libc"])
+        ->and(pgSql($engine->forServerVersion(140010)->createDatabase(new DbName('legacy'), new Charset('sql_ascii'))))
+        ->toBe(["CREATE DATABASE \"legacy\" TEMPLATE template0 ENCODING 'SQL_ASCII' LC_COLLATE 'C' LC_CTYPE 'C'"])
+        // UTF8 in the cluster's locale is untouched on every version.
+        ->and(pgSql($engine->forServerVersion(170000)->createDatabase(new DbName('shop'), new Charset('utf8'))))
+        ->toBe(['CREATE DATABASE "shop" ENCODING \'UTF8\''])
+        ->and(pgSql($engine->serverVersion())[0])->toBe("SELECT current_setting('server_version_num')::int");
+});
+
+it('does not change the engine it was asked about', function () use ($engine): void {
+    $engine->forServerVersion(170000);
+
+    expect(pgSql($engine->createDatabase(new DbName('legacy'), new Charset('latin1'))))
+        ->toBe(["CREATE DATABASE \"legacy\" TEMPLATE template0 ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C'"]);
 });
