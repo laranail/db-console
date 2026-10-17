@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
+
 /**
  * Judges a Postgres admin role from its catalog profile. Kept apart from
  * DoctorService so the judgement is testable without a server; the live
@@ -48,7 +50,7 @@ final readonly class PostgresAdminCheck
     {
         $findings = [];
 
-        $findings[] = $this->truthy($profile['is_superuser'] ?? false)
+        $findings[] = DriverBoolean::truthy($profile['is_superuser'] ?? false)
             ? DoctorFinding::error(
                 "server:{$server}:admin",
                 "The admin role on '{$server}' is a superuser, which bypasses every privilege check. Point DBConsole at a minimal admin instead.",
@@ -57,8 +59,8 @@ final readonly class PostgresAdminCheck
             : DoctorFinding::ok("server:{$server}:admin", "Admin role on '{$server}' is not a superuser.");
 
         $missing = array_keys(array_filter([
-            'CREATEDB'   => ! $this->truthy($profile['can_create_db'] ?? false),
-            'CREATEROLE' => ! $this->truthy($profile['can_create_role'] ?? false),
+            'CREATEDB'   => ! DriverBoolean::truthy($profile['can_create_db'] ?? false),
+            'CREATEROLE' => ! DriverBoolean::truthy($profile['can_create_role'] ?? false),
         ]));
         $findings[] = $missing === []
             ? DoctorFinding::ok("server:{$server}:admin-privileges", "Admin role on '{$server}' has CREATEDB and CREATEROLE.")
@@ -86,14 +88,6 @@ final readonly class PostgresAdminCheck
         }
 
         return $findings;
-    }
-
-    /**
-     * Postgres returns booleans; other drivers return 't'/'f' or 1/0.
-     */
-    private function truthy(mixed $value): bool
-    {
-        return in_array($value, [true, 1, '1', 't', 'true'], true);
     }
 
     private function version(int $number): string

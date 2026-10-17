@@ -391,9 +391,9 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->app->singleton(SecretRotator::class);
         $this->app->singleton(WebhookManager::class);
 
-        // The host binds its own from its 2FA and confirmation records; until
+        // OperatorAssurance is bound once, in registerOperatorSecurity(): the
+        // host binds its own from its 2FA and confirmation records; until
         // then, anything needing a recent confirmation fails closed.
-        $this->app->bindIf(OperatorAssurance::class, NullOperatorAssurance::class);
         $this->app->singleton(ExistingResourceGuard::class);
     }
 

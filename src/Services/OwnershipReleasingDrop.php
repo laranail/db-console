@@ -8,6 +8,7 @@ use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Servers\ScopedSession;
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Exceptions\RollbackFailed;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
@@ -66,14 +67,6 @@ final readonly class OwnershipReleasingDrop
     }
 
     /**
-     * Postgres returns booleans; other drivers and fakes return 1/0 or 't'/'f'.
-     */
-    private function truthy(mixed $value): bool
-    {
-        return in_array($value, [true, 1, '1', 't', 'true'], true);
-    }
-
-    /**
      * @param array<string, mixed> $context
      *
      * @return list<DbName>
@@ -86,7 +79,7 @@ final readonly class OwnershipReleasingDrop
         foreach ($engine->dependentDatabases($user) as $statement) {
             foreach ($admin->selectStatement($statement, $context) as $row) {
                 $name = (string) reset($row);
-                if (! $this->truthy($row['can_connect'] ?? true)) {
+                if (! DriverBoolean::truthy($row['can_connect'] ?? true)) {
                     $unreachable[] = $name;
 
                     continue;
@@ -111,7 +104,7 @@ final readonly class OwnershipReleasingDrop
     private function holdsPrivileges(OwnershipReleasingEngine $engine, AdminConnection $admin, Username $user, array $context): bool
     {
         foreach ($engine->holdsPrivilegesOf($user) as $statement) {
-            if (! $this->truthy($admin->scalarStatement($statement, $context))) {
+            if (! DriverBoolean::truthy($admin->scalarStatement($statement, $context))) {
                 return false;
             }
         }
