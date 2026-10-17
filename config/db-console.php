@@ -63,6 +63,11 @@ return [
             // accounts to host '%', and treats the provider's point-in-time
             // recovery as the backup (see backup.dump_on_managed).
             'hosting' => env('DB_CONSOLE_PRIMARY_HOSTING', 'self_hosted'),
+
+            // Per-server overrides of accounts.on_existing and
+            // databases.on_existing. Unset falls back to the global value.
+            // 'accounts'  => ['on_existing' => 'refuse'],
+            // 'databases' => ['on_existing' => 'refuse'],
         ],
     ],
 
@@ -74,6 +79,13 @@ return [
     'databases' => [
         'default_charset'   => 'utf8mb4',
         'default_collation' => 'utf8mb4_unicode_ci',
+
+        // A create that finds the database already there: refuse | adopt.
+        // refuse (default) changes nothing and notifies the security
+        // recipients. adopt records it as managed, and needs the
+        // resource.adopt permission (Owner only by default). Override per
+        // server with servers.<name>.databases.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_DATABASES_ON_EXISTING', 'refuse'),
     ],
 
     /*
@@ -84,6 +96,15 @@ return [
     'accounts' => [
         'default_host'        => 'localhost',
         'password_min_length' => 16,
+
+        // A create that finds the account already there:
+        // refuse | adopt | adopt_and_apply. refuse (default) changes nothing
+        // and notifies the security recipients. adopt records it as managed
+        // with its password untouched (needs resource.adopt). adopt_and_apply
+        // also replaces its password with the one supplied (needs
+        // account.rotate and step-up as well). Override per server with
+        // servers.<name>.accounts.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_ACCOUNTS_ON_EXISTING', 'refuse'),
     ],
 
     /*
@@ -191,13 +212,14 @@ return [
     |--------------------------------------------------------------------------
     */
     'api' => [
-        'enabled'       => (bool) env('DB_CONSOLE_API', false),
-        'path'          => env('DB_CONSOLE_API_PATH', 'api/db-console'),
-        'auth'          => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
-        'allowed_ips'   => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
-        'rate_limit'    => env('DB_CONSOLE_API_RATE', '60,1'), // requests, per minutes
+        'enabled'     => (bool) env('DB_CONSOLE_API', false),
+        'path'        => env('DB_CONSOLE_API_PATH', 'api/db-console'),
+        'auth'        => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
+        'allowed_ips' => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
+        'rate_limit'  => env('DB_CONSOLE_API_RATE', '60,1'), // 'requests,minutes' per caller; '' or 0 switches it off
+        // Refuse plain HTTP (loopback is always allowed).
         'require_https' => true,
-        // Destructive endpoints require a confirmation field in the body.
+        // Drop endpoints require {"confirm": "<name>"} in the body.
         'confirm_destructive' => true,
     ],
 
@@ -248,27 +270,82 @@ return [
     |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
-    | Recipients per NotificationCategory. Default: off for routine events,
-    | on for destructive and security events.
+    | Per NotificationCategory (routine, destructive, security): which
+    | channels it goes out on, and who receives it on each. A channel with no
+    | recipient is skipped, so nothing is delivered until an operator opts in.
+    | Default: mail only, off for routine events, on for destructive and
+    | security ones once DB_CONSOLE_ALERT_MAIL is set. Refused and adopted
+    | existing resources are security events.
     */
     'notifications' => [
+        // mail: the addresses per category.
         'recipients' => [
             'routine'     => [],
             'destructive' => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
             'security'    => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
         ],
+
+        // Channels per category: any of mail, slack, database.
+        'channels' => [
+            'routine'     => ['mail'],
+            'destructive' => ['mail'],
+            'security'    => ['mail'],
+        ],
+
+        // slack: needs laravel/slack-notification-channel. An incoming-webhook
+        // URL, or a channel name for a bot token (services.slack.notifications).
+        'slack' => [
+            'route' => env('DB_CONSOLE_SLACK_ROUTE'),
+        ],
+
+        // database: an in-app inbox. Ids of rbac.user_model users (the model
+        // uses Notifiable and the app has a notifications table).
+        'database' => [
+            'users' => array_filter(explode(',', (string) env('DB_CONSOLE_NOTIFY_USERS', ''))),
+        ],
+
+        // Hold routine notifications during a window, e.g.
+        // ['start' => '22:00', 'end' => '07:00', 'timezone' => 'Africa/Nairobi'].
+        // Held ones are queued until the window ends. Destructive and
+        // security notifications are never held.
         'quiet_hours' => null,
-        'queue'       => true,
+
+        // true: queue on the default queue. A string: that queue's name.
+        // false: send during the request.
+        'queue' => true,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Alerts — the high-severity channel
     |--------------------------------------------------------------------------
+    | Warning and Critical events (a refused or adopted existing resource, a
+    | failed rollback, suspicious activity) always go to the db-console log,
+    | to `webhook` when set, and as a notification on `channel` (mail, slack,
+    | database, or a comma-separated list) instead of their category's
+    | channels.
     */
     'alerts' => [
         'channel' => env('DB_CONSOLE_ALERT_CHANNEL', 'mail'),
         'webhook' => env('DB_CONSOLE_ALERT_WEBHOOK'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Operator security
+    |--------------------------------------------------------------------------
+    | Authentication stays with the host application, which binds
+    | Contracts\OperatorAssurance from its own two-factor and confirmation
+    | records. db-console enforces policy on the answers.
+    */
+    'security' => [
+        'step_up' => [
+            // How recently (seconds) the operator must have confirmed their
+            // identity before an action that needs it: today, applying a
+            // password to an adopted account (accounts.on_existing
+            // adopt_and_apply). With no OperatorAssurance bound, it is refused.
+            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
+        ],
     ],
 
     /*

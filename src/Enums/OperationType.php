@@ -35,6 +35,21 @@ enum OperationType: string implements Enumerator, Translatable
     #[Label('Change account host')]
     case AccountHostChanged = 'account.host_changed';
 
+    #[Label('Refuse an existing account')]
+    case AccountCreationRefused = 'account.creation_refused';
+
+    #[Label('Adopt an existing account')]
+    case AccountAdopted = 'account.adopted';
+
+    #[Label('Apply a password to an adopted account')]
+    case AccountPasswordApplied = 'account.password_applied';
+
+    #[Label('Refuse an existing database')]
+    case DatabaseCreationRefused = 'database.creation_refused';
+
+    #[Label('Adopt an existing database')]
+    case DatabaseAdopted = 'database.adopted';
+
     #[Label('Grant privileges')]
     case GrantCreate = 'grant.create';
 

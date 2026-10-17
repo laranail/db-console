@@ -30,13 +30,34 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 | `rbac.owner_user_id` | `null` | Bootstrap Owner assigned on install. |
 | `rbac.seed_default_roles` | `true` | Seed the shipped roles on install. |
 
+## Existing resources
+
+| Key | Default | Purpose |
+|---|---|---|
+| `accounts.on_existing` | `refuse` | `refuse`, `adopt` or `adopt_and_apply` for an account that is already there. |
+| `databases.on_existing` | `refuse` | `refuse` or `adopt` for a database that is already there. |
+| `servers.{name}.accounts.on_existing`, `servers.{name}.databases.on_existing` | unset | Per-server override. A call's own policy overrides both. |
+
+See [Adopt an existing account or database](recipes/adopt-existing-resources.md).
+
 ## Notifications & alerts
 
-`notifications.recipients.{category}` routes notifications; `alerts.webhook` receives high-severity alerts.
+| Key | Default | Purpose |
+|---|---|---|
+| `notifications.recipients.{category}` | security, destructive: `DB_CONSOLE_ALERT_MAIL` | Mail addresses per category. |
+| `notifications.channels.{category}` | `['mail']` | Any of `mail`, `slack`, `database`. |
+| `notifications.slack.route` | `DB_CONSOLE_SLACK_ROUTE` | A Slack webhook URL or bot channel. |
+| `notifications.database.users` | `DB_CONSOLE_NOTIFY_USERS` | User ids whose in-app inbox receives notifications. |
+| `notifications.quiet_hours` | `null` | Hold routine notifications in a window. |
+| `notifications.queue` | `true` | `true`, a queue name, or `false` to send in the request. |
+| `alerts.channel` | `mail` | The channels Warning and Critical events go out on. |
+| `alerts.webhook` | `null` | Also post every alert here. |
+
+See [Events & notifications](tools/events-notifications.md).
 
 ## API & webhooks
 
-`api.enabled` (default `false`), `api.guard` (`sanctum` | `passport`), `api.prefix`, `api.allowed_ips`, `api.rate_limit`. `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
+`api.enabled` (default `false`), `api.auth` (`sanctum` | `passport`), `api.path`, `api.allowed_ips`, `api.rate_limit` (`'requests,minutes'`), `api.require_https`, `api.confirm_destructive`. `api.guard` and `api.prefix` are deprecated fallbacks for the first two. `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
 
 ---
 

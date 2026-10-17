@@ -11,6 +11,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
 use Simtabi\Laranail\DBConsole\Events\AccountDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
@@ -19,9 +20,12 @@ use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Engines\HostScopingEngine;
 use Simtabi\Laranail\DBConsole\Events\AccountHostChanged;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourceKind;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Events\AccountPasswordApplied;
 use Simtabi\Laranail\DBConsole\Events\AccountPasswordRotated;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
@@ -46,14 +50,27 @@ final readonly class AccountManager
         private WizardExecutor $executor,
         private PrivilegeManager $privileges,
         private OwnershipReleasingDrop $releasingDrop,
+        private ExistingResourceGuard $guard,
     ) {}
 
     /**
      * Create an account. If $password is null a strong one is generated and
      * returned exactly once on the result.
+     *
+     * An account that is already there is handled by the existing-resource
+     * policy ($onExisting, else the server's, else the global
+     * `accounts.on_existing`, default refuse): refused with
+     * AccountAlreadyExists (HTTP 409), adopted as it is, or adopted and given
+     * $password (a generated one when null). The result's data says which:
+     * `adopted` and `password_applied`.
      */
-    public function create(string $server, Username $user, Host $host, ?Password $password = null): OperationResult
-    {
+    public function create(
+        string $server,
+        Username $user,
+        Host $host,
+        ?Password $password = null,
+        ?ExistingResourcePolicy $onExisting = null,
+    ): OperationResult {
         $this->authorizer->authorize(ConsolePermission::AccountCreate, "server:{$server}");
 
         [$engine, $connection] = $this->registry->resolve($server);
@@ -62,19 +79,14 @@ final readonly class AccountManager
             throw UnsupportedOperation::forEngine($engine->type()->value, 'account management');
         }
 
+        if ($this->exists($server, $user, $host)) {
+            return $this->adopt($server, $user, $host, $password, $onExisting);
+        }
+
         $generated = null;
         if (! $password instanceof Password) {
             $password = Password::generate();
             $generated = $password->reveal();
-        }
-
-        if ($this->exists($server, $user, $host)) {
-            return OperationResult::succeeded(
-                OperationType::AccountCreate,
-                $server,
-                ['username' => $user->value, 'host' => $host->value],
-                alreadyExisted: true,
-            );
         }
 
         try {
@@ -93,7 +105,47 @@ final readonly class AccountManager
         return OperationResult::succeeded(
             OperationType::AccountCreate,
             $server,
-            ['username' => $user->value, 'host' => $host->value],
+            ['username' => $user->value, 'host' => $host->value, 'adopted' => false, 'password_applied' => false],
+            generatedPassword: $generated,
+        );
+    }
+
+    /**
+     * Give an adopted account $password, once the caller has been through
+     * ExistingResourceGuard::authorizeApply(). The wizard adopts the account
+     * in its account step, authorises the change there, and applies it as its
+     * last step, so a failure in between leaves the credential as it was.
+     *
+     * @internal
+     */
+    public function applyAuthorizedPassword(string $server, Username $user, Host $host, ?Password $password = null): OperationResult
+    {
+        [$engine, $connection] = $this->registry->resolve($server);
+
+        $generated = null;
+        if (! $password instanceof Password) {
+            $password = Password::generate();
+            $generated = $password->reveal();
+        }
+
+        try {
+            $connection->run(
+                $engine->setPassword($user, $host, $password),
+                ['operation' => OperationType::AccountPasswordApplied->value, 'target' => $this->label($user, $host)],
+            );
+        } catch (DBConsoleException $e) {
+            $this->fail(OperationType::AccountPasswordApplied, $server, $this->label($user, $host), $e);
+        }
+
+        $this->catalog->recordPasswordRotation($server, $user, $host);
+        $this->log->success(OperationType::AccountPasswordApplied->value, $server, ['target' => $this->label($user, $host)]);
+        $this->events->dispatch(new AccountPasswordApplied($server, ['target' => $this->label($user, $host)]));
+
+        return OperationResult::succeeded(
+            OperationType::AccountCreate,
+            $server,
+            ['username' => $user->value, 'host' => $host->value, 'adopted' => true, 'password_applied' => true],
+            alreadyExisted: true,
             generatedPassword: $generated,
         );
     }
@@ -383,6 +435,37 @@ final readonly class AccountManager
         }
 
         return $engine->createAccountWithAuth($user, $newHost, $plugin, $hashLiteral);
+    }
+
+    /**
+     * The account is already there: refuse it, or adopt it (and, under
+     * adopt_and_apply, give it the supplied password) as the policy says.
+     * The guard authorises everything before anything changes.
+     */
+    private function adopt(string $server, Username $user, Host $host, ?Password $password, ?ExistingResourcePolicy $onExisting): OperationResult
+    {
+        $policy = $this->guard->admit(ExistingResourceKind::Account, $server, $this->label($user, $host), $onExisting);
+
+        $applied = null;
+        if ($policy === ExistingResourcePolicy::AdoptAndApply) {
+            // Apply first: if the server refuses the new password, nothing is
+            // recorded as adopted.
+            $applied = $this->applyAuthorizedPassword($server, $user, $host, $password);
+        }
+
+        $this->catalog->recordAccount($server, $user, $host);
+        $this->log->success(OperationType::AccountAdopted->value, $server, ['target' => $this->label($user, $host)]);
+        $this->events->dispatch(new AccountAdopted($server, [
+            'target'           => $this->label($user, $host),
+            'password_applied' => $applied instanceof OperationResult,
+        ]));
+
+        return $applied ?? OperationResult::succeeded(
+            OperationType::AccountCreate,
+            $server,
+            ['username' => $user->value, 'host' => $host->value, 'adopted' => true, 'password_applied' => false],
+            alreadyExisted: true,
+        );
     }
 
     private function requireAccounts(string $engine, bool $capable): void

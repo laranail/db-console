@@ -78,10 +78,10 @@ it('scopes every gate ability, keeping the bare ones as deprecated aliases', fun
     $scoped = $this->assertGateAbilitiesScoped(
         dbConsoleScope(),
         deprecated: dbConsoleBareAbilities(),
-        atLeast: 21,
+        atLeast: 22,
     );
 
-    expect($scoped)->toHaveCount(21)
+    expect($scoped)->toHaveCount(22)
         ->toContain('laranail-db-console.access', 'laranail-db-console.database.drop');
 });
 

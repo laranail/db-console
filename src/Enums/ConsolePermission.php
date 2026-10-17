@@ -57,6 +57,9 @@ enum ConsolePermission: string implements Enumerator, Translatable
     #[Label('Edit account configuration')]
     case AccountEdit = 'account.edit';
 
+    #[Label('Adopt existing accounts and databases')]
+    case ResourceAdopt = 'resource.adopt';
+
     #[Label('Grant privileges')]
     case GrantCreate = 'grant.create';
 

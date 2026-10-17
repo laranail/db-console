@@ -27,6 +27,14 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DbTools\Providers\DbToolsServiceProvider;
 use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
+use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 
 /*
  * Against a real MySQL or MariaDB: the `live-mysql` job in
@@ -424,8 +432,8 @@ it('rolls the wizard back without dropping an account it did not create', functi
     $user = liveMyName('existing');
     $this->cleanup = [['account', $user, '%'], ['database', $db, null]];
 
-    // Somebody's account, there before the run. The wizard adopts it rather
-    // than failing its account step...
+    // Somebody's account, there before the run. Adopted on request (refused
+    // by default) rather than failing the account step...
     liveMyAs(null)->statement("CREATE USER '{$user}'@'%' IDENTIFIED BY '" . LIVE_MY_PASSWORD . "'");
 
     // ...and then its grant step fails, after it created the database.
@@ -439,6 +447,7 @@ it('rolls the wizard back without dropping an account it did not create', functi
         new Host('%'),
         PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
         new Password(LIVE_MY_PASSWORD),
+        ExistingResourcePolicy::Adopt,
     ))->toThrow(DBConsoleException::class);
 
     // The rollback undoes what this run created, and only that.
@@ -464,6 +473,7 @@ it('rolls the wizard back without dropping a database it did not create', functi
         new Host('%'),
         PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
         new Password(LIVE_MY_PASSWORD),
+        ExistingResourcePolicy::Adopt,
     ))->toThrow(DBConsoleException::class);
 
     expect(liveMyDatabaseCount($db))->toBe(1)
@@ -513,4 +523,136 @@ it('backs up a database before dropping it, as the recommended admin, and the du
 
     expect((int) liveMyAs($restored)->scalar('SELECT amount FROM ledger WHERE id = 1'))->toBe(42);
     liveMyClose($restored);
+});
+/*
+ * Existing accounts and databases (owner decision 2026-10-17): refused by
+ * default, adopted only on request, and given a new password only under
+ * adopt_and_apply. Whether a password "was applied" is answered by logging
+ * in with it, not by reading what db-console recorded.
+ */
+
+/**
+ * The password the account had before db-console saw it, generated once per
+ * run so no literal credential sits in the repository.
+ */
+function liveMyTheirPassword(): string
+{
+    static $password = null;
+
+    return $password ??= Password::generate()->reveal();
+}
+
+/**
+ * An authenticated operator whose host reports a confirmation just now: what
+ * adopt_and_apply needs on top of its permissions.
+ */
+function liveMyConfirmedOperator(): void
+{
+    $operator = new User;
+    $operator->id = 7;
+    test()->actingAs($operator);
+    app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
+}
+
+function liveMyCanLogIn(string $user, string $password): bool
+{
+    $name = 'live_my_login_' . $user . '_' . substr(hash('sha256', $password), 0, 8);
+    config()->set("database.connections.{$name}", liveMyConnection(null, $user, $password));
+
+    try {
+        DB::connection($name)->select('SELECT 1');
+
+        return true;
+    } catch (Throwable) {
+        return false;
+    } finally {
+        DB::purge($name);
+    }
+}
+
+function liveMyTheirAccount(string $user): void
+{
+    liveMyAs(null)->statement("CREATE USER '{$user}'@'%' IDENTIFIED BY '" . liveMyTheirPassword() . "'");
+}
+
+it('refuses an account it did not create, and the account keeps its own password', function (): void {
+    $user = liveMyName('theirs');
+    $this->cleanup = [['account', $user, '%']];
+    liveMyTheirAccount($user);
+
+    expect(fn () => app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD)))
+        ->toThrow(AccountAlreadyExists::class);
+
+    expect(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeTrue()
+        ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(0);
+});
+
+it('adopts an account on request without touching its password', function (): void {
+    $user = liveMyName('adopted');
+    $this->cleanup = [['account', $user, '%']];
+    liveMyTheirAccount($user);
+
+    $result = app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeTrue()
+        ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(1);
+});
+
+it('gives an adopted account the supplied password under adopt_and_apply', function (): void {
+    $user = liveMyName('applied');
+    $this->cleanup = [['account', $user, '%']];
+    liveMyTheirAccount($user);
+
+    liveMyConfirmedOperator();
+    $result = app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
+
+    expect($result->data['password_applied'])->toBeTrue()
+        ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeTrue()
+        ->and(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeFalse();
+});
+
+it('refuses an existing database, and adopts it on request', function (): void {
+    $db = liveMyName('existing');
+    $this->cleanup = [['database', $db, null]];
+    liveMyAs(null)->statement("CREATE DATABASE `{$db}`");
+
+    expect(fn () => app(DatabaseManager::class)->create('live_mysql', new DbName($db), new Charset('utf8mb4', 'utf8mb4_unicode_ci')))
+        ->toThrow(DatabaseAlreadyExists::class);
+    expect(ManagedDatabase::query()->count())->toBe(0);
+
+    $result = app(DatabaseManager::class)->create('live_mysql', new DbName($db), new Charset('utf8mb4', 'utf8mb4_unicode_ci'), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(ManagedDatabase::query()->count())->toBe(1)
+        ->and(liveMyDatabaseCount($db))->toBe(1);
+});
+
+it('re-runs the wizard without a password when the operator adopts, keeping the account\'s password', function (): void {
+    $db = liveMyName('rerun');
+    $user = liveMyName('rerun');
+    $this->cleanup = [['account', $user, '%'], ['database', $db, null]];
+    $provision = fn (?Password $password, ?ExistingResourcePolicy $policy) => app(ProvisioningWizard::class)->provision(
+        'live_mysql',
+        new DbName($db),
+        new Charset('utf8mb4', 'utf8mb4_unicode_ci'),
+        new Username($user),
+        new Host('%'),
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        $password,
+        $policy,
+    );
+
+    $provision(new Password(LIVE_MY_PASSWORD), null);
+
+    expect(fn () => $provision(null, null))->toThrow(DatabaseAlreadyExists::class);
+
+    $rerun = $provision(null, ExistingResourcePolicy::Adopt);
+
+    expect($rerun->data['adopted'])->toBeTrue()
+        ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeTrue();
+    liveMyAs($db, $user)->statement('CREATE TABLE rerun_check (id int PRIMARY KEY)');
+    liveMyClose($db, $user);
 });

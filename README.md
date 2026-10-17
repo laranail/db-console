@@ -104,6 +104,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 ### Recipes
 
 - [Provision a minimal admin per engine](docs/recipes/provision-minimal-admin.md)
+- [Adopt an existing account or database](docs/recipes/adopt-existing-resources.md)
 - [Configure a KMS / Vault / reference secret driver](docs/recipes/configure-secret-driver.md)
 - [Issue an API token](docs/recipes/issue-api-token.md)
 - [Verify a webhook signature](docs/recipes/verify-webhook-signature.md)

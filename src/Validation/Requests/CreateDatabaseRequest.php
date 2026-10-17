@@ -8,6 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Simtabi\Laranail\DBConsole\Enums\Charset;
 use Simtabi\Laranail\DBConsole\Enums\Collation;
 use Simtabi\Laranail\Enumerator\Rules\EnumValue;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 
 /**
@@ -32,6 +33,8 @@ final class CreateDatabaseRequest extends FormRequest
             'name'      => ['required', 'string', new IdentifierRule],
             'charset'   => ['nullable', 'string', EnumValue::for(Charset::class)],
             'collation' => ['nullable', 'string', EnumValue::for(Collation::class)],
+            // What to do when it already exists; absent = the configured policy (refuse by default).
+            'on_existing' => ['nullable', 'string', EnumValue::for(ExistingResourcePolicy::class)],
         ];
     }
 }

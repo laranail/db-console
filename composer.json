@@ -59,6 +59,7 @@
         "laravel/passport": "^13.0",
         "laravel/pint": "^1.30",
         "laravel/sanctum": "^4.3",
+        "laravel/slack-notification-channel": "^3.0",
         "mockery/mockery": "^1.6",
         "orchestra/testbench": "^11.0",
         "pestphp/pest": "^4.0",
@@ -75,6 +76,7 @@
         "laranail/db-tools": "^0.1.6. Enables backup-before-drop snapshots (0.1.6 makes them safe on managed servers: url, TLS, --single-transaction), live schema inspection for doctor and the dashboard, and cursor pagination for API lists.",
         "laravel/passport": "OAuth2 guard for the optional REST API (service-to-service access).",
         "laravel/sanctum": "Default token guard for the optional REST API.",
+        "laravel/slack-notification-channel": "Sends notifications and alerts to Slack (notifications.channels with slack).",
         "spatie/laravel-permission": "Delegates console RBAC storage to Spatie when rbac.driver is set to spatie."
     },
     "autoload": {

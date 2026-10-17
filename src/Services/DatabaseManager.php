@@ -10,6 +10,7 @@ use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
@@ -18,10 +19,12 @@ use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourceKind;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Engines\SessionEndingEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
@@ -47,23 +50,24 @@ final readonly class DatabaseManager
         private BackupService $backups,
         private ScopedConnections $scoped,
         private RoleMembership $membership,
+        private ExistingResourceGuard $guard,
     ) {}
 
-    public function create(string $server, DbName $db, Charset $charset): OperationResult
+    /**
+     * Create a database. One that is already there is handled by the
+     * existing-resource policy ($onExisting, else the server's, else the
+     * global `databases.on_existing`, default refuse): refused with
+     * DatabaseAlreadyExists (HTTP 409), or adopted as it is. A database has
+     * no password, so adopt_and_apply adopts.
+     */
+    public function create(string $server, DbName $db, Charset $charset, ?ExistingResourcePolicy $onExisting = null): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::DatabaseCreate, "server:{$server}");
 
         [$engine, $connection] = $this->registry->resolve($server);
 
-        // Idempotency: an already-existing database is a handled outcome, not
-        // a raw driver error.
         if ($this->exists($server, $db)) {
-            return OperationResult::succeeded(
-                OperationType::DatabaseCreate,
-                $server,
-                ['database' => $db->value],
-                alreadyExisted: true,
-            );
+            return $this->adopt($server, $db, $onExisting);
         }
 
         try {
@@ -79,7 +83,7 @@ final readonly class DatabaseManager
         $this->log->success(OperationType::DatabaseCreate->value, $server, ['target' => $db->value]);
         $this->events->dispatch(new DatabaseCreated($server, ['target' => $db->value]));
 
-        return OperationResult::succeeded(OperationType::DatabaseCreate, $server, ['database' => $db->value]);
+        return OperationResult::succeeded(OperationType::DatabaseCreate, $server, ['database' => $db->value, 'adopted' => false]);
     }
 
     public function drop(string $server, DbName $db): OperationResult
@@ -272,6 +276,26 @@ final readonly class DatabaseManager
         }
 
         return $toTake;
+    }
+
+    /**
+     * The database is already there: refuse it, or record it as managed as it
+     * is. Its charset is not recorded, because db-console did not choose it.
+     */
+    private function adopt(string $server, DbName $db, ?ExistingResourcePolicy $onExisting): OperationResult
+    {
+        $this->guard->admit(ExistingResourceKind::Database, $server, $db->value, $onExisting);
+
+        $this->catalog->recordDatabase($server, $db, '', null);
+        $this->log->success(OperationType::DatabaseAdopted->value, $server, ['target' => $db->value]);
+        $this->events->dispatch(new DatabaseAdopted($server, ['target' => $db->value]));
+
+        return OperationResult::succeeded(
+            OperationType::DatabaseCreate,
+            $server,
+            ['database' => $db->value, 'adopted' => true],
+            alreadyExisted: true,
+        );
     }
 
     private function fail(OperationType $operation, string $server, string $target, DBConsoleException $e): never
