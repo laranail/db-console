@@ -25,6 +25,7 @@ use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DbTools\Providers\DbToolsServiceProvider;
 use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
 
 /*
@@ -453,6 +454,9 @@ it('backs up a database before dropping it, as the recommended admin, and the du
     $this->cleanup = [['database', $db, null], ['database', $restored, null]];
     config()->set('laranail.db-console.backup.enabled', true);
     config()->set('laranail.db-console.backup.before_drop', true);
+    // An application discovers db-tools' provider; Testbench registers only
+    // the ones TestCase names.
+    $this->app->register(DbToolsServiceProvider::class);
     Event::fake([DatabaseBackedUp::class]);
 
     $databases = app(DatabaseManager::class);

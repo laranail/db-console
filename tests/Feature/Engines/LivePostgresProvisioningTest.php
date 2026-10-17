@@ -414,7 +414,8 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     expect($grants)->toContain("database {$db} {$db} CONNECT")
         ->toContain("table {$db} public.reference_data SELECT")
         ->toContain("table {$db} public.reference_data INSERT")
-        ->toContain("default privileges {$db} tables in schema public SELECT");
+        // Database-wide since grants stopped setting defaults per schema.
+        ->toContain("default privileges {$db} tables SELECT");
 
     // From PG15 schema public belongs to the database owner, the admin, so
     // the schema grant lands. Before it the schema is the bootstrap
