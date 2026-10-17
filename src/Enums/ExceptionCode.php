@@ -44,6 +44,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
 
     // Authorization
     case NotAuthorized = 'not_authorized';
+    /** @deprecated Not thrown since adopt_and_apply moved to the assurance policy; see AssuranceRequired. */
     case ConfirmationRequired = 'confirmation.required';
     case AssuranceRequired = 'assurance_required';
     case OwnerWouldBeStranded = 'security.owner_stranded';

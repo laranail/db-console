@@ -23,16 +23,19 @@ use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Events\AssuranceShortfall;
 use Simtabi\Laranail\DBConsole\Enums\NotificationCategory;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Exceptions\AssuranceRequired;
 use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
 use Simtabi\Laranail\DBConsole\Events\AccountPasswordApplied;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
 use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
+use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\ConfirmationRequired;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
@@ -152,12 +155,44 @@ describe('an existing account', function (): void {
         Event::assertNotDispatched(AccountPasswordApplied::class);
     });
 
-    it('cannot be adopted without resource.adopt', function (): void {
+    it('cannot be adopted without resource.adopt, and the attempt is reported', function (): void {
+        Event::fake([AccountCreationRefused::class]);
         policyDenyOnly([ConsolePermission::ResourceAdopt]);
         policyTheirAccount();
 
         expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::Adopt))->toThrow(NotAuthorized::class);
         expect(DbAccount::query()->count())->toBe(0);
+        Event::assertDispatched(
+            AccountCreationRefused::class,
+            fn (AccountCreationRefused $e): bool => $e->context['reason'] === 'not_authorized' && $e->context['requested'] === 'adopt',
+        );
+    });
+
+    it('reports a database adoption refused for lack of resource.adopt', function (): void {
+        Event::fake([DatabaseCreationRefused::class]);
+        policyDenyOnly([ConsolePermission::ResourceAdopt]);
+        FakeProvisioningEngine::addDatabase('shop_prod');
+
+        expect(fn () => app(DatabaseManager::class)->create('fake', new DbName('shop_prod'), new Charset('utf8'), ExistingResourcePolicy::Adopt))
+            ->toThrow(NotAuthorized::class);
+        Event::assertDispatched(DatabaseCreationRefused::class, fn (DatabaseCreationRefused $e): bool => $e->context['reason'] === 'not_authorized');
+    });
+
+    it('reports a password application refused for lack of account.rotate', function (): void {
+        Event::fake([AccountCreationRefused::class]);
+        policyDenyOnly([ConsolePermission::AccountRotate]);
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        Event::assertDispatched(AccountCreationRefused::class, fn (AccountCreationRefused $e): bool => $e->context['reason'] === 'not_authorized' && $e->context['requested'] === 'adopt_and_apply');
+    });
+
+    it('marks a plain refusal with the policy as its reason', function (): void {
+        Event::fake([AccountCreationRefused::class]);
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        Event::assertDispatched(AccountCreationRefused::class, fn (AccountCreationRefused $e): bool => $e->context['reason'] === 'policy');
     });
 
     it('takes its password only with account.rotate as well', function (): void {
@@ -178,48 +213,79 @@ describe('an existing account', function (): void {
 
         expect($result->data['password_applied'])->toBeTrue()
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()))
-            // Asked twice about the operator the request carries, and nobody else:
-            // once by the Authorizer's assurance check (security.assurance), once
-            // by the existing-resource guard before it applies the password.
-            ->and($assurance->askedAbout)->toBe(['7', '7']);
+            // Asked once, about the operator the request carries: the assurance
+            // policy decides account.rotate and the confirmation adopt_and_apply
+            // adds in a single check.
+            ->and($assurance->askedAbout)->toBe(['7']);
         Event::assertDispatched(AccountPasswordApplied::class);
     });
 
-    it('changes nothing without a recent confirmation', function (?int $secondsAgo): void {
+    it('changes nothing without a recent confirmation when assurance is required', function (?int $secondsAgo): void {
+        Event::fake([AccountCreationRefused::class, AssuranceShortfall::class]);
+        config()->set('laranail.db-console.security.assurance.enforce', 'require');
         config()->set('laranail.db-console.security.step_up.ttl', 300);
         app()->instance(OperatorAssurance::class, new FixedOperatorAssurance(
             $secondsAgo === null ? null : now()->subSeconds($secondsAgo)->toImmutable(),
         ));
         policyTheirAccount();
 
-        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(AssuranceRequired::class);
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(DbAccount::query()->count())->toBe(0);
+        Event::assertDispatched(AssuranceShortfall::class);
+        Event::assertDispatched(AccountCreationRefused::class, fn (AccountCreationRefused $e): bool => $e->context['reason'] === 'assurance_required');
     })->with(['never confirmed' => [null], 'confirmed too long ago' => [301]]);
 
-    it('fails closed with the default assurance, which knows of no confirmation', function (): void {
+    it('needs a recent confirmation even when account.rotate is configured not to', function (): void {
+        config()->set('laranail.db-console.security.assurance.enforce', 'require');
+        config()->set('laranail.db-console.security.assurance.recent_confirmation', []);
+        config()->set('laranail.db-console.security.assurance.second_factor', 'none');
+        app()->instance(OperatorAssurance::class, new FixedOperatorAssurance(null));
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(AssuranceRequired::class);
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+
+        // ...while a plain rotation, which the config governs, goes through.
+        app(AccountManager::class)->rotatePassword('fake', new Username('shop'), new Host('%'), new Password(policyOurPassword()));
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()));
+    });
+
+    it('follows the assurance policy\'s report mode: allowed, and the shortfall audited', function (): void {
+        Event::fake([AssuranceShortfall::class, AccountPasswordApplied::class]);
+        config()->set('laranail.db-console.security.assurance.enforce', 'report');
+        app()->instance(OperatorAssurance::class, new FixedOperatorAssurance(null));
+        policyTheirAccount();
+
+        expect(policyCreateShop(ExistingResourcePolicy::AdoptAndApply)->data['password_applied'])->toBeTrue();
+        Event::assertDispatched(AssuranceShortfall::class, fn (AssuranceShortfall $e): bool => $e->context['missing'] === ['recent_confirmation']);
+        Event::assertDispatched(AccountPasswordApplied::class);
+    });
+
+    it('fails closed in require mode with the default assurance, which knows of no confirmation', function (): void {
+        config()->set('laranail.db-console.security.assurance.enforce', 'require');
         app()->forgetInstance(OperatorAssurance::class);
         app()->offsetUnset(OperatorAssurance::class);
         app()->bind(OperatorAssurance::class, NullOperatorAssurance::class);
         policyTheirAccount();
 
-        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(AssuranceRequired::class);
     });
 
-    it('fails closed with no authenticated operator', function (): void {
+    it('leaves a shell run with no operator to the gate, as every other permission does', function (): void {
+        config()->set('laranail.db-console.security.assurance.enforce', 'require');
         auth()->logout();
         policyTheirAccount();
 
-        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+        expect(policyCreateShop(ExistingResourcePolicy::AdoptAndApply)->data['password_applied'])->toBeTrue();
     });
 
-    it('answers a missing confirmation with 403 confirmation.required', function (): void {
+    it('no longer throws the deprecated ConfirmationRequired, which still constructs', function (): void {
         $e = ConfirmationRequired::forAction('adopt_and_apply', 300);
 
         expect($e->code()->value)->toBe('confirmation.required')
             ->and($e->code()->httpStatus())->toBe(403)
-            ->and($e->userMessage())->toContain('300 seconds');
+            ->and(file_get_contents(new ReflectionClass(ExistingResourceGuard::class)->getFileName()))->not->toContain('ConfirmationRequired');
     });
 
     it('gets a generated password under adopt_and_apply when none was supplied, shown once', function (): void {
@@ -448,6 +514,18 @@ describe('the provisioning wizard', function (): void {
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+    });
+
+    it('reports a password application the wizard was refused', function (): void {
+        Event::fake([AccountCreationRefused::class]);
+        policyDenyOnly([ConsolePermission::AccountRotate]);
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        Event::assertDispatched(
+            AccountCreationRefused::class,
+            fn (AccountCreationRefused $e): bool => $e->context['target'] === 'shop@%' && $e->context['requested'] === 'adopt_and_apply' && $e->context['reason'] === 'not_authorized',
+        );
     });
 
     it('applies the new password once the grant has landed', function (): void {

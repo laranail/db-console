@@ -98,7 +98,7 @@ final readonly class ProvisioningWizard
                     $accountResult = $this->accounts->create($server, $username, $host, $password, $adoptOnly);
 
                     if ($accountResult->alreadyExisted && $accountPolicy === ExistingResourcePolicy::AdoptAndApply) {
-                        $this->guard->authorizeApply($server);
+                        $this->guard->authorizeApply($server, "{$username->value}@{$host->value}");
                         $applyPassword = true;
                     }
 

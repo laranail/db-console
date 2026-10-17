@@ -4,24 +4,22 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Services;
 
-use DateTimeInterface;
+use Closure;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
-use Illuminate\Contracts\Auth\Factory as AuthFactory;
+use Simtabi\Laranail\DBConsole\Enums\Assurance;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourceKind;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
-use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
-use Simtabi\Laranail\DBConsole\Exceptions\ConfirmationRequired;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\AuthorizationException;
 
 /**
  * The one place that decides what a create does about an account or database
@@ -40,8 +38,6 @@ final readonly class ExistingResourceGuard
         private Config $config,
         private Authorizer $authorizer,
         private Gate $gate,
-        private OperatorAssurance $assurance,
-        private AuthFactory $auth,
         private Dispatcher $events,
         private DBConsoleLogger $log,
     ) {}
@@ -59,7 +55,9 @@ final readonly class ExistingResourceGuard
     /**
      * The resource is already there: refuse it (report, then throw a 409), or
      * authorise the adoption the policy asks for and return that policy.
-     * Nothing has changed on the server when this throws.
+     * Nothing has changed on the server when this throws, and a refusal of
+     * either kind (the policy's, or an operator who may not adopt) is
+     * reported to the security recipients.
      */
     public function admit(ExistingResourceKind $kind, string $server, string $target, ?ExistingResourcePolicy $requested = null): ExistingResourcePolicy
     {
@@ -69,34 +67,40 @@ final readonly class ExistingResourceGuard
             $this->refuse($kind, $server, $target);
         }
 
-        $this->authorizer->authorize(ConsolePermission::ResourceAdopt, "server:{$server}");
+        $this->reportingRefusal($kind, $server, $target, $policy, function () use ($server, $policy): void {
+            $this->authorizer->authorize(ConsolePermission::ResourceAdopt, "server:{$server}");
 
-        if ($policy === ExistingResourcePolicy::AdoptAndApply) {
-            $this->authorizeApply($server);
-        }
+            if ($policy === ExistingResourcePolicy::AdoptAndApply) {
+                $this->demandApply($server);
+            }
+        });
 
         return $policy;
     }
 
     /**
      * Applying a password to an account db-console did not create replaces a
-     * credential something else may be using: it needs account.rotate, on
-     * top of resource.adopt, and an identity confirmation within
-     * security.step_up.ttl seconds as the host's OperatorAssurance reports
-     * it. Authentication stays with the host; this only enforces the answer,
-     * and fails closed when there is no operator or no confirmation on record.
+     * credential something else may be using. It needs account.rotate on top
+     * of resource.adopt, and the assurance policy (security.assurance) is
+     * asked for a recent confirmation whatever it lists for account.rotate:
+     * the same enforcement mode, break-glass and AssuranceRequired as every
+     * other permission. With $target, a refusal is reported like admit()'s.
      */
-    public function authorizeApply(string $server): void
+    public function authorizeApply(string $server, ?string $target = null): void
     {
-        $this->authorizer->authorize(ConsolePermission::AccountRotate, "server:{$server}");
+        if ($target === null) {
+            $this->demandApply($server);
 
-        $ttl = max(1, (int) $this->config->get('laranail.db-console.security.step_up.ttl', 300));
-        $operator = $this->auth->guard()->user();
-        $confirmedAt = $operator instanceof Authenticatable ? $this->assurance->recentlyConfirmedAt($operator) : null;
-
-        if (! $confirmedAt instanceof DateTimeInterface || $confirmedAt->getTimestamp() < now()->getTimestamp() - $ttl) {
-            throw ConfirmationRequired::forAction(ExistingResourcePolicy::AdoptAndApply->value, $ttl);
+            return;
         }
+
+        $this->reportingRefusal(
+            ExistingResourceKind::Account,
+            $server,
+            $target,
+            ExistingResourcePolicy::AdoptAndApply,
+            fn () => $this->demandApply($server),
+        );
     }
 
     /**
@@ -126,17 +130,56 @@ final readonly class ExistingResourceGuard
     private function refuse(ExistingResourceKind $kind, string $server, string $target): never
     {
         $options = $this->optionsFor($kind, $server);
-        $context = ['target' => $target, 'options' => $options];
+        $this->reportRefusal($kind, $server, $target, [
+            'options'   => $options,
+            'reason'    => 'policy',
+            'requested' => ExistingResourcePolicy::Refuse->value,
+        ]);
 
         if ($kind === ExistingResourceKind::Account) {
-            $this->events->dispatch(new AccountCreationRefused($server, $context));
-
             throw AccountAlreadyExists::on($server, $target, $options);
         }
 
-        $this->events->dispatch(new DatabaseCreationRefused($server, $context));
-
         throw DatabaseAlreadyExists::on($server, $target, $options);
+    }
+
+    private function demandApply(string $server): void
+    {
+        $this->authorizer->authorize(ConsolePermission::AccountRotate, "server:{$server}", [Assurance::RecentConfirmation]);
+    }
+
+    /**
+     * Run an authorisation check, and report a denial as a refusal before
+     * letting it propagate: "refuse and report" holds for an operator who
+     * asked to adopt and was not allowed to, too.
+     *
+     * @param Closure(): void $check
+     */
+    private function reportingRefusal(ExistingResourceKind $kind, string $server, string $target, ExistingResourcePolicy $requested, Closure $check): void
+    {
+        try {
+            $check();
+        } catch (AuthorizationException $e) {
+            $this->reportRefusal($kind, $server, $target, [
+                'options'   => $this->optionsFor($kind, $server),
+                'reason'    => $e->code()->value,
+                'requested' => $requested->value,
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function reportRefusal(ExistingResourceKind $kind, string $server, string $target, array $context): void
+    {
+        $context = ['target' => $target, ...$context];
+
+        $this->events->dispatch($kind === ExistingResourceKind::Account
+            ? new AccountCreationRefused($server, $context)
+            : new DatabaseCreationRefused($server, $context));
     }
 
     private function configured(string $key, string $server): ?ExistingResourcePolicy

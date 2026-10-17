@@ -43,9 +43,17 @@ final readonly class AssuranceEnforcer
     ) {}
 
     /**
+     * $alsoRequire adds to what the policy asks of $permission, for an
+     * operation that must need an assurance however the policy is configured
+     * (applying a password to an adopted account always needs a recent
+     * confirmation). It is checked once, with the rest, so one shortfall is
+     * audited and one exception thrown.
+     *
+     * @param list<Assurance> $alsoRequire
+     *
      * @throws AssuranceRequired
      */
-    public function enforce(?Authenticatable $operator, ConsolePermission $permission, string $server = 'global'): void
+    public function enforce(?Authenticatable $operator, ConsolePermission $permission, string $server = 'global', array $alsoRequire = []): void
     {
         if (! $operator instanceof Authenticatable) {
             return;
@@ -56,7 +64,14 @@ final readonly class AssuranceEnforcer
             return;
         }
 
-        $missing = $this->missing($operator, $this->policy->requiredFor($permission));
+        $required = $this->policy->requiredFor($permission);
+        foreach ($alsoRequire as $assurance) {
+            if (! in_array($assurance, $required, true)) {
+                $required[] = $assurance;
+            }
+        }
+
+        $missing = $this->missing($operator, $required);
         if ($missing === [] || $this->breakGlass->active($operator) instanceof SecurityBypass) {
             return;
         }

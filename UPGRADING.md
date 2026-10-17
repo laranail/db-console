@@ -51,9 +51,10 @@ the security recipients.
 - **A wizard re-run without a password** is the common case: it now needs `adopt` and
   `resource.adopt`. It never replaces the account's password.
 - **`adopt_and_apply`** replaces an adopted account's password with the one supplied, and needs
-  `account.rotate` too, plus an identity confirmation within `security.step_up.ttl` seconds that
-  your application reports by binding `Contracts\OperatorAssurance`. Without a binding it is
-  refused. Anything logging in with the old password stops working.
+  `account.rotate` too, which the assurance policy checks with a recent confirmation always
+  required (within `security.step_up.ttl`, as your `Contracts\OperatorAssurance` binding reports
+  it). Under `assurance.enforce=require` it is refused without one; under `report` it is allowed
+  and the shortfall audited. Anything logging in with the old password stops working.
 - A CLI run that is interactive and finds the resource asks what to do. Scripts should pass
   `--no-interaction` (the configured policy applies) or `--on-existing`.
 
@@ -77,6 +78,9 @@ the security recipients.
 - If your published config has `api.guard` or `api.prefix` and no `api.auth` / `api.path`, those
   are still honoured, with a deprecation notice. Rename them. If it has both, the documented key
   wins.
+- **Failed authentication is throttled per IP** (`api.auth_failure_limit`, default `10,1`). A
+  client behind a shared address that fails often can lock out its neighbours for the window; raise
+  the limit, or set it to `''` to switch it off.
 - **`api.rate_limit` is enforced** (default `60,1`: 60 requests a minute per caller). Set it to `''`
   to switch it off.
 - `api.require_https` and `api.confirm_destructive` are read; both default to `true`, as the API
