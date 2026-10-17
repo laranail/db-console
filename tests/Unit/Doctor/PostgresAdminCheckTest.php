@@ -97,3 +97,61 @@ it('warns when the admin connects through a known pooler port', function (int $p
 it('does not warn about a direct connection', function (?int $port): void {
     expect(pgDoctor([], $port))->not->toHaveKey('server:main:pooler');
 })->with([[5432], [25060], [null]]);
+
+// The port alone warned about a direct connection that happens to use 6432,
+// and missed a pooler on any other port. inet_server_port() is the port the
+// server itself listens on, so a difference means something relays the
+// connection.
+it('does not warn about a known pooler port the server itself listens on', function (): void {
+    expect(pgDoctor(['server_port' => 6432], 6432))->not->toHaveKey('server:main:pooler');
+});
+
+it('still warns about a known pooler port the server does not listen on', function (): void {
+    expect(pgDoctor(['server_port' => 5432], 6432)['server:main:pooler'])->toBe(Severity::Warning->value);
+});
+
+it('notes a connection relayed from a port no known pooler uses', function (): void {
+    $findings = (new PostgresAdminCheck)->findings('main', [
+        'is_superuser'       => false, 'can_create_db' => true, 'can_create_role' => true,
+        'server_version_num' => 170004, 'server_port' => 5432,
+    ], 54320);
+    $pooler = array_values(array_filter($findings, fn (DoctorFinding $f): bool => $f->check === 'server:main:pooler'))[0];
+
+    expect($pooler->severity)->toBe(Severity::Info)
+        ->and($pooler->message)->toContain('54320')->toContain('5432');
+});
+
+// PostgreSQL 16 gave CREATEROLE a ceiling: the admin manages only roles it
+// holds ADMIN OPTION on, which by default means roles it created. Dropping or
+// changing any other login role then fails with "permission denied".
+it('warns on 16 and later about login roles the admin cannot administer, naming them', function (): void {
+    $findings = (new PostgresAdminCheck)->findings('main', [
+        'is_superuser' => false, 'can_create_db' => true, 'can_create_role' => true, 'server_version_num' => 160004,
+    ], 5432, ['legacy_app', 'reporting']);
+    $roles = array_values(array_filter($findings, fn (DoctorFinding $f): bool => $f->check === 'server:main:role-admin'))[0];
+
+    expect($roles->severity)->toBe(Severity::Warning)
+        ->and($roles->message)->toContain('2 login role(s)')->toContain('legacy_app')->toContain('reporting');
+});
+
+it('caps the names it lists', function (): void {
+    $names = array_map(fn (int $i): string => "role_{$i}", range(1, 25));
+    $findings = (new PostgresAdminCheck)->findings('main', [
+        'is_superuser' => false, 'can_create_db' => true, 'can_create_role' => true, 'server_version_num' => 170000,
+    ], 5432, $names);
+    $roles = array_values(array_filter($findings, fn (DoctorFinding $f): bool => $f->check === 'server:main:role-admin'))[0];
+
+    expect($roles->message)->toContain('25 login role(s)')->toContain('role_10')->not->toContain('role_11')->toContain('and 15 more');
+});
+
+it('says nothing about role administration before 16, where CREATEROLE covers every non-superuser role', function (): void {
+    $findings = (new PostgresAdminCheck)->findings('main', [
+        'is_superuser' => false, 'can_create_db' => true, 'can_create_role' => true, 'server_version_num' => 150008,
+    ], 5432, ['legacy_app']);
+
+    expect(array_map(fn (DoctorFinding $f): string => $f->check, $findings))->not->toContain('server:main:role-admin');
+});
+
+it('says nothing when the admin administers every login role', function (): void {
+    expect(pgDoctor(['server_version_num' => 170000]))->not->toHaveKey('server:main:role-admin');
+});

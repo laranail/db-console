@@ -11,7 +11,9 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
+use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
+use Simtabi\Laranail\DBConsole\Services\Results\GrantEntry;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateAccountRequest;
 
@@ -41,6 +43,22 @@ final class AccountController
         // 201 for a new account; 200 for one adopted as it was found. A
         // refused one never gets here: AccountAlreadyExists renders the 409.
         return OperationResponse::make($result, $result->alreadyExisted ? 200 : 201);
+    }
+
+    /**
+     * The account's privileges, read live. `?host=` names the account's host
+     * (default %), `?direct=1` keeps only what it holds itself.
+     */
+    public function grants(Request $request, string $server, string $username, PrivilegeManager $privileges): JsonResponse
+    {
+        $entries = $privileges->grants(
+            $server,
+            new Username($username),
+            new Host((string) ($request->query('host') ?? '%')),
+            $request->boolean('direct'),
+        );
+
+        return new JsonResponse(['data' => array_map(static fn (GrantEntry $entry): array => $entry->toArray(), $entries)]);
     }
 
     public function destroy(Request $request, string $server, string $username, AccountManager $accounts, ApiSettings $settings): JsonResponse

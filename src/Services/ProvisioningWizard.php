@@ -76,6 +76,13 @@ final readonly class ProvisioningWizard
         $accountResult = null;
         $applyPassword = false;
 
+        // A password the engine cannot take is refused before the first
+        // step, not when the account step builds its statement, by which
+        // time the database exists and has to be rolled back.
+        if ($password instanceof Password) {
+            $this->accounts->assertAcceptsPassword($server, $password);
+        }
+
         $this->executor->execute($server, OperationType::DatabaseCreate, [
             WizardStep::make(
                 "create database {$database->value}",

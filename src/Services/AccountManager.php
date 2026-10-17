@@ -16,6 +16,7 @@ use Simtabi\Laranail\DBConsole\Events\AccountCreated;
 use Simtabi\Laranail\DBConsole\Events\AccountDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Engines\HostScopingEngine;
@@ -31,6 +32,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Engines\PasswordConstrainedEngine;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
@@ -77,6 +79,11 @@ final readonly class AccountManager
 
         if (! $engine->capabilities()->canCreateAccount) {
             throw UnsupportedOperation::forEngine($engine->type()->value, 'account management');
+        }
+
+        // Before the existing-account check and anything it may report.
+        if ($password instanceof Password && $engine instanceof PasswordConstrainedEngine) {
+            $engine->assertAcceptsPassword($password);
         }
 
         if ($this->exists($server, $user, $host)) {
@@ -184,6 +191,22 @@ final readonly class AccountManager
             $server,
             ['username' => $user->value, 'host' => $host->value],
         );
+    }
+
+    /**
+     * Refuse, before anything is created, a password the server's engine
+     * cannot take (Postgres: one SASLprep would rewrite). For flows that
+     * create other things first, such as the provisioning wizard.
+     *
+     * @throws WeakPassword
+     */
+    public function assertAcceptsPassword(string $server, Password $password): void
+    {
+        $engine = $this->registry->engine($server);
+
+        if ($engine instanceof PasswordConstrainedEngine) {
+            $engine->assertAcceptsPassword($password);
+        }
     }
 
     /**

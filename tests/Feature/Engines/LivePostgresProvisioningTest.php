@@ -14,6 +14,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
+use Simtabi\Laranail\DBConsole\Doctor\DoctorFinding;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
@@ -23,6 +24,7 @@ use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Exceptions\GrantNotApplied;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
+use Simtabi\Laranail\DBConsole\Services\Results\GrantEntry;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
@@ -415,6 +417,18 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     livePgAs($db)->statement('CREATE TABLE reference_data (code text PRIMARY KEY)');
     livePgClose($db);
 
+    // The role owns a table it created, and inherits a privilege through a
+    // group role.
+    $group = liveName('readers');
+    $this->cleanup[] = ['role', $group];
+    livePgAs($db, $role)->statement('CREATE TABLE orders (id int)');
+    livePgClose($db, $role);
+    livePgAs('postgres')->statement("CREATE ROLE \"{$group}\" NOLOGIN");
+    livePgAs($db)->statement('CREATE TABLE audit_log (n int)');
+    livePgAs($db)->statement("GRANT SELECT ON audit_log TO \"{$group}\"");
+    livePgAs('postgres')->statement("GRANT \"{$group}\" TO \"{$role}\"");
+    livePgClose($db);
+
     $grants = app(PrivilegeManager::class)->showGrants('live_pgsql', new Username($role), new Host('%'));
 
     // Read on the admin's own database, as before, this list held nothing:
@@ -422,18 +436,36 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     expect($grants)->toContain("database {$db} {$db} CONNECT")
         ->toContain("table {$db} public.reference_data SELECT")
         ->toContain("table {$db} public.reference_data INSERT")
-        // Database-wide since grants stopped setting defaults per schema.
-        ->toContain("default privileges {$db} tables SELECT");
+        // What it owns, what it inherits, and what everyone may do.
+        ->toContain("table {$db} public.orders SELECT via owner")
+        ->toContain("table {$db} public.orders DELETE via owner")
+        ->toContain("table {$db} public.audit_log SELECT via {$group}")
+        ->toContain('database postgres postgres CONNECT via PUBLIC');
+
+    // Database-wide since grants stopped setting defaults per schema, and
+    // named for the role whose new tables they cover.
+    expect(array_filter($grants, static fn (string $line): bool => str_starts_with($line, "default privileges {$db} tables for role ")
+        && str_ends_with($line, ' SELECT')))->not->toBeEmpty();
 
     // From PG15 schema public belongs to the database owner, the admin, so
     // the schema grant lands. Before it the schema is the bootstrap
     // superuser's: the grant gives nothing and the role holds USAGE and
-    // CREATE through PUBLIC, which no ACL entry names.
+    // CREATE through PUBLIC.
     if (livePgVersion() >= 150000) {
         expect($grants)->toContain("schema {$db} public USAGE")->toContain("schema {$db} public CREATE");
     } else {
-        expect(array_filter($grants, static fn (string $line): bool => str_starts_with($line, 'schema ')))->toBe([]);
+        expect($grants)->toContain("schema {$db} public USAGE via PUBLIC")->toContain("schema {$db} public CREATE via PUBLIC")
+            ->not->toContain("schema {$db} public USAGE");
     }
+
+    // --direct, through the service: the account's own and what it owns.
+    $direct = array_map(
+        static fn (GrantEntry $entry): string => $entry->line(),
+        app(PrivilegeManager::class)->grants('live_pgsql', new Username($role), new Host('%'), directOnly: true),
+    );
+    expect($direct)->toContain("table {$db} public.orders SELECT via owner")
+        ->not->toContain("table {$db} public.audit_log SELECT via {$group}")
+        ->not->toContain('database postgres postgres CONNECT via PUBLIC');
 });
 
 it('says which databases it could not read a role\'s grants in', function (): void {
@@ -463,11 +495,30 @@ it('creates a database in each encoding it offers, not only the template\'s', fu
     app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset($charset));
 
     expect(livePgScalar('SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = ?', [$db]))->toBe($encoding);
+
+    // Anything but UTF8 is in the C locale, a libc one, even on a cluster
+    // whose template0 is ICU (the ICU leg of the live-pgsql job).
+    if ($encoding !== 'UTF8') {
+        expect(livePgScalar('SELECT datcollate FROM pg_database WHERE datname = ?', [$db]))->toBe('C');
+        if (livePgVersion() >= 150000) {
+            expect(livePgScalar('SELECT datlocprovider FROM pg_database WHERE datname = ?', [$db]))->toBe('c');
+        }
+    }
 })->with([
     'utf8 (template1 unchanged)' => ['utf8', 'UTF8'],
     'latin1'                     => ['latin1', 'LATIN1'],
     'sql_ascii'                  => ['sql_ascii', 'SQL_ASCII'],
 ]);
+
+it('creates a UTF8 database in the C locale when asked for the C collation', function (): void {
+    $db = liveName('bytes');
+    $this->cleanup = [['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8', 'C'));
+
+    expect(livePgScalar('SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = ?', [$db]))->toBe('UTF8')
+        ->and(livePgScalar('SELECT datcollate FROM pg_database WHERE datname = ?', [$db]))->toBe('C');
+});
 
 it('stores the SCRAM verifier it sent, and the role logs in with the password behind it', function (): void {
     $role = liveName('app');
@@ -518,6 +569,29 @@ it('passes the restricted admin in the doctor and fails a superuser', function (
             'server:live_pgsql:version'          => Severity::Info,
         ])
         ->not->toHaveKey('server:live_pgsql:pooler');
+
+    // A login role the superuser made, which the admin holds no ADMIN OPTION
+    // on. From 16 the admin cannot drop or change it; before 16 CREATEROLE
+    // covers it.
+    $foreign = liveName('foreign');
+    livePgSuper('postgres')->statement("CREATE ROLE \"{$foreign}\" LOGIN");
+
+    try {
+        $roleAdmin = array_values(array_filter(
+            app(DoctorService::class)->checkServer('live_pgsql'),
+            static fn (DoctorFinding $finding): bool => $finding->check === 'server:live_pgsql:role-admin',
+        ));
+
+        if (livePgVersion() >= 160000) {
+            expect($roleAdmin)->toHaveCount(1)
+                ->and($roleAdmin[0]->severity)->toBe(Severity::Warning)
+                ->and($roleAdmin[0]->message)->toContain($foreign);
+        } else {
+            expect($roleAdmin)->toBe([]);
+        }
+    } finally {
+        livePgSuper('postgres')->statement("DROP ROLE \"{$foreign}\"");
+    }
 
     config()->set('database.connections.live_pgsql_super', livePgConnection('postgres', livePg('SUPERUSER'), livePg('SUPERUSER_PASSWORD')));
     config()->set('laranail.db-console.servers.live_pgsql_super', [

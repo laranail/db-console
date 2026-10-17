@@ -211,7 +211,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
             [
                 'DoctorCommand',
                 'DbCreateCommand', 'DbListCommand', 'DbDropCommand',
-                'UserCreateCommand', 'UserListCommand', 'UserPasswordCommand', 'UserDropCommand', 'UserEditCommand',
+                'UserCreateCommand', 'UserListCommand', 'UserPasswordCommand', 'UserDropCommand', 'UserEditCommand', 'UserGrantsCommand',
                 'GrantCommand', 'RevokeCommand', 'AttachCommand', 'DetachCommand',
                 'WizardCommand', 'ReconcileCommand',
                 'ServerAddCommand', 'ServerListCommand', 'ServerUseCommand',

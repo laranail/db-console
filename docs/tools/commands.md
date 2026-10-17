@@ -4,7 +4,11 @@ The full Artisan surface, each under the namespaced `laranail::db-console.<comma
 
 ## Overview
 
-Every command ships as `laranail::db-console.<command>`. Groups: `db:create|list|drop`, `user:create|list|password|drop|edit`, `grant|revoke|attach|detach`, `wizard`, `reconcile`, `server:add|list|use`, `audit:view|verify`, `secrets:rotate|driver`, `encryption:status`, `role:list|create|assign|revoke`, `access:show|check`, `token:issue`, `webhook:list|add|remove`, plus `security.recover`, `doctor` and `install`. Destructive commands require typed confirmation (or `--force` in CI); `--generate` prints a password once. All accept `--no-interaction` for scripting.
+Every command ships as `laranail::db-console.<command>`. Groups: `db:create|list|drop`, `user:create|list|password|drop|edit|grants`, `grant|revoke|attach|detach`, `wizard`, `reconcile`, `server:add|list|use`, `audit:view|verify`, `secrets:rotate|driver`, `encryption:status`, `role:list|create|assign|revoke`, `access:show|check`, `token:issue`, `webhook:list|add|remove`, plus `security.recover`, `doctor` and `install`. Destructive commands require typed confirmation (or `--force` in CI); `--generate` prints a password once. All accept `--no-interaction` for scripting.
+
+## Reading an account's grants
+
+`user:grants --user=<name> [--host=%] [--direct] [--json]` prints what an account may do, read live from the server and gated by `account.view`. On PostgreSQL each line says where a privilege comes from when it is not granted to the account itself (`via owner`, `via PUBLIC`, `via <role>`); `--direct` keeps the account's own and what it owns, and `--json` prints the structured entries the API returns. See [Engines](engines.md#postgresql).
 
 ## Break-glass
 

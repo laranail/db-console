@@ -11,6 +11,7 @@ use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Servers\ScopedSession;
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
@@ -23,6 +24,7 @@ use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
 use Simtabi\Laranail\DBConsole\Exceptions\GrantNotApplied;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Services\Results\GrantEntry;
 use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
 use Simtabi\Laranail\DBConsole\Engines\OwnerDelegatingEngine;
@@ -228,11 +230,23 @@ final readonly class PrivilegeManager
     }
 
     /**
-     * Read an account's effective grants live from the server.
+     * Read an account's effective grants live from the server, one line each.
      *
      * @return list<string>
      */
     public function showGrants(string $server, Username $user, Host $host): array
+    {
+        return array_map(static fn (GrantEntry $entry): string => $entry->line(), $this->grants($server, $user, $host));
+    }
+
+    /**
+     * Read an account's effective grants live from the server. On Postgres
+     * each entry says where it comes from (the account itself, ownership,
+     * PUBLIC or an inherited role); $directOnly keeps the account's own.
+     *
+     * @return list<GrantEntry>
+     */
+    public function grants(string $server, Username $user, Host $host, bool $directOnly = false): array
     {
         $this->authorizer->authorize(ConsolePermission::AccountView, "server:{$server}");
 
@@ -247,18 +261,21 @@ final readonly class PrivilegeManager
             $statements = $engine->showGrants($user, $host);
         }
 
-        $grants = [];
+        $entries = [];
         foreach ($this->scoped->select($connection, $statements, $context) as $row) {
-            $grants[] = implode(' ', array_map(strval(...), array_values($row)));
+            $entry = GrantEntry::fromRow($row);
+            if (! $directOnly || $entry->direct()) {
+                $entries[] = $entry;
+            }
         }
 
         // A database the admin may not connect to still has grants in it;
         // saying so beats a list that looks complete.
         foreach ($unreadable as $name) {
-            $grants[] = "database {$name} not readable: the admin may not connect to it";
+            $entries[] = GrantEntry::unreadable($name);
         }
 
-        return $grants;
+        return $entries;
     }
 
     /**
@@ -277,7 +294,7 @@ final readonly class PrivilegeManager
         foreach ($engine->grantDatabases($user) as $statement) {
             foreach ($connection->selectStatement($statement, $context) as $row) {
                 $name = (string) reset($row);
-                if (in_array($row['can_connect'] ?? true, [false, 0, '0', 'f', 'false'], true)) {
+                if (! DriverBoolean::truthy($row['can_connect'] ?? true)) {
                     $unreadable[] = $name;
 
                     continue;

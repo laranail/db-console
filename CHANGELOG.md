@@ -34,11 +34,51 @@ host still using one sees.
   `api.prefix`, and `config:on-existing` warns when existing resources are adopted by default,
   globally or for a server.
 
+- **`laranail::db-console.user:grants` and `GET …/servers/{server}/accounts/{username}/grants`.**
+  `PrivilegeManager::showGrants()` had no caller, so no command or route showed what an account may
+  do. Both take a host and a direct-only switch, are gated by `account.view`, and print or return
+  `Services\Results\GrantEntry` values (`PrivilegeManager::grants()`); `showGrants()` keeps
+  returning one line per entry.
+- **`doctor` warns about login roles a PostgreSQL 16+ admin cannot administer.** From 16,
+  `CREATEROLE` covers only the roles the admin holds ADMIN OPTION on; dropping or changing any other
+  failed only when tried. `server:<name>:role-admin` names them (up to ten) with the grant that
+  hands one over (`AdminInspectingEngine::unmanageableRoles()`).
+- **A `C` collation for PostgreSQL** (`Enums\Collation::C`, offered with `sql_ascii`). `C` and
+  `POSIX` create the database in that locale, `UTF8` included.
+- `Engines\PasswordConstrainedEngine` and `AccountManager::assertAcceptsPassword()`;
+  `Engines\ServerVersionAwareEngine`.
+- A `live-pgsql` leg on a PostgreSQL 17 cluster initialised with the ICU locale provider.
+
+### Changed
+
+- **The PostgreSQL grant listing shows effective privileges, and says where each comes from.** It
+  listed explicit grants only, so a role's own tables, schema `public` on PostgreSQL 14 (held
+  through PUBLIC) and anything held through a group role did not appear. A NULL ACL is now read as
+  the default one (`acldefault()`), inherited roles' entries are included, and each line ends
+  `via owner`, `via PUBLIC` or `via <role>` unless the privilege is the role's own. System schemas
+  and template databases are left out. Default-privilege lines name the creating role
+  (`... for role <name>`).
+- **`doctor` tells a pooler by the port the server listens on.** It compared the configured port
+  against a list, which warned about a direct connection on 6432 and missed a pooler on any other
+  port. A known pooler port the server itself listens on is no longer warned about; a connection
+  relayed from any other port is reported as information.
+
 ### Fixed
 
 - **A create that loses a race to another process is handled by the existing-resource policy.**
   An account or database created between db-console's existence check and its create used to fail
   with the driver's duplicate error; it is now refused with a 409, or adopted when the call asked.
+
+- **The wizard created a database before refusing the password.** A password PostgreSQL would
+  rewrite (SASLprep) was refused when the account step built its statement, after the database
+  existed; the rollback dropped it again. The wizard now asks the engine first, and `user:create`
+  and the API refuse it before the existing-account check.
+- **A non-UTF8 PostgreSQL database could not be created on an ICU cluster.** `template0` is ICU
+  there, which has no `SQL_ASCII`. From PostgreSQL 15 the statement asks for
+  `LOCALE_PROVIDER libc`; `DatabaseManager::create()` reads the server version first, since older
+  servers reject the option.
+- **A collation was silently ignored on PostgreSQL.** One that is neither a MySQL collation name nor
+  `C`/`POSIX` is now refused with `UnsupportedOperation`.
 
 ## [0.1.1] - 2026-10-17
 

@@ -10,6 +10,10 @@ The REST API is disabled by default (`api.enabled`) and mounts under `api.path` 
 
 `POST …/accounts` and `POST …/databases` take an optional `on_existing` (`refuse`, `adopt`, `adopt_and_apply`). A resource that is already there and is refused answers 409 with `code` (`account.already_exists` or `database.already_exists`) and `options`, the values this caller may resubmit with. An adopted one answers 200, a new one 201. See [Adopt an existing account or database](../recipes/adopt-existing-resources.md).
 
+## Grants
+
+`GET …/servers/{server}/accounts/{username}/grants` lists what an account may do, read live and gated by `account.view`. `?host=` names the account's host (default `%`), `?direct=1` keeps what it holds itself and as an owner. Each entry in `data` has `kind`, `database`, `object`, `privilege`, `via` (null, `owner`, `PUBLIC` or a role), `readable` (false for a database the admin may not connect to) and `line`, the one-line form. An engine whose grants have no such structure (MySQL's `SHOW GRANTS`) fills `line` alone.
+
 ## Retired keys
 
 `api.guard` and `api.prefix` were honoured as fallbacks for `api.auth` and `api.path` through 0.1.1. They are no longer read, and `doctor` fails a config that still sets them (`config:legacy-api-keys`), naming the key to rename it to.

@@ -9,6 +9,7 @@ use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Enums\Collation;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Domain\Capabilities;
@@ -16,6 +17,7 @@ use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
 use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
 
 /**
  * PostgreSQL uses roles, not user@host accounts: a login is a ROLE WITH
@@ -28,7 +30,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, SessionEndingEngine
+final readonly class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, PasswordConstrainedEngine, ServerVersionAwareEngine, SessionEndingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -113,6 +115,11 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         'latin1'    => 'LATIN1',
     ];
 
+    /**
+     * @param int|null $serverVersion server_version_num when known; see ServerVersionAwareEngine
+     */
+    public function __construct(private ?int $serverVersion = null) {}
+
     public function type(): EngineType
     {
         return EngineType::Pgsql;
@@ -139,24 +146,40 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
     {
         $q = Quoter::for($this->type());
         $encoding = self::ENCODINGS[strtolower($charset->value)] ?? strtoupper($charset->value);
+        $locale = $this->locale($charset->collation);
 
-        if ($encoding === 'UTF8') {
+        if ($encoding === 'UTF8' && $locale === null) {
             return new StatementList(
                 Statement::plain('CREATE DATABASE ' . $q->identifier($db->value) . ' ENCODING ' . $q->literal($encoding)),
             );
         }
 
         // CREATE DATABASE copies template1, which is UTF8 on every image and
-        // managed service, and a copy keeps its template's encoding. Only
-        // template0 may be copied into another one, and the cluster's locale
-        // (en_US.utf8) is valid for UTF8 alone; C is valid for every encoding.
+        // managed service, and a copy keeps its template's encoding and
+        // locale. Only template0 may be copied into others, and the cluster's
+        // locale (en_US.utf8) is valid for UTF8 alone; C is valid for every
+        // encoding. C is a libc locale, so from 15 the database asks for libc:
+        // on an ICU cluster template0's provider is ICU, which has no SQL_ASCII.
+        $locale ??= 'C';
+
         return new StatementList(
             Statement::plain(
                 'CREATE DATABASE ' . $q->identifier($db->value)
                 . ' TEMPLATE template0 ENCODING ' . $q->literal($encoding)
-                . " LC_COLLATE 'C' LC_CTYPE 'C'",
+                . ' LC_COLLATE ' . $q->literal($locale) . ' LC_CTYPE ' . $q->literal($locale)
+                . ($this->serverVersion !== null && $this->serverVersion >= 150000 ? ' LOCALE_PROVIDER libc' : ''),
             ),
         );
+    }
+
+    public function serverVersion(): StatementList
+    {
+        return new StatementList(Statement::plain("SELECT current_setting('server_version_num')::int"));
+    }
+
+    public function forServerVersion(int $version): static
+    {
+        return new self($version);
     }
 
     public function dropDatabase(DbName $db): StatementList
@@ -187,6 +210,11 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
                 redacted: "CREATE ROLE {$role} WITH LOGIN PASSWORD '[redacted]'",
             ),
         );
+    }
+
+    public function assertAcceptsPassword(Password $p): void
+    {
+        ScramSha256::assertUsable($p->reveal());
     }
 
     public function dropAccount(Username $u, Host $h): StatementList
@@ -507,8 +535,24 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         return new StatementList(
             Statement::plain(
                 'SELECT rolsuper AS is_superuser, rolcreatedb AS can_create_db, rolcreaterole AS can_create_role,'
-                . " current_setting('server_version_num')::int AS server_version_num"
+                . " current_setting('server_version_num')::int AS server_version_num,"
+                . ' pg_catalog.inet_server_port() AS server_port'
                 . ' FROM pg_catalog.pg_roles WHERE rolname = current_user',
+            ),
+        );
+    }
+
+    public function unmanageableRoles(): StatementList
+    {
+        // ADMIN OPTION is what DROP ROLE and ALTER ROLE check from 16 on; a
+        // superuser admin holds it on everything, so this reads empty there.
+        return new StatementList(
+            Statement::plain(
+                'SELECT r.rolname FROM pg_catalog.pg_roles r'
+                . ' WHERE r.rolcanlogin AND NOT r.rolsuper AND r.rolname <> current_user'
+                . " AND r.rolname NOT LIKE 'pg\\_%'"
+                . " AND NOT pg_catalog.pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')"
+                . ' ORDER BY r.rolname',
             ),
         );
     }
@@ -528,57 +572,115 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
 
     public function showGrantsIn(Username $u, array $databases): StatementList
     {
-        $q = Quoter::for($this->type());
-        $grantee = '(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ' . $q->literal($u->value) . ')';
+        $role = 'WITH r AS (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ' . Quoter::for($this->type())->literal($u->value) . ') ';
 
         // Grants on databases sit in the shared catalog and read the same
-        // from anywhere. Explicit grants only: what a role holds through
-        // PUBLIC or by owning an object has no ACL entry naming it.
+        // from anywhere. Template databases are left out: nobody connects
+        // to them to use what PUBLIC holds there.
         $statements = [
             Statement::plain(
-                "SELECT 'database' AS object_type, d.datname::text AS database_name, d.datname::text AS object_name, a.privilege_type"
-                . ' FROM pg_catalog.pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) AS a'
-                . " WHERE a.grantee = {$grantee}"
-                . ' ORDER BY 2, 4',
+                $role
+                . "SELECT 'database' AS object_type, d.datname::text AS database_name, d.datname::text AS object_name,"
+                . ' a.privilege_type, ' . $this->grantSource('d.datdba') . ' AS via'
+                . ' FROM r, pg_catalog.pg_database d'
+                . " CROSS JOIN LATERAL aclexplode(COALESCE(d.datacl, pg_catalog.acldefault('d', d.datdba))) AS a"
+                . ' WHERE NOT d.datistemplate AND ' . $this->heldBy()
+                . ' ORDER BY 2, 4, 5',
             ),
-            Statement::plain($this->objectGrants($grantee)),
+            Statement::plain($role . $this->objectGrants()),
         ];
 
         foreach ($databases as $db) {
-            $statements[] = Statement::plain($this->objectGrants($grantee))->inDatabase($db);
+            $statements[] = Statement::plain($role . $this->objectGrants())->inDatabase($db);
         }
 
         return new StatementList(...$statements);
     }
 
     /**
-     * Grants on schemas, relations, functions and default privileges in the
-     * database the session is connected to.
+     * Effective privileges on schemas, relations and functions, and the
+     * default privileges naming the role, in the database the session is
+     * connected to. Expects the role's oid as `r`.
+     *
+     * An object whose ACL is NULL has the default one, which gives its owner
+     * every privilege and, for functions, PUBLIC EXECUTE; acldefault() spells
+     * that out, so owned objects are listed too. System schemas are left
+     * out: PUBLIC holds USAGE on pg_catalog and EXECUTE on its functions.
      */
-    private function objectGrants(string $grantee): string
+    private function objectGrants(): string
     {
         $database = 'current_database()::text';
+        $userSchema = "n.nspname NOT IN ('pg_catalog', 'information_schema') AND n.nspname NOT LIKE 'pg\\_%'";
 
         return implode(' UNION ALL ', [
-            "SELECT 'schema' AS object_type, {$database} AS database_name, n.nspname::text AS object_name, a.privilege_type"
-            . ' FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) AS a'
-            . " WHERE a.grantee = {$grantee}",
+            "SELECT 'schema' AS object_type, {$database} AS database_name, n.nspname::text AS object_name, a.privilege_type,"
+            . ' ' . $this->grantSource('n.nspowner') . ' AS via'
+            . ' FROM r, pg_catalog.pg_namespace n'
+            . " CROSS JOIN LATERAL aclexplode(COALESCE(n.nspacl, pg_catalog.acldefault('n', n.nspowner))) AS a"
+            . " WHERE {$userSchema} AND " . $this->heldBy(),
             "SELECT CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view'"
-            . " WHEN 'f' THEN 'foreign table' ELSE 'table' END, {$database}, n.nspname || '.' || c.relname, a.privilege_type"
-            . ' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
-            . ' CROSS JOIN LATERAL aclexplode(c.relacl) AS a'
-            . " WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f') AND a.grantee = {$grantee}",
-            "SELECT 'function', {$database}, n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')', a.privilege_type"
-            . ' FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace'
-            . ' CROSS JOIN LATERAL aclexplode(p.proacl) AS a'
-            . " WHERE a.grantee = {$grantee}",
+            . " WHEN 'f' THEN 'foreign table' ELSE 'table' END, {$database}, n.nspname || '.' || c.relname, a.privilege_type,"
+            . ' ' . $this->grantSource('c.relowner')
+            . ' FROM r, pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
+            . ' CROSS JOIN LATERAL aclexplode(COALESCE(c.relacl, pg_catalog.acldefault('
+            . "(CASE c.relkind WHEN 'S' THEN 's' ELSE 'r' END)::\"char\", c.relowner))) AS a"
+            . " WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f') AND {$userSchema} AND " . $this->heldBy(),
+            "SELECT 'function', {$database}, n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')',"
+            . ' a.privilege_type, ' . $this->grantSource('p.proowner')
+            . ' FROM r, pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace'
+            . " CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, pg_catalog.acldefault('f', p.proowner))) AS a"
+            . " WHERE {$userSchema} AND " . $this->heldBy(),
+            // Default privileges are per creating role: the line names it.
             "SELECT 'default privileges', {$database}, CASE da.defaclobjtype WHEN 'r' THEN 'tables' WHEN 'S' THEN 'sequences'"
             . " WHEN 'f' THEN 'functions' WHEN 'T' THEN 'types' WHEN 'n' THEN 'schemas' ELSE da.defaclobjtype::text END"
-            . " || COALESCE(' in schema ' || n.nspname, ''), a.privilege_type"
-            . ' FROM pg_catalog.pg_default_acl da LEFT JOIN pg_catalog.pg_namespace n ON n.oid = da.defaclnamespace'
+            . " || COALESCE(' in schema ' || n.nspname, '') || ' for role ' || pg_catalog.pg_get_userbyid(da.defaclrole),"
+            . ' a.privilege_type, ' . $this->grantSource('0')
+            . ' FROM r, pg_catalog.pg_default_acl da LEFT JOIN pg_catalog.pg_namespace n ON n.oid = da.defaclnamespace'
             . ' CROSS JOIN LATERAL aclexplode(da.defaclacl) AS a'
-            . " WHERE a.grantee = {$grantee}",
-        ]) . ' ORDER BY 1, 2, 3, 4';
+            . ' WHERE ' . $this->heldBy(),
+        ]) . ' ORDER BY 1, 2, 3, 4, 5';
+    }
+
+    /**
+     * An ACL entry the role can use: its own, PUBLIC's, or one granted to a
+     * role whose privileges it inherits. CASE, not OR, so pg_has_role() is
+     * never asked about PUBLIC (oid 0), which is not a role.
+     */
+    private function heldBy(): string
+    {
+        return "(CASE WHEN a.grantee = 0 THEN true ELSE pg_catalog.pg_has_role(r.oid, a.grantee, 'USAGE') END)";
+    }
+
+    /**
+     * Where an entry comes from: null for a grant to the role itself,
+     * `owner` when it owns the object, `PUBLIC`, or the inherited role.
+     */
+    private function grantSource(string $owner): string
+    {
+        return "CASE WHEN a.grantee = 0 THEN 'PUBLIC'"
+            . " WHEN a.grantee = r.oid THEN CASE WHEN a.grantee = {$owner} THEN 'owner' END"
+            . ' ELSE pg_catalog.pg_get_userbyid(a.grantee)::text END';
+    }
+
+    /**
+     * The locale a collation asks for. Postgres collates by locale: C and
+     * POSIX exist on every server. The package's collation names are MySQL's
+     * (utf8mb4_unicode_ci is the default four call sites pass), which have no
+     * meaning here and leave the locale to the encoding. Anything else would
+     * be ignored, so it is refused.
+     */
+    private function locale(?string $collation): ?string
+    {
+        if ($collation === null || ($collation !== 'C' && Collation::tryFrom($collation) instanceof Collation)) {
+            return null;
+        }
+
+        $upper = strtoupper($collation);
+        if ($upper === 'C' || $upper === 'POSIX') {
+            return $upper;
+        }
+
+        throw UnsupportedOperation::forEngine($this->type()->value, "collation '{$collation}' (PostgreSQL takes C or POSIX here)");
     }
 
     /**

@@ -47,6 +47,16 @@ final class ScramSha256
     }
 
     /**
+     * Refuse a password this cannot build a verifier for, without building one.
+     *
+     * @throws WeakPassword
+     */
+    public static function assertUsable(#[SensitiveParameter] string $password): void
+    {
+        self::prepared($password);
+    }
+
+    /**
      * The bytes Postgres hashes: the password after SASLprep, or the raw
      * password when SASLprep refuses it. Both are the raw bytes whenever
      * SASLprep would leave the password unchanged: when it is ASCII (which

@@ -26,9 +26,13 @@ Postgres has no `SHOW GRANTS`, so `doctor` reads the admin role's attributes fro
 | `server:<name>:admin` | error | the admin is a superuser, which bypasses every privilege check; raises `SuspiciousActivity` like a root-like MySQL admin |
 | `server:<name>:admin-privileges` | error | the admin lacks `CREATEDB` or `CREATEROLE`, which provisioning needs |
 | `server:<name>:version` | error | the server is older than PostgreSQL 13, which `DROP DATABASE ... WITH (FORCE)` needs |
-| `server:<name>:pooler` | warning | the admin connection uses a known pooler port: 6432 (PgBouncer), 6543 (Supabase) or 25061 (DigitalOcean connection pools) |
+| `server:<name>:pooler` | warning | the admin connection uses a known pooler port, 6432 (PgBouncer), 6543 (Supabase) or 25061 (DigitalOcean connection pools), and the server itself does not listen on it |
+| `server:<name>:pooler` | info | the connection is relayed from another port: the configured port differs from the one the server listens on (a pooler, a proxy or a port mapping) |
+| `server:<name>:role-admin` | warning | PostgreSQL 16 or later, and the admin holds no ADMIN OPTION on some login roles, which it then cannot drop, rename or change the password of; names up to ten |
 
-A transaction-mode pooler hands each statement to whichever server session is free, which a grant's transaction and the per-database connections a grant or drop opens do not survive, and some poolers refuse `CREATE DATABASE` and `DROP DATABASE`. Point the admin connection at the server directly. The port check is a heuristic: a pooler on another port is not detected, and a direct connection on one of these ports is warned about.
+A transaction-mode pooler hands each statement to whichever server session is free, which a grant's transaction and the per-database connections a grant or drop opens do not survive, and some poolers refuse `CREATE DATABASE` and `DROP DATABASE`. Point the admin connection at the server directly. The check compares the configured port with `inet_server_port()`, the port the server itself listens on: a known pooler port the server listens on is a direct connection and is not warned about, and a pooler on any other port shows as a relayed connection. A port mapping (a container publishing 5432 as 54320) shows the same way, which is why that finding is informational. Over a Unix socket the server reports no port and nothing is said.
+
+From PostgreSQL 16, `CREATEROLE` covers only the roles the admin holds ADMIN OPTION on, which by default are the roles it created. `doctor` lists the other login roles (not superusers, not `pg_*`, not the admin) through `AdminInspectingEngine::unmanageableRoles()`, so a role DBConsole should manage can be handed over with `GRANT <role> TO <admin> WITH ADMIN OPTION` before a drop or a password rotation fails on it. Before 16 a `CREATEROLE` admin manages every role that is not a superuser, and nothing is said.
 
 ## Hosting
 

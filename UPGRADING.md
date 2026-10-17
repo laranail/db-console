@@ -26,6 +26,28 @@ A create that fails because another process created the same account or database
 now handled by the existing-resource policy (409 by default), instead of failing with the driver's
 error.
 
+### Grants, passwords, collations and doctor on PostgreSQL
+
+- **`showGrants()` lists effective privileges on Postgres.** Lines for privileges held through
+  ownership, PUBLIC or an inherited role are new and end `via owner`, `via PUBLIC` or
+  `via <role>`; lines for the role's own grants are unchanged. Default-privilege lines now name the
+  creating role (`default privileges shop tables for role db_console_admin SELECT`). Code that
+  parses the lines should use `PrivilegeManager::grants()` and its `GrantEntry` fields, or filter
+  with `directOnly: true`.
+- **A Postgres collation other than a MySQL collation name, `C` or `POSIX` is refused** with
+  `UnsupportedOperation` (HTTP 422). It used to be ignored. `C`/`POSIX` with `UTF8` now creates the
+  database from `template0` in that locale.
+- **Creating a non-UTF8 Postgres database reads `server_version_num` first**, one extra query, and
+  on 15 or later adds `LOCALE_PROVIDER libc`.
+- **`AdminInspectingEngine` gained `unmanageableRoles()`**, and `adminProfile()` returns
+  `server_port`. An engine of your own implementing the interface must add the method.
+  `PostgresAdminCheck::findings()` takes the unmanageable roles as a fourth, optional argument.
+- **`doctor` may report two new findings on Postgres**: `server:<name>:role-admin` (warning) and an
+  informational `server:<name>:pooler` for a relayed connection. The pooler warning on 6432, 6543
+  or 25061 no longer fires when the server itself listens on that port.
+- **`PostgresEngine` takes an optional server version** (`new PostgresEngine(?int $serverVersion)`);
+  `new PostgresEngine` is unchanged.
+
 ## 0.1.1
 
 ### Postgres grants: every schema, other roles' future objects
