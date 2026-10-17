@@ -186,6 +186,32 @@ it('runs as the minimal admin doctor recommends, not root', function (): void {
     }
 });
 
+it('probes what a managed MySQL enforces, and hides the engine\'s own accounts on a managed hosting', function (): void {
+    $findings = [];
+    foreach (app(DoctorService::class)->checkServer('live_mysql') as $finding) {
+        $findings[$finding->check] = $finding;
+    }
+
+    // The recommended admin holds SELECT on *.*, so it can read mysql.user.
+    expect($findings['server:live_mysql:accounts']->severity)->toBe(Severity::Info)
+        ->and($findings['server:live_mysql:hosting']->severity)->toBe(Severity::Info);
+
+    if (liveMyEngine() === 'mysql') {
+        expect($findings['server:live_mysql:server-settings']->message)->toContain('sql_require_primary_key=ON');
+    }
+
+    $isSystem = static fn (string $account): bool => str_starts_with($account, 'mysql.') || str_starts_with($account, 'mariadb.');
+
+    // Self-hosted lists everything, as it always has.
+    expect(array_filter(app(AccountManager::class)->list('live_mysql'), $isSystem))->not->toBeEmpty();
+
+    config()->set('laranail.db-console.servers.live_mysql.hosting', 'generic');
+
+    $managed = app(AccountManager::class)->list('live_mysql');
+    expect(array_filter($managed, $isSystem))->toBe([])
+        ->and($managed)->not->toBeEmpty();
+});
+
 it('provisions a database an application account can migrate, use and hand back', function (): void {
     $db = liveMyName('shop');
     $user = liveMyName('app');

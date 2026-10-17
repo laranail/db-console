@@ -56,6 +56,13 @@ return [
                 // encrypted at rest. DBConsole never enables or manages it.
                 'show_status' => true,
             ],
+
+            // Where the server runs: self_hosted, digitalocean, rds,
+            // cloud_sql or generic (another managed provider). A managed
+            // hosting hides the provider's accounts, defaults new MySQL
+            // accounts to host '%', and treats the provider's point-in-time
+            // recovery as the backup (see backup.dump_on_managed).
+            'hosting' => env('DB_CONSOLE_PRIMARY_HOSTING', 'self_hosted'),
         ],
     ],
 
@@ -231,6 +238,10 @@ return [
         'abort_drop_on_failure' => (bool) env('DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE', true),
         'disk'                  => env('DB_CONSOLE_BACKUP_DISK', 'local'),
         'retention_days'        => 30,
+        // On a managed hosting the provider's point-in-time recovery is the
+        // backup, and the dump before a drop is skipped (the restore point is
+        // logged). Set true to dump there as well.
+        'dump_on_managed' => (bool) env('DB_CONSOLE_BACKUP_DUMP_ON_MANAGED', false),
     ],
 
     /*

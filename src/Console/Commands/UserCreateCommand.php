@@ -7,6 +7,7 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
@@ -20,10 +21,9 @@ final class UserCreateCommand extends DBConsoleCommand
 
     protected $description = 'Create a database account';
 
-    public function handle(AccountManager $accounts): int
+    public function handle(AccountManager $accounts, ServerRegistry $registry): int
     {
         $user = $this->str('user');
-        $host = $this->str('host') ?: (string) $this->config()->get('laranail.db-console.accounts.default_host', 'localhost');
         $generate = (bool) $this->option('generate');
         $passwordOption = $this->str('password');
 
@@ -34,6 +34,8 @@ final class UserCreateCommand extends DBConsoleCommand
         }
 
         try {
+            // `%` on a managed MySQL, else accounts.default_host.
+            $host = $this->str('host') ?: $registry->defaultAccountHost($this->server());
             $password = ($generate || $passwordOption === '') ? null : new Password($passwordOption);
             $result = $accounts->create($this->server(), new Username($user), new Host($host), $password);
         } catch (DBConsoleException $e) {

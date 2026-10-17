@@ -6,9 +6,12 @@ namespace Simtabi\Laranail\DBConsole\Servers;
 
 use Throwable;
 use Illuminate\Database\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
 use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Domain\HostingProfile;
 use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
@@ -124,6 +127,36 @@ final class ServerRegistry
         return $this->resolved[$server] = [$engine, $connection];
     }
 
+    /**
+     * What the server's hosting means for its engine.
+     */
+    public function hosting(string $server): HostingProfile
+    {
+        $definition = $this->definition($server);
+
+        return $definition->hosting->profile($definition->engine);
+    }
+
+    /**
+     * The engine's capabilities with the server's hosting merged in. Prefer
+     * this to engine()->capabilities(), which knows nothing of where the
+     * server runs.
+     */
+    public function capabilities(string $server): Capabilities
+    {
+        return $this->engine($server)->capabilities()->withHosting($this->hosting($server));
+    }
+
+    /**
+     * The host a new account on this server gets when none is given: the
+     * hosting's (`%` on a managed MySQL), else `accounts.default_host`.
+     */
+    public function defaultAccountHost(string $server): string
+    {
+        return $this->hosting($server)->defaultAccountHost
+            ?? (string) $this->config->get('laranail.db-console.accounts.default_host', 'localhost');
+    }
+
     public function engine(string $server): Engine
     {
         return $this->resolve($server)[0];
@@ -215,6 +248,15 @@ final class ServerRegistry
         /** @var array<string, mixed> $atRest */
         $atRest = (array) ($raw['at_rest'] ?? []);
 
+        // Absent means self-hosted, so an existing config is unchanged. An
+        // unknown value fails rather than quietly becoming self-hosted, which
+        // would expose the provider's accounts and dump instead of using PITR.
+        $hostingValue = (string) ($raw['hosting'] ?? Hosting::SelfHosted->value);
+        $hosting = Hosting::tryFrom($hostingValue) ?? throw ServerMisconfigured::named(
+            $server,
+            "invalid hosting '{$hostingValue}'; expected one of: " . implode(', ', Hosting::values()),
+        );
+
         return new ServerDefinition(
             name: $server,
             engine: $engine,
@@ -228,6 +270,7 @@ final class ServerRegistry
             ],
             showAtRestStatus: (bool) ($atRest['show_status'] ?? true),
             editable: false,
+            hosting: $hosting,
         );
     }
 
