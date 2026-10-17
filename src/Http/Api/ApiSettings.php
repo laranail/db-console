@@ -56,7 +56,29 @@ final readonly class ApiSettings
      */
     public function rateLimit(): ?array
     {
-        $raw = $this->config->get('laranail.db-console.api.rate_limit', '60,1');
+        return $this->limit('rate_limit', '60,1');
+    }
+
+    /**
+     * `api.auth_failure_limit` as [failures, minutes]: how many failed
+     * authentications one IP may make in the window before every request
+     * from it is answered 429 until the window ends. The api.rate_limit
+     * limiter is keyed on the authenticated caller, so without this a
+     * token-guessing client was never throttled. Null when switched off.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    public function authFailureLimit(): ?array
+    {
+        return $this->limit('auth_failure_limit', '10,1');
+    }
+
+    /**
+     * @return array{0: int, 1: int}|null
+     */
+    private function limit(string $key, string $default): ?array
+    {
+        $raw = $this->config->get("laranail.db-console.api.{$key}", $default);
         if (in_array($raw, [null, '', false], true)) {
             return null;
         }

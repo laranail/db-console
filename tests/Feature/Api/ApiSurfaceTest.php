@@ -241,3 +241,50 @@ describe('api.rate_limit', function (): void {
         }
     });
 });
+
+describe('api.auth_failure_limit', function (): void {
+    it('answers 429 to an IP that keeps failing to authenticate, before looking at its credentials', function (): void {
+        config()->set('laranail.db-console.api.auth_failure_limit', '3,1');
+        mountDbConsoleApi();
+
+        foreach (range(1, 3) as $ignored) {
+            $this->getJson('/api/db-console/servers')->assertUnauthorized();
+        }
+
+        $this->getJson('/api/db-console/servers')->assertStatus(429)->assertHeader('Retry-After');
+        // A valid caller from the same address waits out the window too.
+        $this->actingAs(apiCaller(), 'sanctum')->getJson('/api/db-console/servers')->assertStatus(429);
+    });
+
+    it('counts per IP, so another address is unaffected', function (): void {
+        config()->set('laranail.db-console.api.auth_failure_limit', '2,1');
+        mountDbConsoleApi();
+
+        $this->getJson('/api/db-console/servers')->assertUnauthorized();
+        $this->getJson('/api/db-console/servers')->assertUnauthorized();
+        $this->getJson('/api/db-console/servers')->assertStatus(429);
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->withServerVariables(['REMOTE_ADDR' => '::1'])
+            ->getJson('/api/db-console/servers')
+            ->assertOk();
+    });
+
+    it('does not count successful requests', function (): void {
+        config()->set('laranail.db-console.api.auth_failure_limit', '1,1');
+        mountDbConsoleApi();
+
+        foreach (range(1, 4) as $ignored) {
+            $this->actingAs(apiCaller(), 'sanctum')->getJson('/api/db-console/servers')->assertOk();
+        }
+    });
+
+    it('can be switched off', function (): void {
+        config()->set('laranail.db-console.api.auth_failure_limit', '');
+        mountDbConsoleApi();
+
+        foreach (range(1, 12) as $ignored) {
+            $this->getJson('/api/db-console/servers')->assertUnauthorized();
+        }
+    });
+});

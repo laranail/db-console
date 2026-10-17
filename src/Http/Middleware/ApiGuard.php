@@ -6,6 +6,7 @@ namespace Simtabi\Laranail\DBConsole\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,6 +29,7 @@ final readonly class ApiGuard
         private Config $config,
         private ApiSettings $settings,
         private AuthFactory $auth,
+        private RateLimiter $limiter,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -46,9 +48,23 @@ final readonly class ApiGuard
             return $this->deny('Your IP is not permitted to call the DBConsole API.', 403);
         }
 
+        // api.auth_failure_limit: an IP that keeps failing to authenticate is
+        // refused outright until its window ends, before its credentials are
+        // even looked at.
+        $failures = $this->settings->authFailureLimit();
+        $failureKey = 'laranail-db-console:api-auth-failures:' . $request->ip();
+        if ($failures !== null && $this->limiter->tooManyAttempts($failureKey, $failures[0])) {
+            return $this->deny('Too many failed authentication attempts.', 429)
+                ->header('Retry-After', (string) $this->limiter->availableIn($failureKey));
+        }
+
         $guard = $this->settings->guard();
         $user = $request->user($guard);
         if (! $user instanceof Authenticatable) {
+            if ($failures !== null) {
+                $this->limiter->hit($failureKey, $failures[1] * 60);
+            }
+
             return $this->deny('Unauthenticated.', 401);
         }
 

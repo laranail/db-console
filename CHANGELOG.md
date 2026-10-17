@@ -36,12 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `adopt` needs the new **`resource.adopt`** permission (Owner only by default), records the
     resource in the catalog with its password untouched, and dispatches `AccountAdopted` /
     `DatabaseAdopted` (Warning, so they alert).
-  - `adopt_and_apply` also needs `account.rotate` and an identity confirmation within
-    `security.step_up.ttl` seconds (default 300), read from the new `Contracts\OperatorAssurance`
-    that the host binds (`hasSecondFactor()`, `recentlyConfirmedAt()`). Authentication stays with
-    the host. Until it binds one, `NullOperatorAssurance` reports none, so `adopt_and_apply` is
-    refused with `ConfirmationRequired` (HTTP 403, `confirmation.required`). It dispatches
-    `AccountPasswordApplied`. For a database it adopts.
+  - `adopt_and_apply` also needs `account.rotate`, which the assurance policy
+    (`security.assurance`) checks with a recent confirmation always required, whatever
+    `assurance.recent_confirmation` lists. So it follows the same enforcement mode, break-glass and
+    `AssuranceRequired` (HTTP 403, `assurance_required`) as every other permission, and a shell run
+    with no operator is left to the gate. It dispatches `AccountPasswordApplied`. For a database it
+    adopts.
+  - Every refusal is reported, not only the policy's: an operator who asks to adopt without
+    `resource.adopt`, or to apply a password without `account.rotate` or the assurance, also
+    dispatches `AccountCreationRefused` / `DatabaseCreationRefused`, with `reason`
+    (`policy`, `not_authorized`, `assurance_required`) and `requested` in its context.
   - Results carry `adopted` and `password_applied`. All five events are Security-category
     notifications (`ExistingResourceNotification`) and webhook events.
 - **`ProvisioningWizard::provision()` takes `$onExisting`.** Without a password it never replaces an
@@ -58,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`api.rate_limit` is applied** as the `laranail-db-console.api` named limiter, keyed on the API
   caller (`'requests,minutes'`; empty or `0` switches it off).
 - `Http\Api\ApiSettings`, the API's settings read from the documented keys.
+- **`api.auth_failure_limit`** (default `10,1`): an IP that fails to authenticate that many times
+  in the window is answered 429, with `Retry-After`, until the window ends. `api.rate_limit` is
+  keyed on the authenticated caller, so failed authentication was never throttled.
+- `Authorizer::authorize()`, `Authorizer::assure()` and `AssuranceEnforcer::enforce()` take an
+  optional last `$alsoRequire` list of `Assurance`, added to what `security.assurance` asks of the
+  permission and checked in the same pass.
 - **Operator assurance, answered by the host.** `Contracts\OperatorAssurance`
   (`hasSecondFactor()`, `recentlyConfirmedAt()`) is how the host's authentication tells db-console
   what it knows about an operator; db-console verifies no codes and owns no enrolment.
@@ -220,6 +230,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
+- **`Exceptions\ConfirmationRequired` and `ExceptionCode::ConfirmationRequired`
+  (`confirmation.required`).** Nothing throws them any more: `adopt_and_apply` is decided by the
+  assurance policy, which throws `AssuranceRequired`. Both still exist. Removed no earlier than the
+  next minor after 0.1.
 - **Config keys `api.guard` and `api.prefix`.** Read only when `api.auth` / `api.path` is unset,
   with one `E_USER_DEPRECATED` notice each. Removed no earlier than the next minor after 0.1.
 
