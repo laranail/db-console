@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Engines;
 
+use InvalidArgumentException;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
@@ -200,10 +201,11 @@ class MySqlEngine implements Engine, HostScopingEngine
         // The plugin name is an identifier; the hash literal is already a
         // 0x... hex token produced by readAuthentication.
         $pluginQuoted = $q->identifier($plugin);
+        $hex = $this->hashHex($hashLiteral);
 
         return new StatementList(
             Statement::sensitive(
-                sql: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS {$hashLiteral}",
+                sql: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS 0x{$hex}",
                 redacted: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS [redacted]",
             ),
         );
@@ -219,6 +221,20 @@ class MySqlEngine implements Engine, HostScopingEngine
     public function grantablePrivileges(): array
     {
         return array_values(self::PRIVILEGE_MAP);
+    }
+
+    /**
+     * The hex digits of a 0x... hash literal from readAuthentication. The
+     * literal is spliced into the statement, so anything that is not whole
+     * bytes of hex is refused rather than quoted.
+     */
+    protected function hashHex(string $hashLiteral): string
+    {
+        if (preg_match('/^0x((?:[0-9A-Fa-f]{2})*)$/', $hashLiteral, $match) !== 1) {
+            throw new InvalidArgumentException('An authentication hash must be a 0x... hex literal.');
+        }
+
+        return $match[1];
     }
 
     /**
