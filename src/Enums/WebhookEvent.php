@@ -45,6 +45,21 @@ enum WebhookEvent: string implements Enumerator, Translatable
     #[Label('Account host changed')]
     case AccountHostChanged = 'account.host_changed';
 
+    #[Label('Account creation refused')]
+    case AccountCreationRefused = 'account.creation_refused';
+
+    #[Label('Account adopted')]
+    case AccountAdopted = 'account.adopted';
+
+    #[Label('Password applied to an adopted account')]
+    case AccountPasswordApplied = 'account.password_applied';
+
+    #[Label('Database creation refused')]
+    case DatabaseCreationRefused = 'database.creation_refused';
+
+    #[Label('Database adopted')]
+    case DatabaseAdopted = 'database.adopted';
+
     #[Label('Privileges granted')]
     case PrivilegesGranted = 'privileges.granted';
 

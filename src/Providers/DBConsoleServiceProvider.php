@@ -30,6 +30,9 @@ use Simtabi\Laranail\DBConsole\Logging\ContextScrubber;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
+use Simtabi\Laranail\DBConsole\Security\NullStepUpVerifier;
+use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
+use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
 use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
 use Simtabi\Laranail\DBConsole\Http\Middleware\ApiGuard;
@@ -326,6 +329,10 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->app->singleton(AtRestStatusReader::class);
         $this->app->singleton(SecretRotator::class);
         $this->app->singleton(WebhookManager::class);
+
+        // No step-up until a driver is configured; the permission checks alone decide.
+        $this->app->bindIf(StepUpVerifier::class, NullStepUpVerifier::class);
+        $this->app->singleton(ExistingResourceGuard::class);
     }
 
     /**

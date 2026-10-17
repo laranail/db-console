@@ -29,11 +29,15 @@ final readonly class DbConsoleCatalog implements Catalog
 
     public function recordDatabase(string $server, DbName $db, string $charset, ?string $collation): void
     {
+        // An adopted database is recorded with an empty charset: db-console
+        // did not create it and does not know it. That never overwrites a
+        // charset already on record.
+        $known = $charset === '' ? [] : ['charset' => $charset, 'collation' => $collation];
+
         ManagedDatabase::query()->updateOrCreate(
             ['server_name' => $server, 'name' => $db->value],
             [
-                'charset'    => $charset,
-                'collation'  => $collation,
+                ...$known,
                 'is_managed' => true,
                 'created_by' => $this->actorId(),
             ],

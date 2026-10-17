@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Notification;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Enums\NotificationCategory;
+use Simtabi\Laranail\DBConsole\Events\ExistingResourceEvent;
+use Simtabi\Laranail\DBConsole\Events\Contracts\CategorizesNotification;
+use Simtabi\Laranail\DBConsole\Notifications\ExistingResourceNotification;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 use Simtabi\Laranail\DBConsole\Notifications\DBConsoleNotification;
 use Simtabi\Laranail\DBConsole\Notifications\SecurityAlertNotification;
@@ -45,6 +48,7 @@ final readonly class SendNotifications
     private function notificationFor(RecordsToAudit $event): ?DBConsoleNotification
     {
         return match (true) {
+            $event instanceof ExistingResourceEvent                                                                                                     => new ExistingResourceNotification($event),
             $event->outcome()->value === 'failed'                                                                                                       => new OperationFailedNotification($event),
             $event->operation()->isDestructive()                                                                                                        => new DestructiveActionNotification($event),
             $event->operation() === OperationType::AccountRotate                                                                                        => new CredentialRotatedNotification($event),
@@ -56,6 +60,10 @@ final readonly class SendNotifications
 
     private function categoryFor(RecordsToAudit $event): NotificationCategory
     {
+        if ($event instanceof CategorizesNotification) {
+            return $event->notificationCategory();
+        }
+
         if ($event->severity()->alerts() && ! $event->operation()->isDestructive()) {
             return NotificationCategory::Security;
         }

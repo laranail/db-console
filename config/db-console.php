@@ -56,6 +56,11 @@ return [
                 // encrypted at rest. DBConsole never enables or manages it.
                 'show_status' => true,
             ],
+
+            // Per-server overrides of accounts.on_existing and
+            // databases.on_existing. Unset falls back to the global value.
+            // 'accounts'  => ['on_existing' => 'refuse'],
+            // 'databases' => ['on_existing' => 'refuse'],
         ],
     ],
 
@@ -67,6 +72,13 @@ return [
     'databases' => [
         'default_charset'   => 'utf8mb4',
         'default_collation' => 'utf8mb4_unicode_ci',
+
+        // A create that finds the database already there: refuse | adopt.
+        // refuse (default) changes nothing and notifies the security
+        // recipients. adopt records it as managed, and needs the
+        // resource.adopt permission (Owner only by default). Override per
+        // server with servers.<name>.databases.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_DATABASES_ON_EXISTING', 'refuse'),
     ],
 
     /*
@@ -77,6 +89,15 @@ return [
     'accounts' => [
         'default_host'        => 'localhost',
         'password_min_length' => 16,
+
+        // A create that finds the account already there:
+        // refuse | adopt | adopt_and_apply. refuse (default) changes nothing
+        // and notifies the security recipients. adopt records it as managed
+        // with its password untouched (needs resource.adopt). adopt_and_apply
+        // also replaces its password with the one supplied (needs
+        // account.rotate and step-up as well). Override per server with
+        // servers.<name>.accounts.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_ACCOUNTS_ON_EXISTING', 'refuse'),
     ],
 
     /*

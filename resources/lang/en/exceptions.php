@@ -16,6 +16,14 @@ return [
         'weak' => 'The password is too weak: :reason.',
     ],
 
+    'account' => [
+        'already_exists' => "The account ':target' already exists on server ':server', so nothing was changed. An operator allowed to adopt it can resubmit with on_existing set to adopt.",
+    ],
+
+    'database' => [
+        'already_exists' => "The database ':target' already exists on server ':server', so nothing was changed. An operator allowed to adopt it can resubmit with on_existing set to adopt.",
+    ],
+
     'privilege' => [
         'unknown'   => "The privilege ':privilege' is not on the allow-list.",
         'forbidden' => "The privilege ':privilege' is self-escalating or server-wide and can never be granted.",

@@ -23,7 +23,7 @@ enum ConsoleRole: string implements Enumerator, Translatable
     #[Label('Owner'), Description('Everything, including secrets and settings management.')]
     case Owner = 'owner';
 
-    #[Label('Admin'), Description('All database, account, and grant operations on permitted scopes; no secrets or settings management.')]
+    #[Label('Admin'), Description('All database, account, and grant operations on permitted scopes; no secrets or settings management, and no adopting existing resources.')]
     case Admin = 'admin';
 
     #[Label('Operator'), Description('Create, grant, attach, and rotate; no drops, no revokes, no secrets.')]
@@ -48,7 +48,7 @@ enum ConsoleRole: string implements Enumerator, Translatable
                 ConsolePermission::cases(),
                 static fn (ConsolePermission $p): bool => ! in_array(
                     $p,
-                    [ConsolePermission::SecretsManage, ConsolePermission::SettingsManage],
+                    [ConsolePermission::SecretsManage, ConsolePermission::SettingsManage, ConsolePermission::ResourceAdopt],
                     true,
                 ),
             )),
