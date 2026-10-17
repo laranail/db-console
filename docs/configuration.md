@@ -30,6 +30,19 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 | `rbac.owner_user_id` | `null` | Bootstrap Owner assigned on install. |
 | `rbac.seed_default_roles` | `true` | Seed the shipped roles on install. |
 
+## Operator security
+
+| Key | Default | Purpose |
+|---|---|---|
+| `security.two_factor.enforce` | unset: `require` in production, `report` elsewhere | `off`, `report` or `require`. |
+| `security.two_factor.driver` | `fortify` | `fortify` (reads `two_factor_confirmed_at`) or `null`. |
+| `security.two_factor.grace_days` | `7` | Read-only days after an operator's first refusal. |
+| `security.two_factor.break_glass_minutes` | `15` | How long a `security.recover` bypass lasts. |
+| `security.step_up.driver` | `session` | `session`, `totp` or `none`. |
+| `security.step_up.ttl` | `300` | Seconds a `password.confirm` stays valid for step-up. |
+
+See [Operator security](tools/operator-security.md).
+
 ## Notifications & alerts
 
 `notifications.recipients.{category}` routes notifications; `alerts.webhook` receives high-severity alerts.

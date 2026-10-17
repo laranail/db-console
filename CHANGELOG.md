@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Two-factor enforcement for operators** (`security.two_factor.enforce`: `off`, `report` or
+  `require`; unset, `require` in production and `report` elsewhere). Checked in
+  `Services\Access\Authorizer` after the gate allows, and in the API guard, so API, WebUI and CLI
+  runs that carry an operator are all covered. An operator counts as enrolled only with a confirmed
+  second factor and recovery codes, read through the new `Security\Contracts\TwoFactorStatus`
+  (`fortify` driver: `two_factor_confirmed_at`, as laranail/authkit writes it; `null` driver).
+  Refusals are `TwoFactorRequired` (`two_factor.required`, HTTP 403).
+- **An enrolment grace window** (`security.two_factor.grace_days`, 7), counted from an operator's
+  first refused request: reads keep working, writes are refused, and the operator and the security
+  recipients are told (`TwoFactorEnforced`, `TwoFactorEnrolmentNotification`) at most once a day.
+  `report` mode logs and alerts what `require` would refuse without starting the clock.
+- **Step-up for dangerous actions**: dropping a database or an account, rotating a password,
+  changing an account's host, rotating secrets, regenerating recovery codes, and applying a password
+  to an adopted account (`Enums\SensitiveAction`). `Security\StepUpGate` asks the configured
+  `Security\Contracts\StepUpVerifier` (`security.step_up.driver`): `session` (Laravel's
+  `password.confirm`, which authkit-preset satisfies with a password or a passkey, within
+  `security.step_up.ttl`, 300 s; a sessionless caller is asked for a code), `totp` (the
+  `X-DB-Console-OTP` header or `--otp`, verified by laranail/authkit, which is suggested, not
+  required), or `none`. Refusals are `StepUpRequired` (`step_up.required`, HTTP 403) and raise a
+  `StepUpFailed` security alert.
+- **Break-glass**: `laranail::db-console.security.recover <user>`, shell only, issues a 15-minute
+  two-factor bypass that also covers one step-up, and raises a critical `BreakGlassIssued` alert.
+- **The last Owner cannot be stranded**: `role:revoke` refuses to take global Owner from the last
+  holder, or (with enforcement on) the last one with two-factor, and the last enrolled global Owner
+  cannot disable two-factor over HTTP (`OwnerWouldBeStranded`, `security.owner_stranded`, HTTP 409).
+- `Security\RecoveryCodes::regenerate()`, behind step-up, for surfaces that offer regeneration.
+- `doctor` reports operator security: `security:two-factor` (warns whenever enforcement is off),
+  `security:two-factor-driver`, `security:owners` and `security:step-up` (an error for `none` in
+  production).
+- `ConsolePermission::isRead()`; the `security.two_factor`, `security.step_up` and
+  `security.break_glass` operation types; the `two_factor_grace` and `security_bypasses` catalog
+  tables.
+- See [Operator security](docs/tools/operator-security.md).
+
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -159,6 +193,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The API guard makes its configured guard the request's default** (`Auth::shouldUse()`), so the
+  gate, the audit actor and two-factor enforcement resolve the API caller rather than the default
+  web guard's user.
+- `Authorizer`, `AccountManager`, `DatabaseManager`, `SecretRotator`, `ApiGuard` and `DoctorService`
+  take new constructor arguments (`TwoFactorEnforcer`, `StepUpGate`, `OperatorSecurityCheck`),
+  resolved from the container.
 - `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
 - The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
   its own `--server` resolution and `ServerAddCommand`'s `--host`/`--port` handling were the same
