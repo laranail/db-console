@@ -29,21 +29,41 @@ jobs:
 
   # The matrix above runs on SQLite, and the engine tests compare SQL strings,
   # so nothing there can say whether Postgres accepts the SQL. This job
-  # provisions against a real PostgreSQL 18 as an admin holding only CREATEDB
-  # and CREATEROLE -- the shape of a managed service's admin user, which is
-  # what the grant and drop paths have to work under. --fail-on-skipped turns
-  # a missing variable into a failure rather than an empty pass.
+  # provisions against real servers as an admin holding only CREATEDB and
+  # CREATEROLE -- the shape of a managed service's admin user, which is what
+  # the grant and drop paths have to work under. A superuser builds the
+  # fixtures the admin cannot. --fail-on-skipped turns a missing variable into
+  # a failure rather than an empty pass.
+  #
+  # Versions: the latest release, the three before it, and the oldest major
+  # the PostgreSQL project still supports (Postgres has no LTS line; 14 is
+  # supported until 2026-11-12). The behaviour this covers changes across
+  # exactly these: PG15 took CREATE on schema public from PUBLIC, PG16 stopped
+  # CREATEROLE admins inheriting the roles they create. The next major runs as
+  # well, but its failures do not fail the run. When a major is released or
+  # reaches end of life, move the list: https://www.postgresql.org/support/versioning/
   live-pgsql:
-    name: live provisioning · pgsql 18
+    name: live provisioning · pgsql ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: ${{ matrix.next }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { postgres: '18', label: '18 (latest)', next: false }
+          - { postgres: '17', label: '17', next: false }
+          - { postgres: '16', label: '16', next: false }
+          - { postgres: '15', label: '15', next: false }
+          - { postgres: '14', label: '14 (oldest supported)', next: false }
+          - { postgres: '19rc1', label: '19 (next, release candidate)', next: true }
     # Reads the repository and nothing else; the token is used only to fetch
     # dependencies from public repositories.
     permissions:
       contents: read
     services:
       postgres:
-        image: postgres:18
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: secret
@@ -66,10 +86,13 @@ jobs:
         run: >-
           docker exec "${{ job.services.postgres.id }}"
           psql -v ON_ERROR_STOP=1 -U postgres
+          -c "SELECT version()"
           -c "CREATE ROLE db_console_admin WITH LOGIN PASSWORD 'secret' CREATEDB CREATEROLE NOSUPERUSER"
       - name: Live provisioning
         env:
           DB_CONSOLE_LIVE_PGSQL_PORT: '5432'
           DB_CONSOLE_LIVE_PGSQL_ADMIN_USER: db_console_admin
           DB_CONSOLE_LIVE_PGSQL_ADMIN_PASSWORD: secret
+          DB_CONSOLE_LIVE_PGSQL_SUPERUSER: postgres
+          DB_CONSOLE_LIVE_PGSQL_SUPERUSER_PASSWORD: secret
         run: vendor/bin/pest --no-coverage --colors=never --group=live-pgsql --fail-on-skipped
