@@ -7,8 +7,13 @@ namespace Simtabi\Laranail\DBConsole\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Symfony\Component\HttpFoundation\Response;
+use Simtabi\Laranail\DBConsole\Security\StepUpProof;
+use Illuminate\Contracts\Auth\Factory as AuthFactory;
 use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Security\TwoFactorEnforcer;
+use Simtabi\Laranail\DBConsole\Exceptions\TwoFactorRequired;
 
 /**
  * The single front door to the REST API (section 22). Off by default; when on
@@ -17,10 +22,22 @@ use Illuminate\Contracts\Config\Repository as Config;
  * (sanctum | passport), the caller's IP is allow-listed, and per-token rate
  * limits. Authorization itself still happens in the services (same Gate as
  * the CLI/UI) — this middleware only gates transport + identity.
+ *
+ * Identity includes two-factor: an operator two-factor enforcement refuses is
+ * stopped here, before any service runs (safe methods count as reads for the
+ * enrolment grace window), and the `X-DB-Console-OTP` header is handed to
+ * step-up for the actions that need it.
  */
 final readonly class ApiGuard
 {
-    public function __construct(private Config $config) {}
+    public const string OTP_HEADER = 'X-DB-Console-OTP';
+
+    public function __construct(
+        private Config $config,
+        private AuthFactory $auth,
+        private TwoFactorEnforcer $twoFactor,
+        private StepUpProof $proof,
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -37,12 +54,25 @@ final readonly class ApiGuard
         }
 
         $guard = (string) $this->config->get('laranail.db-console.api.guard', 'sanctum');
-        if ($request->user($guard) === null) {
+        $user = $request->user($guard);
+        if (! $user instanceof Authenticatable) {
             return $this->deny('Unauthenticated.', 401);
         }
 
         // Bind the resolved user so the services' Gate sees the API caller.
+        // The gate and the two-factor check resolve the operator through the
+        // default guard, so make the API guard the default for this request.
         $request->setUserResolver(fn () => $request->user($guard));
+        $this->auth->shouldUse($guard);
+
+        try {
+            $this->twoFactor->enforce($user, 'api', $request->isMethodSafe());
+        } catch (TwoFactorRequired $e) {
+            return new JsonResponse(['message' => $e->userMessage(), 'code' => $e->code()->value], $e->code()->httpStatus());
+        }
+
+        $otp = $request->header(self::OTP_HEADER);
+        $this->proof->present(is_string($otp) ? $otp : null);
 
         return $next($request);
     }

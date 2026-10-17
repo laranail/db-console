@@ -52,6 +52,18 @@ return [
 
     'not_authorized' => 'You are not authorized to perform :ability at :scope.',
 
+    'two_factor' => [
+        'required' => 'Two-factor authentication is required for :ability. :status Enrol, and save your recovery codes, to continue.',
+    ],
+
+    'step_up' => [
+        'required' => 'Confirm it is you before you :action: :how.',
+    ],
+
+    'security' => [
+        'owner_stranded' => 'Refused: :reason. Another Owner with confirmed two-factor must exist first.',
+    ],
+
     'secret' => [
         'unavailable'          => 'A stored credential could not be resolved from the :driver secret backend.',
         'driver_misconfigured' => 'The :driver secret driver is misconfigured: :problem.',

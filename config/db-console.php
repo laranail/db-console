@@ -180,6 +180,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operator security — two-factor and step-up
+    |--------------------------------------------------------------------------
+    | Applies to an authenticated operator, on every surface (API, WebUI, and
+    | CLI runs that carry one). A shell run with no operator is governed by the
+    | host's gate: shell access is already the trust boundary.
+    */
+    'security' => [
+        'two_factor' => [
+            // TwoFactorEnforcement: off | report | require. Unset: require in
+            // production, report elsewhere. report logs and alerts what require
+            // would refuse, so it can be switched on safely.
+            'enforce' => env('DB_CONSOLE_2FA_ENFORCE'),
+
+            // TwoFactorDriver: fortify (two_factor_confirmed_at, as laranail/authkit
+            // writes it) | null (no provider).
+            'driver' => env('DB_CONSOLE_2FA_DRIVER', 'fortify'),
+
+            // Days an operator without 2FA keeps read access, counted from the
+            // first refused request. Writes are refused from the start.
+            'grace_days' => (int) env('DB_CONSOLE_2FA_GRACE_DAYS', 7),
+
+            // Minutes the break-glass bypass from security.recover lasts.
+            'break_glass_minutes' => 15,
+        ],
+
+        'step_up' => [
+            // StepUpDriver: session (password.confirm, password or passkey) |
+            // totp (X-DB-Console-OTP header or --otp, via laranail/authkit) |
+            // none (doctor refuses it in production).
+            'driver' => env('DB_CONSOLE_STEP_UP', 'session'),
+
+            // Seconds a session confirmation stays valid.
+            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | REST API — off by default (the highest-exposure surface)
     |--------------------------------------------------------------------------
     */

@@ -11,23 +11,32 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\Package\Tools\Package;
+use Illuminate\Contracts\Container\Container;
 use Simtabi\Laranail\DBConsole\Doctor\Checks;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Models\AuditLog;
+use Simtabi\Laranail\DBConsole\Enums\StepUpDriver;
 use Simtabi\Laranail\DBConsole\Encryption\TlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Simtabi\Laranail\DBConsole\Security\BreakGlass;
+use Simtabi\Laranail\DBConsole\Security\StepUpGate;
 use Illuminate\Database\ConnectionResolverInterface;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Security\OwnerSafety;
+use Simtabi\Laranail\DBConsole\Security\StepUpProof;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
+use Simtabi\Laranail\DBConsole\Enums\TwoFactorDriver;
 use Simtabi\Laranail\DBConsole\Listeners\RaiseAlerts;
 use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
 use Simtabi\Laranail\DBConsole\Audit\AuditLogObserver;
+use Simtabi\Laranail\DBConsole\Security\RecoveryCodes;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Listeners\WriteAuditLog;
 use Simtabi\Laranail\DBConsole\Logging\ContextScrubber;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Security\SecurityPolicy;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
@@ -41,6 +50,7 @@ use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ReconcileService;
 use Simtabi\Laranail\DBConsole\Encryption\SessionTlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Security\TwoFactorEnforcer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
@@ -55,11 +65,18 @@ use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
+use Simtabi\Laranail\DBConsole\Security\StepUp\NoStepUpVerifier;
+use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
+use Simtabi\Laranail\DBConsole\Security\Contracts\TwoFactorStatus;
+use Simtabi\Laranail\DBConsole\Security\StepUp\TotpStepUpVerifier;
 use Simtabi\Laranail\Package\Tools\Providers\PackageServiceProvider;
+use Simtabi\Laranail\DBConsole\Security\StepUp\SessionStepUpVerifier;
+use Simtabi\Laranail\DBConsole\Security\TwoFactor\NullTwoFactorStatus;
 use Simtabi\Laranail\DBConsole\Console\Commands\DeprecatedInstallCommand;
+use Simtabi\Laranail\DBConsole\Security\TwoFactor\FortifyTwoFactorStatus;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\AboutSectionDefinition;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\InstallCommandDefinition;
 
@@ -92,6 +109,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->registerSecrets();
         $this->registerServices();
         $this->registerAccess();
+        $this->registerOperatorSecurity();
     }
 
     #[Override]
@@ -101,6 +119,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->guardSecretDriver();
         $this->registerAuditPipeline();
         $this->registerGate();
+        $this->protectLastEnrolledOwner();
     }
 
     /**
@@ -171,6 +190,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
                 'RoleListCommand', 'RoleCreateCommand', 'RoleAssignCommand', 'RoleRevokeCommand',
                 'AccessShowCommand', 'AccessCheckCommand',
                 'TokenIssueCommand', 'WebhookListCommand', 'WebhookAddCommand', 'WebhookRemoveCommand',
+                'SecurityRecoverCommand',
                 // The pre-0.1 `db-console:install`, forwarding to laranail::db-console.install.
                 'DeprecatedInstallCommand',
             ],
@@ -198,6 +218,68 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         });
 
         $this->app->bindIf(AccessManager::class, RbacAccessManager::class);
+    }
+
+    /**
+     * Two-factor enforcement and step-up (section D of the hardening design).
+     * The drivers are bound with bindIf so a host can supply its own; the
+     * step-up proof is scoped, so it is never carried from one request, job or
+     * Octane tick into the next.
+     */
+    private function registerOperatorSecurity(): void
+    {
+        $this->app->singleton(SecurityPolicy::class);
+
+        $this->app->bindIf(TwoFactorStatus::class, fn (Container $app): TwoFactorStatus => match ($app->make(SecurityPolicy::class)->twoFactorDriver()) {
+            TwoFactorDriver::Fortify => new FortifyTwoFactorStatus,
+            TwoFactorDriver::Null    => new NullTwoFactorStatus,
+        });
+
+        $this->app->bindIf(StepUpVerifier::class, fn (Container $app): StepUpVerifier => match ($app->make(SecurityPolicy::class)->stepUpDriver()) {
+            StepUpDriver::Session => $app->make(SessionStepUpVerifier::class),
+            StepUpDriver::Totp    => $app->make(TotpStepUpVerifier::class),
+            StepUpDriver::None    => new NoStepUpVerifier,
+        });
+
+        $this->app->scoped(StepUpProof::class);
+        $this->app->singleton(BreakGlass::class);
+        $this->app->singleton(TwoFactorEnforcer::class);
+        $this->app->singleton(StepUpGate::class);
+        $this->app->singleton(OwnerSafety::class);
+        $this->app->singleton(RecoveryCodes::class);
+    }
+
+    /**
+     * Refuse an enrolled global Owner losing two-factor when no other global
+     * Owner has it. Watches the operator model's two_factor_confirmed_at going
+     * from set to empty, which is what laranail/authkit and Fortify write when
+     * two-factor is disabled. Skipped in the host's shell, where an
+     * administrator resetting a lost device is the recovery path.
+     */
+    private function protectLastEnrolledOwner(): void
+    {
+        // A wildcard, so the operator model is read when a model saves rather
+        // than frozen at boot; anything that is not that model returns at once.
+        $this->app->make(Dispatcher::class)->listen('eloquent.updating: *', function (string $event, array $payload): void {
+            $user = $payload[0] ?? null;
+            if (! $user instanceof Model || ! $user instanceof Authenticatable) {
+                return;
+            }
+
+            $operatorModel = ltrim((string) $this->app->make(Config::class)->get('laranail.db-console.rbac.user_model', ''), '\\');
+            if ($user::class !== $operatorModel || $this->app->runningInConsole()) {
+                return;
+            }
+
+            $column = FortifyTwoFactorStatus::CONFIRMED_AT;
+            if (! $user->isDirty($column) || $user->getOriginal($column) === null || $user->getAttribute($column) !== null) {
+                return;
+            }
+
+            if ($this->app->make(SecurityPolicy::class)->twoFactorDriver() === TwoFactorDriver::Fortify) {
+                $this->app->make(OwnerSafety::class)->assertMayLoseTwoFactor($user);
+            }
+        });
     }
 
     /**

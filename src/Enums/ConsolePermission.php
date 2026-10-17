@@ -118,6 +118,23 @@ enum ConsolePermission: string implements Enumerator, Translatable
     }
 
     /**
+     * Whether this permission only reads. During the two-factor enrolment grace
+     * window an operator keeps these and loses every other.
+     */
+    public function isRead(): bool
+    {
+        return match ($this) {
+            self::Access,
+            self::DashboardView,
+            self::AuditView,
+            self::ServerView,
+            self::DatabaseView,
+            self::AccountView => true,
+            default           => false,
+        };
+    }
+
+    /**
      * The bare ability this permission was checked by until 0.1: `db-console.<permission>`.
      * Still defined on the gate as a deprecated alias of ability().
      */

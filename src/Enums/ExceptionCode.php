@@ -40,6 +40,9 @@ enum ExceptionCode: string implements Enumerator, Translatable
 
     // Authorization
     case NotAuthorized = 'not_authorized';
+    case TwoFactorRequired = 'two_factor.required';
+    case StepUpRequired = 'step_up.required';
+    case OwnerWouldBeStranded = 'security.owner_stranded';
 
     // Secrets
     case SecretUnavailable = 'secret.unavailable';
@@ -59,8 +62,11 @@ enum ExceptionCode: string implements Enumerator, Translatable
     public function httpStatus(): int
     {
         return match ($this) {
-            self::NotAuthorized => 403,
-            self::UnknownServer => 404,
+            self::NotAuthorized,
+            self::TwoFactorRequired,
+            self::StepUpRequired       => 403,
+            self::OwnerWouldBeStranded => 409,
+            self::UnknownServer        => 404,
             self::IdentifierInvalid,
             self::PasswordWeak,
             self::PrivilegeUnknown,

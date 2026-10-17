@@ -160,5 +160,5 @@ it('ExceptionCode is closed and collision-free', function (): void {
     $values = ExceptionCode::values();
 
     expect($values)->toBe(array_unique($values))
-        ->and($values)->toHaveCount(19);
+        ->and($values)->toHaveCount(22);
 });

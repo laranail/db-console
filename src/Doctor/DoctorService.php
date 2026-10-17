@@ -20,7 +20,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  * and — the doctrine-not-option check — whether the admin account is
  * root-like, in which case doctor FAILS with the exact minimal-grant fix so
  * setup won't quietly proceed insecure. Also reports the secret driver and
- * catalog encryption mode.
+ * catalog encryption mode, and operator security (two-factor, step-up).
  */
 final readonly class DoctorService
 {
@@ -31,6 +31,7 @@ final readonly class DoctorService
         private SqlCipherManager $sqlcipher,
         private Dispatcher $events,
         private PostgresAdminCheck $postgresAdmin,
+        private OperatorSecurityCheck $operatorSecurity,
     ) {}
 
     /**
@@ -47,7 +48,7 @@ final readonly class DoctorService
         $findings[] = $this->checkSecretDriver();
         $findings[] = $this->checkCatalogEncryption();
 
-        return $findings;
+        return [...$findings, ...$this->operatorSecurity->findings()];
     }
 
     /**

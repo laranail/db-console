@@ -15,12 +15,14 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  */
 final class UserPasswordCommand extends DBConsoleCommand
 {
-    protected $signature = 'laranail::db-console.user:password {--server=} {--user=} {--host=} {--password=} {--generate}';
+    protected $signature = 'laranail::db-console.user:password {--server=} {--user=} {--host=} {--password=} {--generate} {--otp= : A one-time code, when step-up asks for one}';
 
     protected $description = 'Rotate a database account password';
 
     public function handle(AccountManager $accounts): int
     {
+        $this->presentStepUpProof();
+
         $user = $this->str('user');
         $host = $this->str('host') ?: 'localhost';
         $passwordOption = $this->str('password');

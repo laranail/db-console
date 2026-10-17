@@ -8,7 +8,9 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Security\StepUpGate;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Enums\SensitiveAction;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
@@ -40,6 +42,7 @@ final readonly class DatabaseManager
         private DBConsoleLogger $log,
         private BackupService $backups,
         private ScopedConnections $scoped,
+        private StepUpGate $stepUp,
     ) {}
 
     public function create(string $server, DbName $db, Charset $charset): OperationResult
@@ -78,6 +81,7 @@ final readonly class DatabaseManager
     public function drop(string $server, DbName $db): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::DatabaseDrop, "server:{$server}");
+        $this->stepUp->require(SensitiveAction::DatabaseDrop, $server);
 
         [$engine, $connection] = $this->registry->resolve($server);
 
