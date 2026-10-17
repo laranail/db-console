@@ -95,6 +95,12 @@ final readonly class AccountManager
                 ['operation' => OperationType::AccountCreate->value, 'target' => $this->label($user, $host)],
             );
         } catch (DBConsoleException $e) {
+            // Created by someone else between the check and the create: the
+            // existing-resource policy decides, as if it had been there first.
+            if ($this->createdMeanwhile($server, $user, $host)) {
+                return $this->adopt($server, $user, $host, $password, $onExisting);
+            }
+
             $this->fail(OperationType::AccountCreate, $server, $this->label($user, $host), $e);
         }
 
@@ -466,6 +472,19 @@ final readonly class AccountManager
             ['username' => $user->value, 'host' => $host->value, 'adopted' => true, 'password_applied' => false],
             alreadyExisted: true,
         );
+    }
+
+    /**
+     * Whether the account exists now, after a create failed. A server that
+     * cannot even answer that leaves the original failure to stand.
+     */
+    private function createdMeanwhile(string $server, Username $user, Host $host): bool
+    {
+        try {
+            return $this->exists($server, $user, $host);
+        } catch (DBConsoleException) {
+            return false;
+        }
     }
 
     private function requireAccounts(string $engine, bool $capable): void

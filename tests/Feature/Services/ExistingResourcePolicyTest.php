@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Event;
 use Simtabi\Laranail\DBConsole\Domain\Host;
@@ -13,6 +14,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
@@ -35,9 +37,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
 use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
-use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
-use Simtabi\Laranail\DBConsole\Exceptions\ConfirmationRequired;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
@@ -280,12 +280,10 @@ describe('an existing account', function (): void {
         expect(policyCreateShop(ExistingResourcePolicy::AdoptAndApply)->data['password_applied'])->toBeTrue();
     });
 
-    it('no longer throws the deprecated ConfirmationRequired, which still constructs', function (): void {
-        $e = ConfirmationRequired::forAction('adopt_and_apply', 300);
-
-        expect($e->code()->value)->toBe('confirmation.required')
-            ->and($e->code()->httpStatus())->toBe(403)
-            ->and(file_get_contents(new ReflectionClass(ExistingResourceGuard::class)->getFileName()))->not->toContain('ConfirmationRequired');
+    it('refuses with AssuranceRequired, the one exception every permission uses', function (): void {
+        expect(class_exists('Simtabi\\Laranail\\DBConsole\\Exceptions\\ConfirmationRequired'))->toBeFalse()
+            ->and(array_map(static fn (ExceptionCode $c): string => $c->value, ExceptionCode::cases()))
+            ->not->toContain('confirmation.required');
     });
 
     it('gets a generated password under adopt_and_apply when none was supplied, shown once', function (): void {
@@ -296,6 +294,46 @@ describe('an existing account', function (): void {
 
         expect($generated)->toBeString()
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', (string) $generated));
+    });
+});
+
+describe('a create that loses a race', function (): void {
+    it('refuses an account another process created meanwhile, as if it had been there first', function (): void {
+        Event::fake([AccountCreationRefused::class, AccountCreated::class]);
+        $this->engine->raceOnCreate = true;
+
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+        Event::assertDispatched(AccountCreationRefused::class);
+        Event::assertNotDispatched(AccountCreated::class);
+    });
+
+    it('adopts it instead when the call asked to', function (): void {
+        $this->engine->raceOnCreate = true;
+
+        expect(policyCreateShop(ExistingResourcePolicy::Adopt)->data['adopted'])->toBeTrue();
+    });
+
+    it('refuses a database another process created meanwhile', function (): void {
+        $this->engine->raceOnCreate = true;
+
+        expect(fn () => app(DatabaseManager::class)->create('fake', new DbName('shop_prod'), new Charset('utf8')))
+            ->toThrow(DatabaseAlreadyExists::class);
+    });
+
+    it('still fails as a failure when nothing appeared', function (): void {
+        // A server that refuses the name outright: the create fails and no
+        // database appears, so there is nothing to adopt or refuse.
+        $admin = DB::connection('fake_admin');
+        $admin->statement('DROP TABLE fake_databases');
+        $admin->statement("CREATE TABLE fake_databases (name TEXT, objects INTEGER DEFAULT 0, CHECK (name <> 'shop_prod'))");
+
+        try {
+            app(DatabaseManager::class)->create('fake', new DbName('shop_prod'), new Charset('utf8'));
+            $this->fail('expected the create to fail');
+        } catch (DBConsoleException $e) {
+            expect($e)->not->toBeInstanceOf(DatabaseAlreadyExists::class);
+        }
     });
 });
 

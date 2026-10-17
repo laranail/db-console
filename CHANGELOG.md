@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+Each had a replacement and announced itself when used, through 0.1.1. See UPGRADING for what a
+host still using one sees.
+
+- **The 22 bare gate abilities `db-console.<permission>`**, with `ConsolePermission::deprecatedAbility()`,
+  `ConsolePermission::DEPRECATED_ABILITY_PREFIX` and `Authorization\DeprecatedAbilities`. Use
+  `laranail-db-console.<permission>` (`ConsolePermission::ability()`).
+- **`ConsolePermission::fromAbility()` no longer reads the old `db-console.` prefix.** Stored rows
+  are renamed by a migration instead (see Added), so nothing reads two names at runtime.
+- **Command `db-console:install`** (`Console\Commands\DeprecatedInstallCommand`). Use
+  `laranail::db-console.install`.
+- **Config fallbacks `api.guard` and `api.prefix`**, with `Http\Api\DeprecatedConfigKeys`. Use
+  `api.auth` and `api.path`; doctor reports the old keys.
+- **`Exceptions\ConfirmationRequired` and `ExceptionCode::ConfirmationRequired`**
+  (`confirmation.required`). `AssuranceRequired` replaced them in #49.
+
+### Added
+
+- **Catalog migration `0001_01_01_001100_migrate_db_console_permission_names`.** Renames permission
+  rows stored under `db-console.*` to `laranail-db-console.*`, merging into a scoped row install
+  already seeded so no role loses a permission, and gives the shipped Owner `resource.adopt`
+  without re-syncing any role. Builtin and Spatie drivers; idempotent.
+- **`Doctor\ConfigCheck`**: `config:legacy-api-keys` fails a config that still sets `api.guard` or
+  `api.prefix`, and `config:on-existing` warns when existing resources are adopted by default,
+  globally or for a server.
+
+### Fixed
+
+- **A create that loses a race to another process is handled by the existing-resource policy.**
+  An account or database created between db-console's existence check and its create used to fail
+  with the driver's duplicate error; it is now refused with a 409, or adopted when the call asked.
+
 ## [0.1.1] - 2026-10-17
 
 ### Added

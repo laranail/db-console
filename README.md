@@ -19,8 +19,6 @@ composer require laranail/db-console
 php artisan laranail::db-console.install
 ```
 
-`db-console:install` still works as a deprecated alias: it prints one line naming the replacement and runs it.
-
 The installer publishes the config, runs the catalog migrations, seeds the shipped console roles, assigns the bootstrap Owner (set `DB_CONSOLE_OWNER_USER_ID`), and runs `doctor` to health-check your servers.
 
 Point it at a **minimal** admin account, never root:

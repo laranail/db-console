@@ -16,8 +16,6 @@ composer require laranail/db-console
 php artisan laranail::db-console.install
 ```
 
-The pre-0.1 name `db-console:install` still works as a deprecated alias. It prints one line naming `laranail::db-console.install`, then runs it, and is removed no earlier than the next minor after 0.1.
-
 The install flow publishes the config and language files, runs the catalog migrations, seeds the shipped console roles, assigns the bootstrap Owner, and runs `doctor`.
 
 ## The minimal admin account

@@ -76,6 +76,12 @@ final readonly class DatabaseManager
                 ['operation' => OperationType::DatabaseCreate->value, 'target' => $db->value],
             );
         } catch (DBConsoleException $e) {
+            // Created by someone else between the check and the create: the
+            // existing-resource policy decides, as if it had been there first.
+            if ($this->createdMeanwhile($server, $db)) {
+                return $this->adopt($server, $db, $onExisting);
+            }
+
             $this->fail(OperationType::DatabaseCreate, $server, $db->value, $e);
         }
 
@@ -296,6 +302,19 @@ final readonly class DatabaseManager
             ['database' => $db->value, 'adopted' => true],
             alreadyExisted: true,
         );
+    }
+
+    /**
+     * Whether the database exists now, after a create failed. A server that
+     * cannot even answer that leaves the original failure to stand.
+     */
+    private function createdMeanwhile(string $server, DbName $db): bool
+    {
+        try {
+            return $this->exists($server, $db);
+        } catch (DBConsoleException) {
+            return false;
+        }
     }
 
     private function fail(OperationType $operation, string $server, string $target, DBConsoleException $e): never

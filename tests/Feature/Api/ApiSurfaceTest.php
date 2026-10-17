@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
+use Simtabi\Laranail\DBConsole\Doctor\ConfigCheck;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Http\Api\DeprecatedConfigKeys;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
 
 /*
@@ -36,7 +36,6 @@ function apiCaller(): User
 
 beforeEach(function (): void {
     $this->migrateCatalog();
-    DeprecatedConfigKeys::forgetWarnings();
     $GLOBALS['apiDenied'] = [];
     $GLOBALS['apiGateUsers'] = [];
     Gate::before(function ($user = null, string $ability = ''): bool {
@@ -122,26 +121,19 @@ describe('api.auth and api.path', function (): void {
         expect($GLOBALS['apiGateUsers'])->not->toBeEmpty()->each->toBe(1);
     });
 
-    it('falls back to api.guard when api.auth is unset, and says it is deprecated', function (): void {
+    it('no longer reads api.guard, and doctor says so', function (): void {
+        config()->set('auth.guards.ops', ['driver' => 'session', 'provider' => 'users']);
         config()->set('laranail.db-console.api.auth');
-        config()->set('laranail.db-console.api.guard', 'web');
+        config()->set('laranail.db-console.api.guard', 'ops');
         mountDbConsoleApi();
 
-        $notices = [];
-        set_error_handler(function (int $level, string $message) use (&$notices): bool {
-            $notices[] = $message;
+        // The default guard (sanctum) applies; the retired key does nothing...
+        $this->actingAs(apiCaller(), 'ops')->getJson('/api/db-console/servers')->assertUnauthorized();
 
-            return true;
-        }, E_USER_DEPRECATED);
-
-        try {
-            $this->actingAs(apiCaller(), 'web')->getJson('/api/db-console/servers')->assertOk();
-        } finally {
-            restore_error_handler();
-        }
-
-        expect($notices)->toHaveCount(1)
-            ->and($notices[0])->toContain('api.guard')->toContain('api.auth');
+        // ...and doctor names it instead of letting that pass silently.
+        $finding = collect(app(ConfigCheck::class)->findings())->firstWhere('check', 'config:legacy-api-keys');
+        expect($finding->isError())->toBeTrue()
+            ->and($finding->message)->toContain('api.guard (now api.auth)');
     });
 
     it('mounts under api.path', function (): void {
@@ -152,28 +144,18 @@ describe('api.auth and api.path', function (): void {
         $this->actingAs(apiCaller(), 'sanctum')->getJson('/api/db-console/servers')->assertNotFound();
     });
 
-    it('prefers api.path when the old api.prefix is set too', function (): void {
-        config()->set('laranail.db-console.api.path', 'ops/dbc');
+    it('no longer reads api.prefix, and doctor says so', function (): void {
+        config()->set('laranail.db-console.api.path');
         config()->set('laranail.db-console.api.prefix', 'legacy/dbc');
         mountDbConsoleApi();
 
-        $this->actingAs(apiCaller(), 'sanctum')->getJson('/ops/dbc/servers')->assertOk();
+        $this->actingAs(apiCaller(), 'sanctum')->getJson('/api/db-console/servers')->assertOk();
         $this->actingAs(apiCaller(), 'sanctum')->getJson('/legacy/dbc/servers')->assertNotFound();
+
+        $finding = collect(app(ConfigCheck::class)->findings())->firstWhere('check', 'config:legacy-api-keys');
+        expect($finding->message)->toContain('api.prefix (now api.path)');
     });
 
-    it('falls back to api.prefix when api.path is unset', function (): void {
-        config()->set('laranail.db-console.api.path');
-        config()->set('laranail.db-console.api.prefix', 'legacy/dbc');
-        set_error_handler(fn (): bool => true, E_USER_DEPRECATED);
-
-        try {
-            mountDbConsoleApi();
-        } finally {
-            restore_error_handler();
-        }
-
-        $this->actingAs(apiCaller(), 'sanctum')->getJson('/legacy/dbc/servers')->assertOk();
-    });
 });
 
 describe('api.require_https', function (): void {

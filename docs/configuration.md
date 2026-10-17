@@ -69,7 +69,7 @@ See [Events & notifications](tools/events-notifications.md).
 
 ## API & webhooks
 
-`api.enabled` (default `false`), `api.auth` (`sanctum` | `passport`), `api.path`, `api.allowed_ips`, `api.rate_limit` (`'requests,minutes'`), `api.auth_failure_limit` (`'failures,minutes'` per IP, default `10,1`), `api.require_https`, `api.confirm_destructive`. `api.guard` and `api.prefix` are deprecated fallbacks for the first two. `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
+`api.enabled` (default `false`), `api.auth` (`sanctum` | `passport`), `api.path`, `api.allowed_ips`, `api.rate_limit` (`'requests,minutes'`), `api.auth_failure_limit` (`'failures,minutes'` per IP, default `10,1`), `api.require_https`, `api.confirm_destructive`. `api.guard` and `api.prefix`, read until 0.1.1, are no longer read; `doctor` reports them (`config:legacy-api-keys`). `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
 
 ---
 

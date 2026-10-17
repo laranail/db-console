@@ -90,23 +90,15 @@ enum ConsolePermission: string implements Enumerator, Translatable
     public const string ABILITY_PREFIX = 'laranail-db-console.';
 
     /**
-     * The bare prefix the gate abilities carried until 0.1. Abilities under it are still defined,
-     * as deprecated aliases that delegate to the scoped ones, and are removed no earlier than the
-     * next minor after 0.1. Permission names stored under it still resolve (see fromAbility()).
-     */
-    public const string DEPRECATED_ABILITY_PREFIX = 'db-console.';
-
-    /**
-     * The permission a gate ability or stored permission name stands for, in either form
-     * (`laranail-db-console.x`, or the pre-0.1 `db-console.x`), or the bare permission value.
-     * Null for anything else, including another package's ability.
+     * The permission a gate ability or stored permission name (`laranail-db-console.x`), or a
+     * bare permission value (`x`, as config lists them), stands for. Null for anything else,
+     * including another package's ability. Rows stored under the pre-0.1 `db-console.x` name are
+     * renamed by the 0001_01_01_001100 migration, so nothing reads that form at runtime.
      */
     public static function fromAbility(string $ability): ?self
     {
-        foreach ([self::ABILITY_PREFIX, self::DEPRECATED_ABILITY_PREFIX] as $prefix) {
-            if (str_starts_with($ability, $prefix)) {
-                return self::tryFrom(substr($ability, strlen($prefix)));
-            }
+        if (str_starts_with($ability, self::ABILITY_PREFIX)) {
+            return self::tryFrom(substr($ability, strlen(self::ABILITY_PREFIX)));
         }
 
         return self::tryFrom($ability);
@@ -136,14 +128,5 @@ enum ConsolePermission: string implements Enumerator, Translatable
             self::AccountView => true,
             default           => false,
         };
-    }
-
-    /**
-     * The bare ability this permission was checked by until 0.1: `db-console.<permission>`.
-     * Still defined on the gate as a deprecated alias of ability().
-     */
-    public function deprecatedAbility(): string
-    {
-        return self::DEPRECATED_ABILITY_PREFIX . $this->value;
     }
 }

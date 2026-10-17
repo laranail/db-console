@@ -68,7 +68,6 @@ it('resolves labels through the enumerator toolkit', function (): void {
 it('ConsolePermission abilities carry the db-console gate prefix', function (): void {
     expect(ConsolePermission::Access->ability())->toBe('laranail-db-console.access')
         ->and(ConsolePermission::DatabaseDrop->ability())->toBe('laranail-db-console.database.drop')
-        ->and(ConsolePermission::DatabaseDrop->deprecatedAbility())->toBe('db-console.database.drop')
         ->and(ConsolePermission::cases())->toHaveCount(22);
 });
 
@@ -161,5 +160,5 @@ it('ExceptionCode is closed and collision-free', function (): void {
     $values = ExceptionCode::values();
 
     expect($values)->toBe(array_unique($values))
-        ->and($values)->toHaveCount(25);
+        ->and($values)->toHaveCount(24);
 });

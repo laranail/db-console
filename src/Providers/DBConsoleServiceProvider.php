@@ -71,7 +71,6 @@ use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
 use Simtabi\Laranail\Package\Tools\Providers\PackageServiceProvider;
-use Simtabi\Laranail\DBConsole\Console\Commands\DeprecatedInstallCommand;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\AboutSectionDefinition;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\InstallCommandDefinition;
 
@@ -161,7 +160,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
     private function installDefinition(): InstallCommandDefinition
     {
         return InstallCommandDefinition::make()
-            ->named(DeprecatedInstallCommand::REPLACEMENT)
+            ->named('laranail::db-console.install')
             ->publishes('config', 'translations')
             ->runsMigrations()
             ->step('Seed console roles', function (InstallCommand $command): void {
@@ -222,8 +221,6 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
                 'AccessShowCommand', 'AccessCheckCommand',
                 'TokenIssueCommand', 'WebhookListCommand', 'WebhookAddCommand', 'WebhookRemoveCommand',
                 'SecurityRecoverCommand',
-                // The pre-0.1 `db-console:install`, forwarding to laranail::db-console.install.
-                'DeprecatedInstallCommand',
             ],
         );
     }
