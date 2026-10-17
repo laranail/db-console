@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A live provisioning job against PostgreSQL 18** (`live-pgsql` in `tests.yml`). It runs the
+  `live-pgsql` group as an admin holding only `CREATEDB CREATEROLE`, the shape of a managed
+  service's admin user: provision, migrate as the new role, read a table created after the grant,
+  drop the role while it still owns objects, drop a database with a session open, and check
+  emptiness. The engine tests compare SQL strings, which is how every Postgres defect below passed.
+- **Statements can be scoped to a database** (`Statement::inDatabase()`, `Statement::$database`),
+  and `Servers\ScopedConnections` runs each one on a short-lived connection to its database, built
+  from the admin connection's own configuration. `AdminConnection::run()` refuses a statement
+  scoped to a database it is not on, so a grant can no longer land in the wrong database quietly.
+- `Engines\OwnershipReleasingEngine` and `Engines\EmptinessProbingEngine`, implemented by
+  `PostgresEngine`, following the `HostScopingEngine` pattern for dialect only one engine needs.
+
 ### Fixed
+
+- **PostgreSQL could not create a database with the package's own default charset.** `utf8mb4`
+  became `ENCODING 'UTF8MB4'`, which Postgres has no encoding for. `PostgresEngine` now maps MySQL
+  charset names to Postgres encodings (`utf8mb4`/`utf8mb3` → `UTF8`, `ascii` → `SQL_ASCII`), so the
+  wizard, CLI, API and WebUI defaults all work without each call site knowing the engine.
+- **PostgreSQL grants landed in the admin's database, not the target.** `GRANT ... ON ALL TABLES IN
+  SCHEMA public` acts on the connected database, which was the admin connection's, so the target
+  received `CONNECT` and nothing else. Schema, table, sequence and function grants now run inside the
+  target database, with `GRANT USAGE ON SCHEMA public` (and `CREATE` when the set has it: PG15
+  revoked it from `PUBLIC`) and `ALTER DEFAULT PRIVILEGES`, so tables the admin creates later are
+  covered too.
+- **PostgreSQL put `CREATE` and `EXECUTE` in a table grant, and turned any privilege it did not
+  recognise into `SELECT`.** Each privilege now goes on the object Postgres grants it on: `CREATE`
+  on the schema, `EXECUTE` on functions, `CREATE TEMPORARY TABLES` as `TEMPORARY` on the database,
+  and sequence `USAGE`/`SELECT` alongside `INSERT`/`UPDATE`/`SELECT`. `ALTER`, `DROP`, `INDEX`,
+  `ALTER ROUTINE`, `LOCK TABLES` and `EVENT` grant nothing, since Postgres reserves the first four
+  to an object's owner. An unclassified privilege throws `UnknownPrivilege`.
+- **PostgreSQL drops failed whenever anything was attached.** `DROP DATABASE` now uses `WITH
+  (FORCE)`, which ends the sessions the admin may terminate; one held by a role it cannot signal
+  still blocks the drop. `DROP ROLE` is preceded by
+  `REASSIGN OWNED BY ... TO CURRENT_USER` and `DROP OWNED BY ...` inside every database the role has
+  objects or privileges in, read from `pg_shdepend`, after the admin takes membership in the role.
+  A CREATEROLE admin on PG16+ does not inherit the roles it creates.
+- **A drop whose emptiness check failed was not audited.** The check now runs inside the drop's
+  failure handling, so it is logged and dispatches `OperationFailed` like any other failed drop.
+- **PostgreSQL's "is empty" check always answered "not empty".** It is now read inside the target
+  database, so a wizard rollback drops the database it created instead of leaving it behind, and an
+  empty database is no longer backed up before a drop.
 
 - **`audit:view --limit=<non-numeric>` printed nothing.** `(int)` on a typo is `0`, and `limit(0)`
   returns no rows -- so a mistyped limit rendered an empty audit view, which reads exactly like

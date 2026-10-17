@@ -26,3 +26,50 @@ jobs:
       # line only once that default is ["*"].
       laravel-versions: '["*"]'
       php-extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, sqlite3, pdo_sqlite'
+
+  # The matrix above runs on SQLite, and the engine tests compare SQL strings,
+  # so nothing there can say whether Postgres accepts the SQL. This job
+  # provisions against a real PostgreSQL 18 as an admin holding only CREATEDB
+  # and CREATEROLE -- the shape of a managed service's admin user, which is
+  # what the grant and drop paths have to work under. --fail-on-skipped turns
+  # a missing variable into a failure rather than an empty pass.
+  live-pgsql:
+    name: live provisioning · pgsql 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Reads the repository and nothing else; the token is used only to fetch
+    # dependencies from public repositories.
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: secret
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, pdo_sqlite, pdo_pgsql'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+      - name: Create a restricted admin (CREATEDB CREATEROLE, not a superuser)
+        run: >-
+          docker exec "${{ job.services.postgres.id }}"
+          psql -v ON_ERROR_STOP=1 -U postgres
+          -c "CREATE ROLE db_console_admin WITH LOGIN PASSWORD 'secret' CREATEDB CREATEROLE NOSUPERUSER"
+      - name: Live provisioning
+        env:
+          DB_CONSOLE_LIVE_PGSQL_PORT: '5432'
+          DB_CONSOLE_LIVE_PGSQL_ADMIN_USER: db_console_admin
+          DB_CONSOLE_LIVE_PGSQL_ADMIN_PASSWORD: secret
+        run: vendor/bin/pest --no-coverage --colors=never --group=live-pgsql --fail-on-skipped
