@@ -28,7 +28,8 @@ Both engines grant on `` `db`.* `` and scope accounts by host, `'user'@'host'`. 
 recreates the account at the new host from its stored authentication, read from `mysql.user` as a hex
 literal so the password is never known. MySQL takes the hash as `AS 0x...`, which a binary
 `caching_sha2_password` hash needs; MariaDB's grammar takes only a quoted string after `AS`, so
-`MariaDbEngine` decodes the hex and quotes it.
+`MariaDbEngine` decodes the hex and quotes it. Both refuse a hash literal that is not whole bytes of
+hex, since it is spliced into the statement.
 
 The emptiness check before a drop or a wizard rollback counts `information_schema.tables` for the
 database, from the admin connection.

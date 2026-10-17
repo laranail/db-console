@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inherit the roles it creates. The drop now reads whose sessions they are (`SessionEndingEngine`),
   takes membership so `FORCE` can end them, and refuses up front, before the backup runs, when a
   superuser or a role the admin cannot act as holds one.
+- **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
+  It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already
+  did; the two share the check.
 - **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
   failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
   `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any
