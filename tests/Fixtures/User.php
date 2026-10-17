@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
-use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Auth\Access\Authorizable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Foundation\Auth\Access\Authorizable;
+use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
 
 /**
  * A minimal operator model for RBAC tests: an Authenticatable on the default
@@ -22,11 +22,11 @@ final class User extends Model implements Authenticatable, AuthorizableContract
     use Authorizable;
     use HasApiTokens;
 
+    public array $roles = [];
+
     protected $table = 'users';
 
     protected $guarded = [];
-
-    public array $roles = [];
 
     public function getAuthIdentifierName(): string
     {

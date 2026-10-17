@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
+use Illuminate\Database\Connection;
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
 use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
+use Simtabi\Laranail\DBConsole\Engines\AdminInspectingEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
@@ -29,6 +30,7 @@ final readonly class DoctorService
         private SecretVaultManager $secrets,
         private SqlCipherManager $sqlcipher,
         private Dispatcher $events,
+        private PostgresAdminCheck $postgresAdmin,
     ) {}
 
     /**
@@ -71,7 +73,7 @@ final readonly class DoctorService
             $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': " . $this->tls->status($server)->value . '.');
         }
 
-        $findings[] = $this->checkAdminPrivileges($server);
+        $findings = [...$findings, ...$this->checkAdminPrivileges($server)];
 
         $capabilities = $this->registry->engine($server)->capabilities();
         $findings[] = DoctorFinding::ok(
@@ -97,19 +99,26 @@ final readonly class DoctorService
         }
     }
 
-    private function checkAdminPrivileges(string $server): DoctorFinding
+    /**
+     * @return list<DoctorFinding>
+     */
+    private function checkAdminPrivileges(string $server): array
     {
         $engine = $this->registry->engine($server);
 
-        // Only MySQL-family exposes SHOW GRANTS for the current admin here.
+        if ($engine instanceof AdminInspectingEngine) {
+            return $this->inspectAdmin($server, $engine);
+        }
+
+        // MySQL-family exposes SHOW GRANTS for the current admin.
         if (! $engine->type()->isMysqlFamily()) {
-            return DoctorFinding::ok("server:{$server}:admin", "Admin privilege check skipped for {$engine->type()->value}.");
+            return [DoctorFinding::ok("server:{$server}:admin", "Admin privilege check skipped for {$engine->type()->value}.")];
         }
 
         try {
             $rows = $this->registry->connection($server)->select('SHOW GRANTS FOR CURRENT_USER()', ['operation' => 'server.view']);
         } catch (DBConsoleException $e) {
-            return DoctorFinding::warning("server:{$server}:admin", "Could not read admin grants: {$e->userMessage()}");
+            return [DoctorFinding::warning("server:{$server}:admin", "Could not read admin grants: {$e->userMessage()}")];
         }
 
         $grants = strtoupper(implode("\n", array_map(
@@ -118,14 +127,36 @@ final readonly class DoctorService
         )));
 
         if ($this->looksRootLike($grants)) {
-            return DoctorFinding::error(
+            return [DoctorFinding::error(
                 "server:{$server}:admin",
                 "The admin account on '{$server}' is ROOT-LIKE (ALL PRIVILEGES or SUPER). Point DBConsole at a minimal admin instead.",
                 $this->minimalGrantFix($server),
-            );
+            )];
         }
 
-        return DoctorFinding::ok("server:{$server}:admin", "Admin account on '{$server}' is appropriately scoped (not root-like).");
+        return [DoctorFinding::ok("server:{$server}:admin", "Admin account on '{$server}' is appropriately scoped (not root-like).")];
+    }
+
+    /**
+     * @return list<DoctorFinding>
+     */
+    private function inspectAdmin(string $server, AdminInspectingEngine $engine): array
+    {
+        $connection = $this->registry->connection($server);
+
+        try {
+            $profile = [];
+            foreach ($engine->adminProfile() as $statement) {
+                $profile = [...$profile, ...($connection->selectStatement($statement, ['operation' => 'server.view'])[0] ?? [])];
+            }
+        } catch (DBConsoleException $e) {
+            return [DoctorFinding::warning("server:{$server}:admin", "Could not read the admin role: {$e->userMessage()}")];
+        }
+
+        $underlying = $connection->underlying();
+        $port = $underlying instanceof Connection ? $underlying->getConfig('port') : null;
+
+        return $this->postgresAdmin->findings($server, $profile, is_numeric($port) ? (int) $port : null);
     }
 
     private function looksRootLike(string $upperGrants): bool
@@ -182,16 +213,6 @@ final readonly class DoctorService
 
     private function minimalGrantFix(string $server): string
     {
-        $engine = $this->registry->engine($server);
-
-        if ($engine->type() === EngineType::Pgsql) {
-            return "CREATE ROLE db_console_admin WITH LOGIN CREATEDB CREATEROLE PASSWORD '...';";
-        }
-
-        return implode("\n", [
-            "CREATE USER 'db_console_admin'@'%' IDENTIFIED BY '...';",
-            "GRANT CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE USER, RELOAD ON *.* TO 'db_console_admin'@'%';",
-            "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREATE VIEW, SHOW VIEW ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;",
-        ]);
+        return implode("\n", MinimalAdminGrant::statements($this->registry->engine($server)));
     }
 }

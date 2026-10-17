@@ -180,3 +180,20 @@ it('reads rows inside the transaction, seeing its own uncommitted work', functio
 
     expect($rows)->toBe([['name' => 'on_target']]);
 });
+
+// A read that has to see inside each database (Postgres grants on schemas and
+// tables) returns the rows of every statement, each from its own database.
+it('reads rows from the database each statement is scoped to, in order', function (): void {
+    new PDO('sqlite:' . $this->dir . '/target_db')->exec('CREATE TABLE on_target (id INTEGER)');
+    new PDO('sqlite:' . $this->dir . '/admin_db')->exec('CREATE TABLE on_admin (id INTEGER)');
+
+    $engine = new class
+    {
+        use MintsScopedStatements;
+    };
+
+    $rows = app(ScopedConnections::class)->select($this->admin, $engine->tablesEverywhere());
+
+    expect($rows)->toBe([['name' => 'on_admin'], ['name' => 'on_target']])
+        ->and(array_keys(DB::getConnections()))->not->toContain('db-console-scoped:local:target_db');
+});

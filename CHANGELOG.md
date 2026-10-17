@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
+  `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
+  admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
+  on MySQL: provision through the wizard with the default `utf8mb4_unicode_ci`, migrate and write as
+  the new account, grant every preset privilege, revoke, move an account to a new host, drop an
+  account and a database, check emptiness, and roll the wizard back. `MinimalAdminGrantTest` keeps
+  the job's grant, the README and the recipe the same as `Doctor\MinimalAdminGrant`.
+- `Doctor\MinimalAdminGrant::statements()`, the recommended admin per engine, and
+  `MySqlEngine::grantablePrivileges()`, the privilege keywords it builds the grant from.
 - **A live provisioning job against PostgreSQL 14 to 18** (`live-pgsql` in `tests.yml`), plus the
   19 release candidate as a leg whose failures do not fail the run. 18 is the latest release, 15
   to 17 the three before it, and 14 the oldest the project still supports. It runs the
@@ -29,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Services\OwnershipReleasingDrop`, which drops a Postgres role so that a failure leaves as little
   behind as Postgres allows (see Fixed).
 - The `grant.not_applied` exception code (`GrantNotApplied`, HTTP 502).
+- **`doctor` checks a Postgres admin.** It skipped Postgres and reported every admin as fine, a
+  superuser included. It now reads the role from `pg_roles` (`Engines\AdminInspectingEngine`,
+  judged by `Doctor\PostgresAdminCheck`) and fails a superuser, an admin without `CREATEDB` or
+  `CREATEROLE`, and a server older than 13, and warns when the admin connects through a known
+  pooler port (6432, 6543, 25061).
+- `Engines\DatabaseScopedGrantsEngine`, `Engines\ScramSha256` and `ScopedConnections::select()`,
+  which reads rows from each statement's own database.
 
 ### Fixed
 
@@ -64,6 +80,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TlsChecker::isLocal()` treated a connection configured only by `url` (`DATABASE_URL`) as
   localhost**, which exempted exactly the managed-database setups from the TLS check. It now parses
   the url and checks every `read`/`write` host.
+- **The recommended MySQL/MariaDB admin could not grant the `app_standard` preset**, nor `full`:
+  `GRANT` needs `GRANT OPTION` on each privilege it hands out, and the recommendation left out
+  `CREATE TEMPORARY TABLES`, `LOCK TABLES`, `REFERENCES`, `CREATE ROUTINE`, `ALTER ROUTINE`, `EVENT`
+  and `TRIGGER`, so provisioning failed at its grant step with `InsufficientPrivilege`. The
+  recommendation now gives every privilege a preset can carry `WITH GRANT OPTION`, built from the
+  engine's own privilege map, and drops `RELOAD`, which nothing db-console runs uses.
+- **Changing an account's host failed on MariaDB.** The account is recreated from its stored hash
+  with `IDENTIFIED WITH <plugin> AS 0x...`, and MariaDB's grammar takes only a quoted string after
+  `AS`. `MariaDbEngine` now decodes the hash and quotes it, and refuses one that is not hex.
+- **A failed provisioning wizard dropped an account or database it had not created.** The wizard
+  adopts an account or database that already exists, and its rollback then dropped it with the rest
+  -- a customer's existing login, if a later step failed. The rollback now undoes only what the run
+  created, as its documentation said. This applies to every engine.
 - **PostgreSQL could not create a database with the package's own default charset.** `utf8mb4`
   became `ENCODING 'UTF8MB4'`, which Postgres has no encoding for. `PostgresEngine` now maps MySQL
   charset names to Postgres encodings (`utf8mb4`/`utf8mb3` → `UTF8`, `ascii` → `SQL_ASCII`), so the
@@ -99,6 +128,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and throws `GrantNotApplied`, naming each privilege. Revokes run in one transaction too.
 - **A drop whose emptiness check failed was not audited.** The check now runs inside the drop's
   failure handling, so it is logged and dispatches `OperationFailed` like any other failed drop.
+- **PostgreSQL showed a role's grants in the admin's own database only.** `showGrants()` read
+  `information_schema.role_table_grants` on the admin connection, so a role provisioned into any
+  other database showed nothing, and schema and database grants never showed at all. Database
+  grants are now read from `pg_database`, and schema, table, sequence, function and default-privilege
+  grants inside every database the role has entries in. Each line is `<kind> <database> <object>
+  <privilege>`; a database the admin cannot connect to is listed as not readable.
+- **PostgreSQL could not create a `LATIN1` or `SQL_ASCII` database**, the two non-UTF8 encodings it
+  offers: a copy of `template1` keeps its `UTF8` encoding. Any encoding other than `UTF8` now copies
+  `template0` with the `C` locale. The `UTF8` path is unchanged.
+- **PostgreSQL role passwords were sent in clear**, where `log_statement = 'ddl'` or a failed
+  statement could write them to the server log. `CREATE ROLE` and `ALTER ROLE` now send a
+  SCRAM-SHA-256 verifier computed client-side, which Postgres stores as given.
 - **PostgreSQL's "is empty" check always answered "not empty".** It is now read inside the target
   database, so a wizard rollback drops the database it created instead of leaving it behind, and an
   empty database is no longer backed up before a drop.

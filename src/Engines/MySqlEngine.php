@@ -210,6 +210,18 @@ class MySqlEngine implements Engine, HostScopingEngine
     }
 
     /**
+     * Every privilege keyword this engine can put in a GRANT, in the order
+     * of the abstract allow-list. The admin db-console runs as needs each one
+     * WITH GRANT OPTION, or a preset carrying it fails at its grant step.
+     *
+     * @return list<string>
+     */
+    public function grantablePrivileges(): array
+    {
+        return array_values(self::PRIVILEGE_MAP);
+    }
+
+    /**
      * Render the 'user'@'host' account identity. Both parts are already
      * allow-list-validated value objects; the Quoter's literal quoting is
      * belt-and-suspenders.

@@ -32,6 +32,24 @@ as local, so it is no longer exempt from the TLS findings.
   deleted.
 - **The backup disk must use the `local` driver**; any other fails the drop.
 
+### The recommended MySQL and MariaDB admin
+
+An admin created from the previous recommendation cannot grant the `app_standard` or `full` preset,
+so the wizard fails at its grant step. Give it the privileges it was missing, with grant option:
+
+```sql
+GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;
+```
+
+`RELOAD` is no longer recommended, because nothing db-console runs uses it. An admin that already
+has it keeps working; `REVOKE RELOAD ON *.* FROM 'db_console_admin'@'%'` takes it away.
+
+### Wizard rollback
+
+When a provisioning wizard fails, its rollback no longer drops a database or account that existed
+before the run. If you relied on a failed run clearing an existing empty database, drop it yourself.
+
 ### PostgreSQL provisioning
 
 Postgres provisioning works on any server now, which changes what some calls do:
@@ -64,6 +82,20 @@ Postgres provisioning works on any server now, which changes what some calls do:
 - **`OwnershipReleasingEngine` gained five methods** (`holdsPrivilegesOf`, `takeMembership`,
   `releaseMembership`, `releaseOwnershipIn`, `dropReleasedAccount`), and `dependentDatabases()`
   returns a second column, `can_connect`. An engine of your own implementing it must add them.
+- **`showGrants()` returns different lines on Postgres.** Each is `<kind> <database> <object>
+  <privilege>` (`table shop public.orders SELECT`), where it was `<schema> <table> <privilege>` for
+  tables in the admin's own database only. Code parsing the old lines must change.
+- **A non-UTF8 Postgres database uses the `C` locale**, created from `template0`. Text sorts by byte
+  value. `UTF8` databases are created exactly as before.
+- **Postgres role passwords are sent as a SCRAM-SHA-256 verifier.** The server stores it whatever its
+  `password_encryption` setting, so a server set to `md5` gets a SCRAM verifier for these roles; any
+  client from PostgreSQL 10 on can log in with it. A password that SASLprep would rewrite (non-ASCII
+  spaces, soft hyphens, or characters NFKC changes, such as fullwidth letters) is refused with
+  `WeakPassword`, because the verifier would not match it.
+- **`doctor` can now fail on a Postgres server**: for a superuser admin, an admin without `CREATEDB`
+  or `CREATEROLE`, or a server older than 13. A superuser admin also raises `SuspiciousActivity`.
+  `DoctorService` takes a `PostgresAdminCheck` as a new last constructor argument, resolved from the
+  container.
 - **`AdminConnection::run()` throws `LogicException` for a statement scoped to another database.**
   Engines in this package only scope Postgres statements. An engine of your own is affected only if
   it calls `Statement::inDatabase()`.
