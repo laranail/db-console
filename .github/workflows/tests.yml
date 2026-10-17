@@ -98,10 +98,21 @@ jobs:
         run: vendor/bin/pest --no-coverage --colors=never --group=live-pgsql --fail-on-skipped
 
   # The matrix above runs on SQLite, which has no transport to encrypt. This
-  # job proves the TLS probe against servers that answer for real: the image
-  # defaults give a plaintext PostgreSQL and a MySQL whose TLS starts only
-  # when a CA is applied. --fail-on-skipped turns a missing variable into a
-  # failure rather than an empty pass.
+  # job proves doctor's TLS verdicts against servers that answer for real, in
+  # the shape of a managed service: MySQL with require_secure_transport=ON and
+  # PostgreSQL with ssl=on and a pg_hba that rejects every non-TLS host line,
+  # both serving a certificate from a CA generated here, both reached through
+  # restricted admins (never root or a superuser). A plaintext MySQL and a
+  # plaintext PostgreSQL run beside them, so the guard can be pointed at a
+  # server that cannot encrypt and be seen to fail.
+  #
+  # The servers start from steps rather than services: a service container
+  # starts before any step, so it cannot mount a certificate the job has not
+  # generated yet. Every server is reached as db.live-tls.test, because doctor
+  # exempts localhost and 127.0.0.1 from the TLS check, and the certificate
+  # names only that host, so verification is checked against the name.
+  # --fail-on-skipped turns a missing variable into a failure rather than an
+  # empty pass.
   live-tls:
     name: live TLS · mysql 8.4 · pgsql 18
     runs-on: ubuntu-latest
@@ -110,24 +121,6 @@ jobs:
     # dependencies from public repositories.
     permissions:
       contents: read
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: db_console
-          POSTGRES_PASSWORD: secret
-          POSTGRES_DB: db_console_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U db_console" --health-interval 5s --health-timeout 5s --health-retries 10
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: secret
-          MYSQL_DATABASE: db_console_test
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd "mysqladmin ping -psecret" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
@@ -140,14 +133,95 @@ jobs:
         env:
           COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
         run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
-      - name: Copy the MySQL CA out of the service container
-        run: docker cp "${{ job.services.mysql.id }}:/var/lib/mysql/ca.pem" "$RUNNER_TEMP/mysql-ca.pem"
+      - name: Name the runner db.live-tls.test (a host doctor does not exempt as local)
+        run: echo '127.0.0.1 db.live-tls.test' | sudo tee -a /etc/hosts
+      - name: Generate a CA and a server certificate for db.live-tls.test
+        run: |
+          set -euo pipefail
+          tls="$RUNNER_TEMP/tls"
+          mkdir -p "$tls/mysql" "$tls/pgsql"
+          cd "$tls"
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=db-console live-tls CA' -keyout ca.key -out ca.pem
+          openssl req -newkey rsa:2048 -nodes -subj '/CN=db.live-tls.test' -keyout server.key -out server.csr
+          printf 'subjectAltName=DNS:db.live-tls.test\n' > san.ext
+          openssl x509 -req -in server.csr -CA ca.pem -CAkey ca.key -CAcreateserial -days 1 -extfile san.ext -out server.pem
+          cp ca.pem server.pem server.key mysql/
+          cp ca.pem server.pem server.key pgsql/
+          # The only way in over TCP is hostssl; local (the socket, used below
+          # to create the admin) stays open, as on any self-managed server.
+          printf '%s\n' 'local all all trust' 'hostnossl all all all reject' 'hostssl all all all scram-sha-256' > pgsql/pg_hba.conf
+          # Both images run their server as uid 999. PostgreSQL refuses a key
+          # that is not private to that user.
+          chmod 0644 mysql/* pgsql/*
+          chmod 0600 pgsql/server.key
+          sudo chown -R 999:999 mysql pgsql
+      - name: Start the servers
+        run: |
+          set -euo pipefail
+          tls="$RUNNER_TEMP/tls"
+          docker run -d --name mysql-tls -p 3306:3306 -v "$tls/mysql:/etc/db-tls:ro" \
+            -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=db_console_test mysql:8.4 \
+            --require-secure-transport=ON \
+            --ssl-ca=/etc/db-tls/ca.pem --ssl-cert=/etc/db-tls/server.pem --ssl-key=/etc/db-tls/server.key
+          docker run -d --name pgsql-tls -p 5432:5432 -v "$tls/pgsql:/etc/db-tls:ro" \
+            -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=db_console_test postgres:18 \
+            -c ssl=on -c ssl_ca_file=/etc/db-tls/ca.pem \
+            -c ssl_cert_file=/etc/db-tls/server.pem -c ssl_key_file=/etc/db-tls/server.key \
+            -c hba_file=/etc/db-tls/pg_hba.conf
+          # Plaintext only: TLS switched off, so nothing can be negotiated.
+          docker run -d --name mysql-plain -p 3307:3306 \
+            -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=db_console_test mysql:8.4 --tls-version=''
+          docker run -d --name pgsql-plain -p 5433:5432 \
+            -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=db_console_test postgres:18
+          # Over TCP inside each container: the images' first-run servers listen
+          # on the socket only, so a TCP answer means the real server is up.
+          wait_for() {
+            for _ in $(seq 1 60); do
+              if docker exec "$1" sh -c "$2" > /dev/null 2>&1; then return 0; fi
+              sleep 2
+            done
+            docker logs "$1"
+            return 1
+          }
+          wait_for mysql-tls 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent'
+          wait_for mysql-plain 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent'
+          wait_for pgsql-tls 'pg_isready -h 127.0.0.1 -U postgres'
+          wait_for pgsql-plain 'pg_isready -h 127.0.0.1 -U postgres'
+      - name: Create restricted admins (the minimal MySQL grant; CREATEDB CREATEROLE NOSUPERUSER)
+        run: |
+          set -euo pipefail
+          {
+            # The recommended grant, verbatim between the markers. MinimalAdminGrantTest
+            # fails if it drifts from DoctorService's recommendation, and
+            # LiveTlsTest fails if this copy drifts from live-mysql's.
+            # >>> minimal-admin
+            echo "CREATE USER 'db_console_admin'@'%' IDENTIFIED BY 'secret';"
+            echo "GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';"
+            echo "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;"
+            # <<< minimal-admin
+          } > "$RUNNER_TEMP/minimal-admin.sql"
+          # Over the socket, which require_secure_transport counts as secure.
+          for server in mysql-tls mysql-plain; do
+            docker exec -i "$server" mysql -uroot -psecret < "$RUNNER_TEMP/minimal-admin.sql"
+          done
+          for server in pgsql-tls pgsql-plain; do
+            docker exec "$server" psql -v ON_ERROR_STOP=1 -U postgres \
+              -c "CREATE ROLE db_console_admin WITH LOGIN PASSWORD 'secret' CREATEDB CREATEROLE NOSUPERUSER"
+          done
       - name: Live TLS
         env:
+          DB_CONSOLE_LIVE_TLS_HOST: db.live-tls.test
+          DB_CONSOLE_LIVE_TLS_CA: ${{ runner.temp }}/tls/ca.pem
+          DB_CONSOLE_LIVE_TLS_ADMIN_USER: db_console_admin
+          DB_CONSOLE_LIVE_TLS_ADMIN_PASSWORD: secret
           DB_CONSOLE_LIVE_MYSQL_PORT: '3306'
-          DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
+          DB_CONSOLE_LIVE_MYSQL_PLAIN_PORT: '3307'
           DB_CONSOLE_LIVE_PGSQL_PORT: '5432'
+          DB_CONSOLE_LIVE_PGSQL_PLAIN_PORT: '5433'
         run: vendor/bin/pest --no-coverage --colors=never --group=live-tls --fail-on-skipped
+      - name: Server logs
+        if: failure()
+        run: for server in mysql-tls mysql-plain pgsql-tls pgsql-plain; do echo "::group::$server"; docker logs "$server" 2>&1 | tail -n 50; echo '::endgroup::'; done
 
   # The same blind spot for the MySQL family: MySqlEngine's tests compare SQL
   # strings and nothing had ever provisioned against a real server. The admin
