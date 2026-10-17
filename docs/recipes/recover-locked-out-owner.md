@@ -1,6 +1,6 @@
 # Recover a locked-out Owner
 
-Give an Owner who lost their device fifteen minutes to get back in and re-enrol.
+Let an Owner back into db-console for fifteen minutes while their second factor is restored.
 
 ## Steps
 
@@ -10,9 +10,7 @@ From the server's shell, not from a browser:
 php artisan laranail::db-console.security.recover 42
 ```
 
-The operator counts as enrolled until the printed expiry, and the bypass stands in for one step-up. The security recipients are alerted. Within the window, the operator re-enrols in two-factor in their account settings and saves the new recovery codes; running the command again ends the earlier bypass and starts a new one.
-
-If the operator cannot sign in at all because the login itself asks for the lost factor, reset their two-factor from the same shell (for authkit, `TwoFactorAuthentication::disable()` in `tinker`). The last-Owner protection does not apply in the shell. See [Operator security](../tools/operator-security.md).
+db-console's assurance requirements are lifted for operator 42 until the printed expiry, and the security recipients are alerted. It does not touch your application's login: if the Owner cannot sign in, reset their second factor in your application (from the same shell, for example with `tinker`), then have them enrol again before the bypass expires. Running the command again ends the earlier bypass and starts a new one. See [Operator assurance](../tools/operator-assurance.md).
 
 ---
 

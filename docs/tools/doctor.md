@@ -6,17 +6,16 @@ Health-check every server and report the security posture.
 
 `doctor` probes each registered server for reachability, TLS posture, the real capability set, and — the doctrine-not-option check — whether the admin account is **root-like** (`ALL PRIVILEGES ON *.*` or `SUPER`), in which case it fails with the exact minimal-grant fix so setup cannot quietly proceed insecure. It also reports the active secret driver (warning on `app_key`) and the catalog encryption mode. A root-like admin raises a `SuspiciousActivity` alert. `doctor` runs as the last step of install.
 
-## Operator security
+## Operator assurance
 
 | Check | Severity | When |
 |---|---|---|
-| `security:two-factor` | warning | enforcement is `off` (any environment), or `report` in production |
-| `security:two-factor-driver` | error under `require`, else warning | the driver is `null`, or the operator model lacks `two_factor_confirmed_at` / `two_factor_recovery_codes` |
-| `security:owners` | warning | no global Owner has confirmed two-factor with recovery codes |
-| `security:step-up` | error | `none` in production, or `totp` without laranail/authkit |
-| `security:step-up` | warning | `none` outside production, or `session` without authkit (API and CLI operators cannot present a code) |
+| `security:assurance` | error | enforcement is `off` in production |
+| `security:assurance` | warning | `off` outside production, or `report` in production |
+| `security:assurance-binding` | warning | the host has bound no `OperatorAssurance`, so `NullOperatorAssurance` answers |
+| `security:owners` | warning | with enforcement on, no global Owner has a second factor |
 
-See [Operator security](operator-security.md).
+See [Operator assurance](operator-assurance.md).
 
 ## PostgreSQL
 

@@ -2,35 +2,30 @@
 
 ## Unreleased
 
-### Two-factor is required in production
+### Operator assurance is required in production
 
-**In production, an operator without two-factor is now refused writes**, and after seven days
-everything. Unset, `security.two_factor.enforce` is `require` in production and `report`
-elsewhere. Before deploying:
+**In production, db-console now refuses writes from an operator without a second factor, and the
+dangerous operations without a recent confirmation**, as your application reports them through
+`Contracts\OperatorAssurance`. Until you bind one, `NullOperatorAssurance` reports none, so those
+operations are refused. Before deploying:
 
-1. Run `doctor`. `security:owners` warns when no global Owner has confirmed two-factor with
-   recovery codes; `security:two-factor-driver` errors when the operator model lacks
-   `two_factor_confirmed_at` / `two_factor_recovery_codes` (install laranail/authkit and run its
-   migrations).
-2. To stage it, set `DB_CONSOLE_2FA_ENFORCE=report` first: nothing is refused, and each operator
-   who would be gets one alert a day. Switch to `require` when they stop.
-3. `DB_CONSOLE_2FA_ENFORCE=off` restores the old behaviour, and `doctor` warns about it.
+1. Bind your implementation (see the *Implement OperatorAssurance* recipe; Fortify and
+   laranail/authkit both work with a few lines in your application).
+2. Run `doctor`: `security:assurance-binding` names your class, and `security:owners` warns when
+   no global Owner has a second factor.
+3. To stage it, set `DB_CONSOLE_ASSURANCE_ENFORCE=report` first: nothing is refused, and each
+   shortfall is audited and alerted. Switch to `require` when they stop.
+4. `DB_CONSOLE_ASSURANCE_ENFORCE=off` restores the old behaviour; `doctor` errors on that in
+   production.
 
-Run the migrations: two catalog tables are new (`two_factor_grace`, `security_bypasses`).
-
-### Dangerous actions need step-up
-
-Dropping a database or an account, rotating a password, changing an account's host and rotating
-secrets now need step-up from an authenticated operator. With the default `session` driver a web
-operator confirms their password or passkey (`password.confirm`) within 300 seconds; an API or CLI
-operator sends a current authenticator code as `X-DB-Console-OTP` or `--otp`, which needs
-laranail/authkit. Without authkit those callers are refused. A shell run with no operator is not
-asked. `DB_CONSOLE_STEP_UP=none` switches it off, and `doctor` errors on that in production.
+An API client that is refused gets 403 with `"code": "assurance_required"` and a `missing` list.
+`secrets:rotate` run by an authenticated operator needs the same assurance; from the shell with no
+operator it runs as before. Run the migrations: `security_bypasses` is new.
 
 ### Revoking the last Owner is refused
 
 `role:revoke --role=owner --scope=global` fails for the last global Owner, and, while enforcement
-is on, for the last one with two-factor. Assign another Owner first.
+is on, for the last one with a second factor. Assign another Owner first.
 
 ### TLS is applied and measured
 

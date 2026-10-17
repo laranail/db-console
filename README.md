@@ -98,7 +98,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 ### Reference
 
 - [Engines](docs/tools/engines.md) · [Servers & connections](docs/tools/servers.md) · [Secret vault](docs/tools/secret-vault.md) · [Catalog encryption](docs/tools/catalog-encryption.md)
-- [RBAC](docs/tools/rbac.md) · [Operator security](docs/tools/operator-security.md) · [Audit trail](docs/tools/audit.md) · [Wizard & rollback](docs/tools/wizard-executor.md) · [Attach / detach](docs/tools/attach-detach.md) · [Reconcile](docs/tools/reconcile.md) · [Backup before drop](docs/tools/backups.md)
+- [RBAC](docs/tools/rbac.md) · [Operator assurance](docs/tools/operator-assurance.md) · [Audit trail](docs/tools/audit.md) · [Wizard & rollback](docs/tools/wizard-executor.md) · [Attach / detach](docs/tools/attach-detach.md) · [Reconcile](docs/tools/reconcile.md) · [Backup before drop](docs/tools/backups.md)
 - [doctor](docs/tools/doctor.md) · [Commands](docs/tools/commands.md) · [REST API](docs/tools/api.md) · [Webhooks](docs/tools/webhooks.md) · [Events & notifications](docs/tools/events-notifications.md)
 
 ### Recipes
@@ -108,6 +108,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 - [Issue an API token](docs/recipes/issue-api-token.md)
 - [Verify a webhook signature](docs/recipes/verify-webhook-signature.md)
 - [Use the Spatie RBAC driver](docs/recipes/spatie-rbac.md)
+- [Implement OperatorAssurance with Fortify or laranail/authkit](docs/recipes/implement-operator-assurance.md)
 - [Recover a locked-out Owner](docs/recipes/recover-locked-out-owner.md)
 
 ## Stability

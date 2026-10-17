@@ -30,18 +30,17 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 | `rbac.owner_user_id` | `null` | Bootstrap Owner assigned on install. |
 | `rbac.seed_default_roles` | `true` | Seed the shipped roles on install. |
 
-## Operator security
+## Operator assurance
 
 | Key | Default | Purpose |
 |---|---|---|
-| `security.two_factor.enforce` | unset: `require` in production, `report` elsewhere | `off`, `report` or `require`. |
-| `security.two_factor.driver` | `fortify` | `fortify` (reads `two_factor_confirmed_at`) or `null`. |
-| `security.two_factor.grace_days` | `7` | Read-only days after an operator's first refusal. |
-| `security.two_factor.break_glass_minutes` | `15` | How long a `security.recover` bypass lasts. |
-| `security.step_up.driver` | `session` | `session`, `totp` or `none`. |
-| `security.step_up.ttl` | `300` | Seconds a `password.confirm` stays valid for step-up. |
+| `security.assurance.enforce` | unset: `require` in production, `report` elsewhere | `off`, `report` or `require`. |
+| `security.assurance.second_factor` | `writes` | Which permissions need a second factor: `writes`, `all` or `none`. |
+| `security.assurance.recent_confirmation` | drop database, drop account, rotate, change host, secrets | Permissions that need a confirmation within the ttl. |
+| `security.step_up.ttl` | `300` | Seconds a confirmation counts as recent. |
+| `security.break_glass_minutes` | `15` | How long a `security.recover` bypass lasts. |
 
-See [Operator security](tools/operator-security.md).
+The host binds `Contracts\OperatorAssurance`. See [Operator assurance](tools/operator-assurance.md).
 
 ## Notifications & alerts
 
