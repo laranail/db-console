@@ -167,7 +167,9 @@ final readonly class AccountManager
     }
 
     /**
-     * List accounts live from the server.
+     * List accounts live from the server, without those its hosting reserves
+     * (a managed provider's own accounts, the engine's system accounts), so
+     * nothing offers to manage or drop them. exists() still sees them.
      *
      * @return list<string>
      */
@@ -178,10 +180,18 @@ final readonly class AccountManager
         [$engine, $connection] = $this->registry->resolve($server);
         $this->requireAccounts($engine->type()->value, $engine->capabilities()->canCreateAccount);
 
+        $hosting = $this->registry->hosting($server);
+
         $accounts = [];
         foreach ($engine->listAccounts() as $statement) {
             foreach ($connection->select($statement->sql, ['operation' => 'account.view']) as $row) {
-                $accounts[] = implode('@', array_map(strval(...), array_values($row)));
+                $values = array_map(strval(...), array_values($row));
+
+                if ($hosting->isReserved($values[0] ?? '')) {
+                    continue;
+                }
+
+                $accounts[] = implode('@', $values);
             }
         }
 
