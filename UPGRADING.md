@@ -34,6 +34,20 @@ Postgres provisioning works on any server now, which changes what some calls do:
 - **`OwnershipReleasingEngine` gained five methods** (`holdsPrivilegesOf`, `takeMembership`,
   `releaseMembership`, `releaseOwnershipIn`, `dropReleasedAccount`), and `dependentDatabases()`
   returns a second column, `can_connect`. An engine of your own implementing it must add them.
+- **`showGrants()` returns different lines on Postgres.** Each is `<kind> <database> <object>
+  <privilege>` (`table shop public.orders SELECT`), where it was `<schema> <table> <privilege>` for
+  tables in the admin's own database only. Code parsing the old lines must change.
+- **A non-UTF8 Postgres database uses the `C` locale**, created from `template0`. Text sorts by byte
+  value. `UTF8` databases are created exactly as before.
+- **Postgres role passwords are sent as a SCRAM-SHA-256 verifier.** The server stores it whatever its
+  `password_encryption` setting, so a server set to `md5` gets a SCRAM verifier for these roles; any
+  client from PostgreSQL 10 on can log in with it. A password that SASLprep would rewrite (non-ASCII
+  spaces, soft hyphens, or characters NFKC changes, such as fullwidth letters) is refused with
+  `WeakPassword`, because the verifier would not match it.
+- **`doctor` can now fail on a Postgres server**: for a superuser admin, an admin without `CREATEDB`
+  or `CREATEROLE`, or a server older than 13. A superuser admin also raises `SuspiciousActivity`.
+  `DoctorService` takes a `PostgresAdminCheck` as a new last constructor argument, resolved from the
+  container.
 - **`AdminConnection::run()` throws `LogicException` for a statement scoped to another database.**
   Engines in this package only scope Postgres statements. An engine of your own is affected only if
   it calls `Statement::inDatabase()`.
