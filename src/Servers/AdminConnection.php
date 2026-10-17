@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Servers;
 
 use Throwable;
+use LogicException;
 use Illuminate\Database\ConnectionInterface;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
 
@@ -37,12 +39,56 @@ final readonly class AdminConnection
     public function run(StatementList $statements, array $context = []): void
     {
         foreach ($statements as $statement) {
-            try {
-                $this->connection->statement($statement->sql);
-            } catch (Throwable $e) {
-                throw ExceptionTranslator::from($e, [...$context, 'server' => $this->server]);
-            }
+            $this->runStatement($statement, $context);
         }
+    }
+
+    /**
+     * Run one statement. A statement scoped to a database other than this
+     * connection's is refused rather than run here, where it would act on
+     * the wrong database and succeed: route those through ScopedConnections.
+     *
+     * @param array<string, mixed> $context sanitized context for error translation
+     */
+    public function runStatement(Statement $statement, array $context = []): void
+    {
+        $this->assertRunsHere($statement);
+
+        try {
+            $this->connection->statement($statement->sql);
+        } catch (Throwable $e) {
+            throw ExceptionTranslator::from($e, [...$context, 'server' => $this->server]);
+        }
+    }
+
+    /**
+     * A single scalar from a statement an engine produced, on this
+     * connection. Same scope rule as runStatement().
+     *
+     * @param array<string, mixed> $context
+     */
+    public function scalarStatement(Statement $statement, array $context = []): mixed
+    {
+        $this->assertRunsHere($statement);
+
+        return $this->scalar($statement->sql, [], $context);
+    }
+
+    /**
+     * The database this connection is on.
+     */
+    public function database(): string
+    {
+        return (string) $this->connection->getDatabaseName();
+    }
+
+    /**
+     * Whether a statement belongs on this connection: unscoped, or scoped
+     * to the database this connection is already on.
+     */
+    public function runsHere(Statement $statement): bool
+    {
+        return $statement->database === null || $statement->database === $this->database();
     }
 
     /**
@@ -87,5 +133,15 @@ final readonly class AdminConnection
     public function underlying(): ConnectionInterface
     {
         return $this->connection;
+    }
+
+    private function assertRunsHere(Statement $statement): void
+    {
+        if (! $this->runsHere($statement)) {
+            throw new LogicException(
+                "statement is scoped to database '{$statement->database}' but the admin connection for server "
+                . "'{$this->server}' is on '{$this->database()}'; run it through ScopedConnections",
+            );
+        }
     }
 }

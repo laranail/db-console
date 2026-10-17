@@ -15,9 +15,11 @@ use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
+use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
@@ -37,6 +39,7 @@ final readonly class DatabaseManager
         private Catalog $catalog,
         private DBConsoleLogger $log,
         private BackupService $backups,
+        private ScopedConnections $scoped,
     ) {}
 
     public function create(string $server, DbName $db, Charset $charset): OperationResult
@@ -140,11 +143,22 @@ final readonly class DatabaseManager
     {
         [$engine, $connection] = $this->registry->resolve($server);
 
-        // Only MySQL/MariaDB expose a reliable per-database table count from
-        // the admin connection (information_schema.table_schema == the
-        // database). For every other engine — where "empty" cannot be
-        // checked without switching databases — report NON-empty
-        // conservatively, so backups always run and a rollback never drops.
+        // Postgres keeps its catalog per database, so the count has to be read
+        // inside the target database rather than from the admin connection.
+        if ($engine instanceof EmptinessProbingEngine) {
+            $count = 0;
+            foreach ($engine->countUserObjects($db) as $statement) {
+                $count += (int) $this->scoped->scalar($connection, $statement, ['operation' => 'database.view']);
+            }
+
+            return $count === 0;
+        }
+
+        // MySQL/MariaDB expose a reliable per-database table count from the
+        // admin connection (information_schema.table_schema == the database).
+        // For every other engine — where "empty" cannot be checked without
+        // switching databases — report NON-empty conservatively, so backups
+        // always run and a rollback never drops.
         if (! $engine->type()->isMysqlFamily()) {
             return false;
         }
