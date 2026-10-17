@@ -151,8 +151,8 @@ final readonly class DatabaseManager
     {
         [$engine, $connection] = $this->registry->resolve($server);
 
-        // Postgres keeps its catalog per database, so the count has to be read
-        // inside the target database rather than from the admin connection.
+        // The engine knows where its catalog lives: Postgres reads it inside the
+        // target database, the MySQL family from information_schema anywhere.
         if ($engine instanceof EmptinessProbingEngine) {
             $count = 0;
             foreach ($engine->countUserObjects($db) as $statement) {
@@ -162,22 +162,9 @@ final readonly class DatabaseManager
             return $count === 0;
         }
 
-        // MySQL/MariaDB expose a reliable per-database table count from the
-        // admin connection (information_schema.table_schema == the database).
-        // For every other engine — where "empty" cannot be checked without
-        // switching databases — report NON-empty conservatively, so backups
-        // always run and a rollback never drops.
-        if (! $engine->type()->isMysqlFamily()) {
-            return false;
-        }
-
-        $count = $connection->scalar(
-            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?',
-            [$db->value],
-            ['operation' => 'database.view'],
-        );
-
-        return (int) $count === 0;
+        // Every other engine cannot say: report NON-empty conservatively, so
+        // backups always run and a rollback never drops.
+        return false;
     }
 
     /**

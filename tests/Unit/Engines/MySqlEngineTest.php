@@ -9,6 +9,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Engines\MySqlEngine;
+use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Engines\MariaDbEngine;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
@@ -197,3 +198,21 @@ describe('recreating an account from its stored hash', function (): void {
         ))->toThrow(InvalidArgumentException::class);
     });
 });
+
+// A database holding only a stored procedure, an event or a trigger is not
+// empty, and a rollback that thought so would drop the procedure with it.
+it('counts every kind of object a database can hold for the emptiness check', function (string $class): void {
+    $engine = new $class;
+
+    expect($engine)->toBeInstanceOf(EmptinessProbingEngine::class);
+
+    $statements = $engine->countUserObjects(new DbName('shop_prod'))->all();
+
+    expect($statements)->toHaveCount(1)
+        ->and($statements[0]->database)->toBeNull();   // information_schema reads from anywhere
+
+    $sql = $statements[0]->sql;
+    foreach (['TABLES' => 'TABLE_SCHEMA', 'ROUTINES' => 'ROUTINE_SCHEMA', 'EVENTS' => 'EVENT_SCHEMA', 'TRIGGERS' => 'TRIGGER_SCHEMA'] as $table => $column) {
+        expect($sql)->toContain("information_schema.{$table} WHERE {$column} = 'shop_prod'");
+    }
+})->with([MySqlEngine::class, MariaDbEngine::class]);

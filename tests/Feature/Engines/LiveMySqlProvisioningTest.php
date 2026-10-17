@@ -365,6 +365,29 @@ it('reports emptiness from the admin connection, so a rollback drops only what i
         ->and(liveMyDatabaseCount($used))->toBe(1);
 });
 
+// Before it counted only information_schema.TABLES, so a database holding a
+// stored procedure or an event alone read as empty, and a wizard rollback
+// dropped it along with them.
+it('does not call a database empty when it holds only a routine or an event', function (): void {
+    $routine = liveMyName('routine');
+    $event = liveMyName('event');
+    $this->cleanup = [['database', $routine, null], ['database', $event, null]];
+    $databases = app(DatabaseManager::class);
+
+    $databases->create('live_mysql', new DbName($routine), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    $databases->create('live_mysql', new DbName($event), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    liveMyAs($routine)->unprepared('CREATE PROCEDURE ping() SELECT 1');
+    liveMyAs($event)->unprepared('CREATE EVENT tick ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1');
+    liveMyClose($routine);
+    liveMyClose($event);
+
+    expect($databases->isEmpty('live_mysql', new DbName($routine)))->toBeFalse()
+        ->and($databases->isEmpty('live_mysql', new DbName($event)))->toBeFalse();
+
+    $databases->rollbackCreatedDatabase('live_mysql', new DbName($routine));
+    expect(liveMyDatabaseCount($routine))->toBe(1);
+});
+
 it('rolls the wizard back without dropping an account it did not create', function (): void {
     $db = liveMyName('rolled');
     $user = liveMyName('existing');
