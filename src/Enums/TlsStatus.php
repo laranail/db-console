@@ -11,7 +11,7 @@ use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
  * TLS status of an admin connection, as reported by doctor and the
- * connection checks.
+ * connection checks. Measured from the live session, not read from config.
  */
 enum TlsStatus: string implements Enumerator, Translatable
 {
@@ -28,4 +28,13 @@ enum TlsStatus: string implements Enumerator, Translatable
 
     #[Label('Not applicable')]
     case NotApplicable = 'n/a';
+
+    /**
+     * TLS is configured, but the session could not be asked whether it is
+     * encrypted (unreachable, or a driver with no way to ask). Reported as
+     * unknown rather than as the configured state, which is what used to be
+     * reported whether or not it was true.
+     */
+    #[Label('Configured but not measured')]
+    case Unmeasured = 'unmeasured';
 }

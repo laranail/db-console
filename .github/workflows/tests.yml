@@ -25,7 +25,7 @@ jobs:
       # the suite would test a manifest this package does not ship. Remove this
       # line only once that default is ["*"].
       laravel-versions: '["*"]'
-      php-extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, sqlite3, pdo_sqlite'
+      php-extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql'
 
   # The matrix above runs on SQLite, and the engine tests compare SQL strings,
   # so nothing there can say whether Postgres accepts the SQL. This job
@@ -96,6 +96,58 @@ jobs:
           DB_CONSOLE_LIVE_PGSQL_SUPERUSER: postgres
           DB_CONSOLE_LIVE_PGSQL_SUPERUSER_PASSWORD: secret
         run: vendor/bin/pest --no-coverage --colors=never --group=live-pgsql --fail-on-skipped
+
+  # The matrix above runs on SQLite, which has no transport to encrypt. This
+  # job proves the TLS probe against servers that answer for real: the image
+  # defaults give a plaintext PostgreSQL and a MySQL whose TLS starts only
+  # when a CA is applied. --fail-on-skipped turns a missing variable into a
+  # failure rather than an empty pass.
+  live-tls:
+    name: live TLS · mysql 8.4 · pgsql 18
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Reads the repository and nothing else; the token is used only to fetch
+    # dependencies from public repositories.
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: db_console
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: db_console_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U db_console" --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: db_console_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping -psecret" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, pdo_sqlite, pdo_pgsql, pdo_mysql'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+      - name: Copy the MySQL CA out of the service container
+        run: docker cp "${{ job.services.mysql.id }}:/var/lib/mysql/ca.pem" "$RUNNER_TEMP/mysql-ca.pem"
+      - name: Live TLS
+        env:
+          DB_CONSOLE_LIVE_MYSQL_PORT: '3306'
+          DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
+          DB_CONSOLE_LIVE_PGSQL_PORT: '5432'
+        run: vendor/bin/pest --no-coverage --colors=never --group=live-tls --fail-on-skipped
 
   # The same blind spot for the MySQL family: MySqlEngine's tests compare SQL
   # strings and nothing had ever provisioned against a real server. The admin

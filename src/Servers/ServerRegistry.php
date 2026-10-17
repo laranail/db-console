@@ -13,6 +13,7 @@ use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
+use Simtabi\Laranail\DBConsole\Encryption\TlsConnectionOptions;
 
 /**
  * The multi-server entry point (section 5). Resolves a server name to an
@@ -36,6 +37,7 @@ final class ServerRegistry
         private readonly Config $config,
         private readonly DatabaseManager $db,
         private readonly EngineFactory $engines,
+        private readonly TlsConnectionOptions $tls,
     ) {}
 
     /**
@@ -106,12 +108,16 @@ final class ServerRegistry
         $definition = $this->definition($server);
         $engine = $this->engines->make($definition->engine);
 
-        if ($this->config->get("database.connections.{$definition->connection}") === null) {
+        /** @var array<string, mixed>|null $connectionConfig */
+        $connectionConfig = $this->config->get("database.connections.{$definition->connection}");
+        if ($connectionConfig === null) {
             throw ServerMisconfigured::named(
                 $server,
                 "admin connection '{$definition->connection}' is not defined in config/database.php",
             );
         }
+
+        $this->applyTls($definition, $connectionConfig);
 
         $connection = new AdminConnection($server, $this->db->connection($definition->connection));
 
@@ -156,6 +162,29 @@ final class ServerRegistry
     {
         $this->catalogServers = $servers;
         $this->resolved = [];
+    }
+
+    /**
+     * Write the server's TLS options into its admin connection config before
+     * the connection is made. Written to config rather than passed to
+     * connectUsing() so everything else reading that connection (the backup
+     * service copies it) sees the same settings. A connection already opened
+     * without them is purged so the next use reconnects with TLS.
+     *
+     * @param array<string, mixed> $connectionConfig
+     */
+    private function applyTls(ServerDefinition $definition, array $connectionConfig): void
+    {
+        $withTls = $this->tls->apply($definition, $connectionConfig);
+        if ($withTls === $connectionConfig) {
+            return;
+        }
+
+        $this->config->set("database.connections.{$definition->connection}", $withTls);
+
+        if (array_key_exists($definition->connection, $this->db->getConnections())) {
+            $this->db->purge($definition->connection);
+        }
     }
 
     /**
