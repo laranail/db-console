@@ -36,6 +36,10 @@ jobs:
     name: live TLS · mysql 8.4 · pgsql 18
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Reads the repository and nothing else; the token is used only to fetch
+    # dependencies from public repositories.
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:18
