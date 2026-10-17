@@ -160,7 +160,7 @@ final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbi
 
         return new StatementList(
             Statement::sensitive(
-                sql: "CREATE ROLE {$role} WITH LOGIN PASSWORD " . $q->literal($p->reveal()),
+                sql: "CREATE ROLE {$role} WITH LOGIN PASSWORD " . $q->literal(ScramSha256::verifier($p->reveal())),
                 redacted: "CREATE ROLE {$role} WITH LOGIN PASSWORD '[redacted]'",
             ),
         );
@@ -249,7 +249,7 @@ final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbi
 
         return new StatementList(
             Statement::sensitive(
-                sql: "ALTER ROLE {$role} WITH PASSWORD " . $q->literal($p->reveal()),
+                sql: "ALTER ROLE {$role} WITH PASSWORD " . $q->literal(ScramSha256::verifier($p->reveal())),
                 redacted: "ALTER ROLE {$role} WITH PASSWORD '[redacted]'",
             ),
         );
