@@ -39,7 +39,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CR
 
 1. Set `DB_CONSOLE_OWNER_USER_ID` before running `php artisan laranail::db-console.install` (see Install), so the installer can assign the bootstrap Owner.
 2. Add a dedicated admin connection named `db_console_admin` to `config/database.php`, using the minimal admin account above. The `primary` server in `config/db-console.php` uses it by default; `DB_CONSOLE_ENGINE` and `DB_CONSOLE_CONNECTION` override the engine and connection name.
-3. Check the server before provisioning anything. TLS is mandatory by default, and `doctor` fails on a root-like account:
+3. Check the server before provisioning anything. TLS is mandatory by default: set `DB_CONSOLE_PRIMARY_TLS_CA` to the server's CA certificate, because `doctor` measures the live session and fails a remote one that is plaintext. It also fails on a root-like account:
 
    ```bash
    php artisan laranail::db-console.doctor
@@ -98,7 +98,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 ### Reference
 
 - [Engines](docs/tools/engines.md) · [Servers & connections](docs/tools/servers.md) · [Secret vault](docs/tools/secret-vault.md) · [Catalog encryption](docs/tools/catalog-encryption.md)
-- [RBAC](docs/tools/rbac.md) · [Audit trail](docs/tools/audit.md) · [Wizard & rollback](docs/tools/wizard-executor.md) · [Attach / detach](docs/tools/attach-detach.md) · [Reconcile](docs/tools/reconcile.md)
+- [RBAC](docs/tools/rbac.md) · [Audit trail](docs/tools/audit.md) · [Wizard & rollback](docs/tools/wizard-executor.md) · [Attach / detach](docs/tools/attach-detach.md) · [Reconcile](docs/tools/reconcile.md) · [Backup before drop](docs/tools/backups.md)
 - [doctor](docs/tools/doctor.md) · [Commands](docs/tools/commands.md) · [REST API](docs/tools/api.md) · [Webhooks](docs/tools/webhooks.md) · [Events & notifications](docs/tools/events-notifications.md)
 
 ### Recipes

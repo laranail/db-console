@@ -14,6 +14,7 @@ use Simtabi\Laranail\Package\Tools\Package;
 use Simtabi\Laranail\DBConsole\Doctor\Checks;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Models\AuditLog;
+use Simtabi\Laranail\DBConsole\Encryption\TlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Illuminate\Database\ConnectionResolverInterface;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
@@ -38,6 +39,7 @@ use Simtabi\Laranail\DBConsole\Catalog\CatalogConnection;
 use Simtabi\Laranail\DBConsole\Listeners\WriteChannelLog;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ReconcileService;
+use Simtabi\Laranail\DBConsole\Encryption\SessionTlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
@@ -318,6 +320,8 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->app->singleton(WizardExecutor::class);
         $this->app->singleton(ProvisioningWizard::class);
         $this->app->singleton(ReconcileService::class);
+        // The live session, not config, says whether TLS is in effect.
+        $this->app->bindIf(TlsProbe::class, SessionTlsProbe::class);
         $this->app->singleton(TlsChecker::class);
         $this->app->singleton(AtRestStatusReader::class);
         $this->app->singleton(SecretRotator::class);

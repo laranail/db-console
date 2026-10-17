@@ -11,12 +11,16 @@ Add a server to `config/db-console.php` (or register one at runtime with `server
     'primary' => [
         'engine' => 'mysql',
         'connection' => 'db_console_admin',   // a dedicated admin connection in database.php
-        'tls' => ['enabled' => true, 'verify' => true],
+        'tls' => [
+            'enabled' => true,
+            'verify' => true,
+            'ca' => env('DB_CONSOLE_PRIMARY_TLS_CA'),   // the server's CA certificate
+        ],
     ],
 ],
 ```
 
-Admin work always runs over this dedicated connection, never your app's default.
+Admin work always runs over this dedicated connection, never your app's default. The `tls` block is applied to that connection, and `doctor` checks the live session rather than the config. On MySQL and MariaDB, TLS starts only when `ca` (or `cert`/`key`) is set; a managed provider publishes its CA certificate for this. See [Servers & connections](tools/servers.md#tls).
 
 ## Provision with the wizard
 

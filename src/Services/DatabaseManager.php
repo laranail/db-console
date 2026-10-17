@@ -93,7 +93,14 @@ final readonly class DatabaseManager
         }
 
         if (! $empty) {
-            $path = $this->backups->snapshot($server, $db);
+            // A failed snapshot stops the drop, and is audited like any other
+            // failed drop.
+            try {
+                $path = $this->backups->snapshot($server, $db);
+            } catch (DBConsoleException $e) {
+                $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
+            }
+
             if ($path !== null) {
                 $this->events->dispatch(new DatabaseBackedUp($server, ['target' => $db->value, 'path' => $path]));
             }

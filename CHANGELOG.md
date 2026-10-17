@@ -48,6 +48,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
+  failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
+  `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any
+  other failed drop. `backup.abort_drop_on_failure=false` restores the old log-and-drop.
+- **Every backup of a database overwrote the last, and PostgreSQL archives were named `.sql`.**
+  Snapshots are now `{database}-{UTC timestamp}.dump` (PostgreSQL) or `.sql`, so a restore picks
+  `pg_restore` for a custom-format archive instead of replaying it through psql.
+- **A `DATABASE_URL` admin connection backed up the url's database, not the target.** The url is now
+  expanded before the target database is set, so it can no longer override it.
+- **`backup.retention_days` was never read.** Snapshots of a database older than it are now pruned
+  after each successful snapshot; `0` keeps them all.
+- **A non-local backup disk dumped into the working directory.** `path()` on S3 returns the object
+  key. The snapshot now fails, with the disk and driver named, unless the disk uses the `local` driver.
+
+- **The `tls` block was never applied, and `doctor` reported TLS from config alone.** Nothing turned
+  `tls.ca/cert/key/verify` into driver options, so an admin connection could run in plaintext while
+  `TlsChecker` reported `required_ok` because `tls.enabled` was true. `ServerRegistry` now writes the
+  block into the admin connection before connecting (PDO SSL options for MySQL/MariaDB; `sslmode`,
+  `sslrootcert`, `sslcert`, `sslkey` for PostgreSQL; `encrypt`, `trust_server_certificate` for SQL
+  Server), purging a connection already opened without it. `TlsChecker` asks the live session
+  through the new `TlsProbe` contract (default `SessionTlsProbe`), so a plaintext session is `off`
+  and fails `doctor` whatever the config says. A new `TlsStatus::Unmeasured` case covers TLS that
+  is configured but could not be checked.
+
+  **Behaviour change:** `TlsChecker::status()` now opens the admin connection to measure it, where
+  it used to read config only; `encryption:status` therefore needs the server reachable to report
+  anything but `unmeasured`. A PostgreSQL server without SSL now refuses a connection with
+  `tls.enabled=true` (`sslmode=require`) instead of falling back to plaintext.
+
+- **`TlsChecker::isLocal()` treated a connection configured only by `url` (`DATABASE_URL`) as
+  localhost**, which exempted exactly the managed-database setups from the TLS check. It now parses
+  the url and checks every `read`/`write` host.
 - **The recommended MySQL/MariaDB admin could not grant the `app_standard` preset**, nor `full`:
   `GRANT` needs `GRANT OPTION` on each privilege it hands out, and the recommendation left out
   `CREATE TEMPORARY TABLES`, `LOCK TABLES`, `REFERENCES`, `CREATE ROUTINE`, `ALTER ROUTINE`, `EVENT`

@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### TLS is applied and measured
+
+The `tls` block on a server is now written into its admin connection, and
+`TlsChecker` reports what the live session negotiated instead of what config
+says. Three things can change on upgrade:
+
+- **MySQL/MariaDB with `tls.enabled=true` and no `tls.ca` now fails `doctor`
+  on a remote server.** pdo_mysql never started TLS without a CA, certificate
+  or key, so these sessions were always plaintext; they are now reported as
+  such. Set `DB_CONSOLE_PRIMARY_TLS_CA` (or `tls.ca`) to the server's CA.
+- **PostgreSQL with `tls.enabled=true` now connects with `sslmode=require`**
+  (`verify-full` when `verify` is on). A server without SSL that used to
+  accept a plaintext connection now refuses it.
+- **`encryption:status` and `TlsChecker::status()` open the admin
+  connection.** An unreachable server reports `unmeasured`.
+
+A connection configured only by `url` (`DATABASE_URL`) is no longer treated
+as local, so it is no longer exempt from the TLS findings.
+
+### Backup before drop
+
+- **A failed backup now stops the drop** and throws `BackupFailed`. Set
+  `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` to keep dropping after a
+  logged warning.
+- **Backup files are timestamped**, and PostgreSQL ones end in `.dump`. Tooling
+  that read `db-console/backups/{server}/{database}.sql` must list the
+  directory instead. Snapshots older than `backup.retention_days` (30) are
+  deleted.
+- **The backup disk must use the `local` driver**; any other fails the drop.
+
 ### The recommended MySQL and MariaDB admin
 
 An admin created from the previous recommendation cannot grant the `app_standard` or `full` preset,
