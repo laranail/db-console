@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   18 with `ssl=on` and a `pg_hba` that rejects every `hostnossl` line, both serving a certificate
   from a CA generated in the job, both reached as restricted admins (the minimal MySQL grant, a
   `CREATEDB CREATEROLE NOSUPERUSER` role) through a host name doctor does not exempt as local. The
-  `live-tls` group asserts that plaintext is refused and `tls.enabled=false` is a TLS error, that
-  `verify=false` is an Unverified warning, and that the CA with `verify=true` is green. A plaintext
+  `live-tls` group asserts that a plaintext session is refused and is a TLS error, that
+  `verify=false` is an Unverified warning, and that the CA with `verify=true` is green. On
+  PostgreSQL, `tls.enabled=false` is still encrypted, because libpq's default `sslmode=prefer`
+  takes the TLS the server offers, and doctor warns that nothing requires it; a plaintext session
+  there needs `sslmode=disable`. A plaintext
   MySQL and PostgreSQL run beside them, and pointing `tls.enabled=true` at either turns doctor red.
   Every refusal is paired with a connection the same server accepts, so a server that is down fails
   the group instead of passing it. `LiveTlsWorkflowTest` pins each copy of the minimal grant in the

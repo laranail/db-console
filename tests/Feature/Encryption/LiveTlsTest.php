@@ -44,8 +44,9 @@ function liveTlsEnv(string $name): string
  *
  * @param 'mysql'|'pgsql' $driver
  * @param array<string, mixed> $tls
+ * @param array<string, mixed> $connection extra connection keys, such as sslmode
  */
-function liveTlsServer(string $name, string $driver, string $portEnv, array $tls): string
+function liveTlsServer(string $name, string $driver, string $portEnv, array $tls, array $connection = []): string
 {
     config()->set("database.connections.{$name}", [
         'driver'   => $driver,
@@ -54,6 +55,7 @@ function liveTlsServer(string $name, string $driver, string $portEnv, array $tls
         'database' => 'db_console_test',
         'username' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_ADMIN_USER'),
         'password' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_ADMIN_PASSWORD'),
+        ...$connection,
     ]);
     config()->set("laranail.db-console.servers.{$name}", [
         'engine' => $driver, 'connection' => $name, 'tls' => $tls,
@@ -194,23 +196,39 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
 })->group('live-tls');
 
 describe('postgresql 18 with ssl=on and hostssl only', function (): void {
+    // libpq's own default is sslmode=prefer, so a plaintext session has to be
+    // asked for: tls.enabled=false leaves the connection's sslmode alone.
     it('refuses a plaintext session', function (): void {
         liveTlsExpectAccepts('pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_pgsql_tls_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_pgsql_tls_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false], ['sslmode' => 'disable']);
 
         expect(fn () => app(ServerRegistry::class)->ensureReachable($server))->toThrow(ServerUnreachable::class);
     });
 
     // Doctor stops at the reachability error, so the `:tls` finding it would
     // add is read from TlsChecker, which builds it.
-    it('fails doctor with a TLS error when tls.enabled=false', function (): void {
+    it('fails doctor with a TLS error when tls.enabled=false and the session is plaintext', function (): void {
         liveTlsExpectAccepts('pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_pgsql_tls_disabled', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_pgsql_tls_disabled', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false], ['sslmode' => 'disable']);
 
         expect(liveTlsSeverity($server))->toBe(Severity::Error)
             ->and(liveTlsDoctorIsRed(liveTlsDoctor($server)))->toBeTrue();
+    });
+
+    // Unlike pdo_mysql, libpq negotiates TLS whenever the server offers it,
+    // so tls.enabled=false is still encrypted here. Doctor cannot see that
+    // this server refuses plaintext, so it warns that nothing requires TLS.
+    it('warns when tls.enabled=false is encrypted only because libpq prefers TLS', function (): void {
+        $server = liveTlsServer('live_pgsql_tls_preferred', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false]);
+        $doctor = liveTlsDoctor($server);
+
+        expect(config("database.connections.{$server}.sslmode"))->toBeNull()
+            ->and(app(TlsChecker::class)->measure($server))->toBeTrue()
+            ->and(app(TlsChecker::class)->status($server))->toBe(TlsStatus::Unverified)
+            ->and($doctor['tls']->severity)->toBe(Severity::Warning)
+            ->and($doctor['tls']->message)->toContain('does not require it (tls.enabled=false)');
     });
 
     it('warns that verify=false is encrypted but unverified', function (): void {
