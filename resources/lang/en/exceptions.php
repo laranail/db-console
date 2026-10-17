@@ -38,6 +38,10 @@ return [
         'failed' => 'The operation failed at the server. Details are in the db-console log.',
     ],
 
+    'backup' => [
+        'failed' => "The backup of ':target' on server ':server' failed, so the database was not dropped. Details are in the db-console log.",
+    ],
+
     'rollback' => [
         'failed' => 'A rollback step (:step) failed — the server may be in a partial state and needs review.',
     ],

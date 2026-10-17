@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Backup;
 
 use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Exceptions\BackupFailed;
 
 /**
  * The backup seam. Snapshots a specific database before a destructive drop
@@ -16,6 +17,9 @@ interface BackupService
     /**
      * Snapshot a database and return the backup path, or null when backup is
      * disabled or unavailable (db-tools not installed).
+     *
+     * @throws BackupFailed when the snapshot was attempted and failed, so the
+     *                      caller does not drop
      */
     public function snapshot(string $server, DbName $database): ?string;
 

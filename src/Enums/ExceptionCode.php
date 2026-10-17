@@ -35,6 +35,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
     // Execution
     case OperationFailed = 'operation.failed';
     case RollbackFailed = 'rollback.failed';
+    case BackupFailed = 'backup.failed';
 
     // Authorization
     case NotAuthorized = 'not_authorized';

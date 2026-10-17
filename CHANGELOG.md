@@ -23,6 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
+  failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
+  `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any
+  other failed drop. `backup.abort_drop_on_failure=false` restores the old log-and-drop.
+- **Every backup of a database overwrote the last, and PostgreSQL archives were named `.sql`.**
+  Snapshots are now `{database}-{UTC timestamp}.dump` (PostgreSQL) or `.sql`, so a restore picks
+  `pg_restore` for a custom-format archive instead of replaying it through psql.
+- **A `DATABASE_URL` admin connection backed up the url's database, not the target.** The url is now
+  expanded before the target database is set, so it can no longer override it.
+- **`backup.retention_days` was never read.** Snapshots of a database older than it are now pruned
+  after each successful snapshot; `0` keeps them all.
+- **A non-local backup disk dumped into the working directory.** `path()` on S3 returns the object
+  key. The snapshot now fails, with the disk and driver named, unless the disk uses the `local` driver.
+
 - **The `tls` block was never applied, and `doctor` reported TLS from config alone.** Nothing turned
   `tls.ca/cert/key/verify` into driver options, so an admin connection could run in plaintext while
   `TlsChecker` reported `required_ok` because `tls.enabled` was true. `ServerRegistry` now writes the

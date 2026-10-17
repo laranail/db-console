@@ -21,6 +21,17 @@ says. Three things can change on upgrade:
 A connection configured only by `url` (`DATABASE_URL`) is no longer treated
 as local, so it is no longer exempt from the TLS findings.
 
+### Backup before drop
+
+- **A failed backup now stops the drop** and throws `BackupFailed`. Set
+  `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` to keep dropping after a
+  logged warning.
+- **Backup files are timestamped**, and PostgreSQL ones end in `.dump`. Tooling
+  that read `db-console/backups/{server}/{database}.sql` must list the
+  directory instead. Snapshots older than `backup.retention_days` (30) are
+  deleted.
+- **The backup disk must use the `local` driver**; any other fails the drop.
+
 ### PostgreSQL provisioning
 
 Postgres provisioning works on any server now, which changes what some calls do:

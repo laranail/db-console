@@ -224,10 +224,13 @@ return [
     | Requires laranail/db-tools; disabled with a clear notice when absent.
     */
     'backup' => [
-        'enabled'        => true,
-        'before_drop'    => true,
-        'disk'           => env('DB_CONSOLE_BACKUP_DISK', 'local'),
-        'retention_days' => 30,
+        'enabled'     => true,
+        'before_drop' => true,
+        // A failed backup stops the drop. Set false to log it and drop anyway,
+        // the behaviour before this key existed.
+        'abort_drop_on_failure' => (bool) env('DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE', true),
+        'disk'                  => env('DB_CONSOLE_BACKUP_DISK', 'local'),
+        'retention_days'        => 30,
     ],
 
     /*

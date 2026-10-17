@@ -13,6 +13,10 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 
 `servers.{name}` defines a config-backed server: `engine`, `connection` (a `database.php` connection), and `tls` (`enabled`, `verify`, `ca`, `cert`, `key`). The `tls` block is written into that connection before it opens, and `doctor` measures whether the session is actually encrypted; see [Servers & connections](tools/servers.md#tls). `default` (env `DB_CONSOLE_SERVER`) names the fallback server.
 
+## Backup
+
+`backup.enabled`, `backup.before_drop`, `backup.abort_drop_on_failure` (a failed snapshot stops the drop), `backup.disk` (must use the `local` driver) and `backup.retention_days`. See [Backup before drop](tools/backups.md).
+
 ## Secrets
 
 `secrets.driver` selects the vault (`app_key` | `kms` | `vault` | `reference`). `app_key` is blocked in production without an explicit override. See [Secret vault](tools/secret-vault.md).
