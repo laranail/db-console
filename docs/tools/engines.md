@@ -31,12 +31,11 @@ literal so the password is never known. MySQL takes the hash as `AS 0x...`, whic
 `MariaDbEngine` decodes the hex and quotes it. Both refuse a hash literal that is not whole bytes of
 hex, since it is spliced into the statement.
 
-The emptiness check before a drop or a wizard rollback counts `information_schema.tables` for the
-database, from the admin connection.
-
 These paths are tested against MySQL 8.4 and 9 and MariaDB 11.4 and latest by the `live-mysql` CI
 job, as an admin holding exactly the grant `doctor` recommends (`Doctor\MinimalAdminGrant`), with
-`sql_require_primary_key=ON` on MySQL.
+`sql_require_primary_key=ON` on MySQL. The job also takes a backup before a drop and restores it, as
+that admin with GTID on: db-tools dumps with `--single-transaction --no-tablespaces`, which needs no
+`PROCESS`, `LOCK TABLES` or `RELOAD`.
 
 ## PostgreSQL
 
