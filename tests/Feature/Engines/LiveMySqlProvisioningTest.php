@@ -236,13 +236,19 @@ it('can grant every privilege a preset hands out', function (): void {
         new Password(LIVE_MY_PASSWORD),
     );
 
-    $grants = strtoupper(implode("\n", array_map(
-        static fn (object $row): string => (string) array_values((array) $row)[0],
-        liveMyAs(null)->select("SHOW GRANTS FOR '{$user}'@'%'"),
-    )));
-    expect($grants)->toContain('CREATE TEMPORARY TABLES')
-        ->and($grants)->toContain('LOCK TABLES')
-        ->and($grants)->toContain('TRIGGER');
+    // MySQL folds a complete database-level set into ALL PRIVILEGES in
+    // SHOW GRANTS; schema_privileges lists each one.
+    $held = array_map(
+        static fn (object $row): string => (string) $row->privilege_type,
+        liveMyAs(null)->select(
+            'SELECT privilege_type FROM information_schema.schema_privileges WHERE grantee = ? AND table_schema = ?',
+            ["'{$user}'@'%'", $db],
+        ),
+    );
+
+    foreach (['CREATE TEMPORARY TABLES', 'LOCK TABLES', 'TRIGGER', 'EVENT', 'CREATE ROUTINE', 'REFERENCES'] as $privilege) {
+        expect($held)->toContain($privilege);
+    }
 });
 
 it('revokes a privilege so the account can still read but no longer write', function (): void {
