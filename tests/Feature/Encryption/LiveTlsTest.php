@@ -143,7 +143,7 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
     it('refuses a plaintext session', function (): void {
         liveTlsExpectAccepts('mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_mysql_tls_off', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_mysql_tls_off', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
         expect(fn () => app(ServerRegistry::class)->ensureReachable($server))->toThrow(ServerUnreachable::class);
     });
@@ -153,7 +153,7 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
     it('fails doctor with a TLS error when tls.enabled=false', function (): void {
         liveTlsExpectAccepts('mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_mysql_tls_disabled', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_mysql_tls_disabled', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
         expect(liveTlsSeverity($server))->toBe(Severity::Error)
             ->and(liveTlsDoctorIsRed(liveTlsDoctor($server)))->toBeTrue();
@@ -164,7 +164,7 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
     it('refuses tls.enabled=true without a CA, because pdo_mysql never starts TLS', function (): void {
         liveTlsExpectAccepts('mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_mysql_tls_no_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', ['enabled' => true, 'verify' => false]);
+        $server = liveTlsServer('live_mysql_tls_no_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
 
         expect(fn () => app(ServerRegistry::class)->ensureReachable($server))->toThrow(ServerUnreachable::class)
             ->and(liveTlsDoctorIsRed(liveTlsDoctor($server)))->toBeTrue();
@@ -172,7 +172,7 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
 
     it('warns that verify=false is encrypted but unverified', function (): void {
         $server = liveTlsServer('live_mysql_tls_unverified', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', [
-            'enabled' => true, 'verify' => false, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
+            'enabled' => true, 'verify' => true, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
         ]);
         $doctor = liveTlsDoctor($server);
 
@@ -184,7 +184,7 @@ describe('mysql 8.4 with require_secure_transport=ON', function (): void {
 
     it('is green with the CA and verify=true', function (): void {
         $server = liveTlsServer('live_mysql_tls_verified', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', [
-            'enabled' => true, 'verify' => true, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
+            'enabled' => true, 'verify' => false, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
         ]);
         $doctor = liveTlsDoctor($server);
 
@@ -201,7 +201,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
     it('refuses a plaintext session', function (): void {
         liveTlsExpectAccepts('pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_pgsql_tls_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false], ['sslmode' => 'disable']);
+        $server = liveTlsServer('live_pgsql_tls_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified(), ['sslmode' => 'disable']);
 
         expect(fn () => app(ServerRegistry::class)->ensureReachable($server))->toThrow(ServerUnreachable::class);
     });
@@ -211,7 +211,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
     it('fails doctor with a TLS error when tls.enabled=false and the session is plaintext', function (): void {
         liveTlsExpectAccepts('pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
 
-        $server = liveTlsServer('live_pgsql_tls_disabled', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false], ['sslmode' => 'disable']);
+        $server = liveTlsServer('live_pgsql_tls_disabled', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified(), ['sslmode' => 'disable']);
 
         expect(liveTlsSeverity($server))->toBe(Severity::Error)
             ->and(liveTlsDoctorIsRed(liveTlsDoctor($server)))->toBeTrue();
@@ -221,7 +221,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
     // so tls.enabled=false is still encrypted here. Doctor cannot see that
     // this server refuses plaintext, so it warns that nothing requires TLS.
     it('warns when tls.enabled=false is encrypted only because libpq prefers TLS', function (): void {
-        $server = liveTlsServer('live_pgsql_tls_preferred', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_pgsql_tls_preferred', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => false], ['sslmode' => 'disable']);
         $doctor = liveTlsDoctor($server);
 
         expect(config("database.connections.{$server}.sslmode"))->toBeNull()
@@ -232,7 +232,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
     });
 
     it('warns that verify=false is encrypted but unverified', function (): void {
-        $server = liveTlsServer('live_pgsql_tls_unverified', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => true, 'verify' => false]);
+        $server = liveTlsServer('live_pgsql_tls_unverified', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
         $doctor = liveTlsDoctor($server);
 
         expect(config("database.connections.{$server}.sslmode"))->toBe('require')
@@ -244,7 +244,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
 
     it('is green with the CA and verify=true', function (): void {
         $server = liveTlsServer('live_pgsql_tls_verified', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', [
-            'enabled' => true, 'verify' => true, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
+            'enabled' => true, 'verify' => false, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
         ]);
         $doctor = liveTlsDoctor($server);
 
@@ -260,7 +260,7 @@ describe('postgresql 18 with ssl=on and hostssl only', function (): void {
 // cannot encrypt must turn doctor red, never report what was configured.
 describe('the guard, against plaintext servers', function (): void {
     it('turns doctor red when MySQL TLS is configured but never negotiated', function (): void {
-        $server = liveTlsServer('live_mysql_plain_no_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PLAIN_PORT', ['enabled' => true, 'verify' => false]);
+        $server = liveTlsServer('live_mysql_plain_no_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', liveTlsVerified());
         $doctor = liveTlsDoctor($server);
 
         expect(app(TlsChecker::class)->measure($server))->toBeFalse()
@@ -271,7 +271,7 @@ describe('the guard, against plaintext servers', function (): void {
     it('turns doctor red when MySQL is given a CA but the server has no TLS', function (): void {
         liveTlsExpectAccepts('mysql', 'DB_CONSOLE_LIVE_MYSQL_PLAIN_PORT', ['enabled' => false]);
 
-        $server = liveTlsServer('live_mysql_plain_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PLAIN_PORT', [
+        $server = liveTlsServer('live_mysql_plain_ca', 'mysql', 'DB_CONSOLE_LIVE_MYSQL_PORT', [
             'enabled' => true, 'verify' => true, 'ca' => liveTlsEnv('DB_CONSOLE_LIVE_TLS_CA'),
         ]);
 
@@ -282,7 +282,7 @@ describe('the guard, against plaintext servers', function (): void {
     it('turns doctor red when PostgreSQL TLS is required of a server without SSL', function (): void {
         liveTlsExpectAccepts('pgsql', 'DB_CONSOLE_LIVE_PGSQL_PLAIN_PORT', ['enabled' => false]);
 
-        $server = liveTlsServer('live_pgsql_plain_tls', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PLAIN_PORT', ['enabled' => true, 'verify' => false]);
+        $server = liveTlsServer('live_pgsql_plain_tls', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', ['enabled' => true, 'verify' => false]);
 
         expect(fn () => app(ServerRegistry::class)->ensureReachable($server))->toThrow(ServerUnreachable::class)
             ->and(app(TlsChecker::class)->status($server))->toBe(TlsStatus::Unmeasured)
@@ -290,7 +290,7 @@ describe('the guard, against plaintext servers', function (): void {
     });
 
     it('reports a reachable plaintext PostgreSQL as a TLS error', function (): void {
-        $server = liveTlsServer('live_pgsql_plain_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PLAIN_PORT', ['enabled' => false]);
+        $server = liveTlsServer('live_pgsql_plain_off', 'pgsql', 'DB_CONSOLE_LIVE_PGSQL_PORT', liveTlsVerified());
         $doctor = liveTlsDoctor($server);
 
         expect($doctor['reachable']->severity)->toBe(Severity::Info)
