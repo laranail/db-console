@@ -16,6 +16,7 @@ use Simtabi\Laranail\DBConsole\Events\DatabasesAttached;
 use Simtabi\Laranail\DBConsole\Events\DatabasesDetached;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesGranted;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesRevoked;
+use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
@@ -39,6 +40,7 @@ final readonly class PrivilegeManager
         private Dispatcher $events,
         private Catalog $catalog,
         private DBConsoleLogger $log,
+        private ScopedConnections $scoped,
     ) {}
 
     public function grant(string $server, Username $user, Host $host, DbName $db, PrivilegeSet $set): OperationResult
@@ -49,7 +51,9 @@ final readonly class PrivilegeManager
         $target = $this->label($user, $host, $db);
 
         try {
-            $connection->run(
+            // Postgres grants run inside the target database; see Statement.
+            $this->scoped->run(
+                $connection,
                 $engine->grant($set, $db, $user, $host),
                 ['operation' => OperationType::GrantCreate->value, 'target' => $target],
             );
@@ -84,7 +88,9 @@ final readonly class PrivilegeManager
         $target = $this->label($user, $host, $db);
 
         try {
-            $connection->run(
+            // Postgres grants run inside the target database; see Statement.
+            $this->scoped->run(
+                $connection,
                 $engine->revoke($set, $db, $user, $host),
                 ['operation' => OperationType::GrantRevoke->value, 'target' => $target],
             );
