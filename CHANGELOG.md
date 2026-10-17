@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
+  `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
+  admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
+  on MySQL: provision through the wizard with the default `utf8mb4_unicode_ci`, migrate and write as
+  the new account, grant every preset privilege, revoke, move an account to a new host, drop an
+  account and a database, check emptiness, and roll the wizard back. `MinimalAdminGrantTest` keeps
+  the job's grant, the README and the recipe the same as `Doctor\MinimalAdminGrant`.
+- `Doctor\MinimalAdminGrant::statements()`, the recommended admin per engine, and
+  `MySqlEngine::grantablePrivileges()`, the privilege keywords it builds the grant from.
 - **A live provisioning job against PostgreSQL 14 to 18** (`live-pgsql` in `tests.yml`), plus the
   19 release candidate as a leg whose failures do not fail the run. 18 is the latest release, 15
   to 17 the three before it, and 14 the oldest the project still supports. It runs the
@@ -39,6 +48,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The recommended MySQL/MariaDB admin could not grant the `app_standard` preset**, nor `full`:
+  `GRANT` needs `GRANT OPTION` on each privilege it hands out, and the recommendation left out
+  `CREATE TEMPORARY TABLES`, `LOCK TABLES`, `REFERENCES`, `CREATE ROUTINE`, `ALTER ROUTINE`, `EVENT`
+  and `TRIGGER`, so provisioning failed at its grant step with `InsufficientPrivilege`. The
+  recommendation now gives every privilege a preset can carry `WITH GRANT OPTION`, built from the
+  engine's own privilege map, and drops `RELOAD`, which nothing db-console runs uses.
+- **Changing an account's host failed on MariaDB.** The account is recreated from its stored hash
+  with `IDENTIFIED WITH <plugin> AS 0x...`, and MariaDB's grammar takes only a quoted string after
+  `AS`. `MariaDbEngine` now decodes the hash and quotes it, and refuses one that is not hex.
+- **A failed provisioning wizard dropped an account or database it had not created.** The wizard
+  adopts an account or database that already exists, and its rollback then dropped it with the rest
+  -- a customer's existing login, if a later step failed. The rollback now undoes only what the run
+  created, as its documentation said. This applies to every engine.
 - **PostgreSQL could not create a database with the package's own default charset.** `utf8mb4`
   became `ENCODING 'UTF8MB4'`, which Postgres has no encoding for. `PostgresEngine` now maps MySQL
   charset names to Postgres encodings (`utf8mb4`/`utf8mb3` → `UTF8`, `ascii` → `SQL_ASCII`), so the

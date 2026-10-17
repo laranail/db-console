@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### The recommended MySQL and MariaDB admin
+
+An admin created from the previous recommendation cannot grant the `app_standard` or `full` preset,
+so the wizard fails at its grant step. Give it the privileges it was missing, with grant option:
+
+```sql
+GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;
+```
+
+`RELOAD` is no longer recommended, because nothing db-console runs uses it. An admin that already
+has it keeps working; `REVOKE RELOAD ON *.* FROM 'db_console_admin'@'%'` takes it away.
+
+### Wizard rollback
+
+When a provisioning wizard fails, its rollback no longer drops a database or account that existed
+before the run. If you relied on a failed run clearing an existing empty database, drop it yourself.
+
 ### PostgreSQL provisioning
 
 Postgres provisioning works on any server now, which changes what some calls do:

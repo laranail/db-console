@@ -20,6 +20,21 @@ A statement can name the database it must run in (`Statement::inDatabase()`). An
 
 Only `PostgresEngine` scopes statements, because Postgres schema grants, default privileges and `REASSIGN OWNED` act on the connected database.
 
+## MySQL and MariaDB
+
+Both engines grant on `` `db`.* `` and scope accounts by host, `'user'@'host'`. A host change
+recreates the account at the new host from its stored authentication, read from `mysql.user` as a hex
+literal so the password is never known. MySQL takes the hash as `AS 0x...`, which a binary
+`caching_sha2_password` hash needs; MariaDB's grammar takes only a quoted string after `AS`, so
+`MariaDbEngine` decodes the hex and quotes it.
+
+The emptiness check before a drop or a wizard rollback counts `information_schema.tables` for the
+database, from the admin connection.
+
+These paths are tested against MySQL 8.4 and 9 and MariaDB 11.4 and latest by the `live-mysql` CI
+job, as an admin holding exactly the grant `doctor` recommends (`Doctor\MinimalAdminGrant`), with
+`sql_require_primary_key=ON` on MySQL.
+
 ## PostgreSQL
 
 Grants for a database run inside it:

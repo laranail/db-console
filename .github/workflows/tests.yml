@@ -96,3 +96,65 @@ jobs:
           DB_CONSOLE_LIVE_PGSQL_SUPERUSER: postgres
           DB_CONSOLE_LIVE_PGSQL_SUPERUSER_PASSWORD: secret
         run: vendor/bin/pest --no-coverage --colors=never --group=live-pgsql --fail-on-skipped
+
+  # The same blind spot for the MySQL family: MySqlEngine's tests compare SQL
+  # strings and nothing had ever provisioned against a real server. The admin
+  # is created with exactly the grants DoctorService recommends (the test
+  # suite pins this file to that recommendation), never root, and MySQL runs
+  # with sql_require_primary_key=ON the way DigitalOcean's managed MySQL does.
+  # 8.4 is the only MySQL DigitalOcean offers; 9 and MariaDB latest catch what
+  # the next release changes.
+  live-mysql:
+    name: live provisioning · ${{ matrix.engine }} ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { engine: mysql, version: '8.4', image: 'mysql:8.4', client: mysql, health: 'mysqladmin ping -h 127.0.0.1 -uroot -psecret' }
+          - { engine: mysql, version: '9', image: 'mysql:9', client: mysql, health: 'mysqladmin ping -h 127.0.0.1 -uroot -psecret' }
+          - { engine: mariadb, version: '11.4', image: 'mariadb:11.4', client: mariadb, health: 'healthcheck.sh --connect --innodb_initialized' }
+          - { engine: mariadb, version: 'latest', image: 'mariadb:latest', client: mariadb, health: 'healthcheck.sh --connect --innodb_initialized' }
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MARIADB_ROOT_PASSWORD: secret
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "${{ matrix.health }}" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, pdo_sqlite, pdo_mysql'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+      - name: Create the recommended minimal admin (not root)
+        run: |
+          {
+            # The recommended grant, verbatim between the markers. MinimalAdminGrantTest
+            # fails if it drifts from DoctorService's recommendation.
+            # >>> minimal-admin
+            echo "CREATE USER 'db_console_admin'@'%' IDENTIFIED BY 'secret';"
+            echo "GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';"
+            echo "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;"
+            # <<< minimal-admin
+            if [ "${{ matrix.engine }}" = mysql ]; then echo "SET PERSIST sql_require_primary_key = ON;"; fi
+          } | docker exec -i "${{ job.services.database.id }}" ${{ matrix.client }} -uroot -psecret
+      - name: Live provisioning
+        env:
+          DB_CONSOLE_LIVE_MYSQL_ENGINE: ${{ matrix.engine }}
+          DB_CONSOLE_LIVE_MYSQL_PORT: '3306'
+          DB_CONSOLE_LIVE_MYSQL_ADMIN_USER: db_console_admin
+          DB_CONSOLE_LIVE_MYSQL_ADMIN_PASSWORD: secret
+        run: vendor/bin/pest --no-coverage --colors=never --group=live-mysql --fail-on-skipped

@@ -8,10 +8,11 @@ Create the least-privilege admin account DBConsole should use — never root.
 
 ```sql
 CREATE USER 'db_console_admin'@'%' IDENTIFIED BY '…';
-GRANT CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE USER, RELOAD ON *.* TO 'db_console_admin'@'%';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREATE VIEW, SHOW VIEW
-  ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;
+GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;
 ```
+
+`CREATE USER` covers creating, altering and dropping accounts. A grant needs both the privilege and `GRANT OPTION` on it, so the second statement lists every privilege a preset can hand out; on `*.*` its `CREATE` and `DROP` also cover databases. `doctor` prints the same statements, and the `live-mysql` CI job provisions against MySQL and MariaDB as exactly this account.
 
 **PostgreSQL** (not a superuser)
 
