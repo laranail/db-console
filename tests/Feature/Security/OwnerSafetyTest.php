@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Artisan;
+use Simtabi\Laranail\DBConsole\Security\OwnerSafety;
 use Simtabi\Laranail\DBConsole\Models\RoleAssignment;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Exceptions\OwnerWouldBeStranded;
@@ -11,7 +12,7 @@ use Simtabi\Laranail\DBConsole\Tests\Fixtures\OperatorSecurity;
 beforeEach(function (): void {
     $this->migrateCatalog();
     OperatorSecurity::setUp();
-    config()->set('laranail.db-console.security.two_factor.enforce', 'require');
+    config()->set('laranail.db-console.security.assurance.enforce', 'require');
 });
 
 function revokeOwner(object $operator): int
@@ -43,10 +44,10 @@ it('allows it once another Owner is enrolled, or when enforcement is off', funct
     $first = OperatorSecurity::owner(OperatorSecurity::enrolled('first'));
     $unenrolled = OperatorSecurity::owner(OperatorSecurity::unenrolled());
 
-    config()->set('laranail.db-console.security.two_factor.enforce', 'off');
+    config()->set('laranail.db-console.security.assurance.enforce', 'off');
     expect(revokeOwner($first))->toBe(0);
 
-    config()->set('laranail.db-console.security.two_factor.enforce', 'require');
+    config()->set('laranail.db-console.security.assurance.enforce', 'require');
     OperatorSecurity::owner($first);
     OperatorSecurity::owner(OperatorSecurity::enrolled('second'));
     expect(revokeOwner($first))->toBe(0)
@@ -60,25 +61,23 @@ it('leaves other roles and scopes alone', function (): void {
     expect(Artisan::call('laranail::db-console.role:revoke', ['--user' => $only->id, '--role' => 'owner', '--scope' => 'server:prod']))->toBe(0);
 });
 
-it('refuses the last enrolled Owner disabling two-factor over HTTP', function (): void {
-    $owner = OperatorSecurity::owner(OperatorSecurity::enrolled());
+it('refuses the host disabling the second factor of the last global Owner who has one', function (): void {
+    $owner = OperatorSecurity::owner(OperatorSecurity::enrolled('first'));
     OperatorSecurity::owner(OperatorSecurity::unenrolled());
-    OperatorSecurity::overHttp();
 
-    expect(fn () => $owner->forceFill(['two_factor_confirmed_at' => null])->save())->toThrow(OwnerWouldBeStranded::class)
-        ->and($owner->fresh()->two_factor_confirmed_at)->not->toBeNull();
+    expect(fn () => app(OwnerSafety::class)->assertMayLoseSecondFactor($owner))->toThrow(OwnerWouldBeStranded::class);
+
+    OperatorSecurity::owner(OperatorSecurity::enrolled('second'));
+    app(OwnerSafety::class)->assertMayLoseSecondFactor($owner);
+
+    config()->set('laranail.db-console.security.assurance.enforce', 'off');
+    app(OwnerSafety::class)->assertMayLoseSecondFactor(OperatorSecurity::owner(OperatorSecurity::enrolled('third')));
 });
 
-it('allows it with another enrolled Owner, and from the shell', function (): void {
-    $owner = OperatorSecurity::owner(OperatorSecurity::enrolled('first'));
+it('does not guard operators who are not global Owners', function (): void {
+    OperatorSecurity::owner(OperatorSecurity::unenrolled());
 
-    $owner->forceFill(['two_factor_confirmed_at' => null])->save();   // the shell: an administrator resetting a lost device
-    expect($owner->fresh()->two_factor_confirmed_at)->toBeNull();
+    app(OwnerSafety::class)->assertMayLoseSecondFactor(OperatorSecurity::enrolled('admin'));
 
-    $owner->forceFill(['two_factor_confirmed_at' => now()])->save();
-    OperatorSecurity::owner(OperatorSecurity::enrolled('second'));
-    OperatorSecurity::overHttp();
-
-    $owner->forceFill(['two_factor_confirmed_at' => null])->save();
-    expect($owner->fresh()->two_factor_confirmed_at)->toBeNull();
+    expect(true)->toBeTrue();
 });

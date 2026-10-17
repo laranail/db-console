@@ -11,22 +11,22 @@ use Simtabi\Laranail\Enumerator\Contracts\Translatable;
 use Simtabi\Laranail\DBConsole\Enums\Concerns\DBConsoleEnum;
 
 /**
- * How `security.two_factor.enforce` treats an operator without confirmed
- * two-factor authentication. Unset, it resolves to `require` in production and
- * `report` everywhere else, so production is safe by default and every other
- * environment shows what enforcement would refuse before it is switched on.
+ * How `security.assurance.enforce` treats an operator whose host-reported
+ * assurance falls short of what an operation requires. Unset, it resolves to
+ * `require` in production and `report` everywhere else, so production is safe
+ * by default and every other environment shows what would be refused first.
  */
-enum TwoFactorEnforcement: string implements Enumerator, Translatable
+enum AssuranceEnforcement: string implements Enumerator, Translatable
 {
     use DBConsoleEnum;
 
-    #[Label('Off'), Description('Two-factor is not checked. doctor warns.')]
+    #[Label('Off'), Description('Assurance is not checked. doctor errors in production and warns elsewhere.')]
     case Off = 'off';
 
-    #[Label('Report'), Description('Nothing is refused; what enforcement would refuse is logged and alerted.')]
+    #[Label('Report'), Description('Nothing is refused; each shortfall is audited, and alerted once a day per operator.')]
     case Report = 'report';
 
-    #[Label('Require'), Description('Operators without confirmed two-factor are refused, after an enrolment grace window.')]
+    #[Label('Require'), Description('An operation is refused until the operator has the assurance it requires.')]
     case Require = 'require';
 
     /**

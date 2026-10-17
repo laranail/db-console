@@ -8,7 +8,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * How operator-security state is keyed: the same (class, identifier) pair
- * role assignments use, so a grace window or a bypass follows the operator
+ * role assignments use, so a break-glass bypass follows the operator
  * the gate resolves.
  */
 final class OperatorIdentity

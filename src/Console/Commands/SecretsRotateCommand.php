@@ -12,14 +12,12 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  */
 final class SecretsRotateCommand extends DBConsoleCommand
 {
-    protected $signature = 'laranail::db-console.secrets:rotate {--otp= : A one-time code, when step-up asks for one}';
+    protected $signature = 'laranail::db-console.secrets:rotate';
 
     protected $description = 'Re-wrap every stored secret under the active driver\'s new key material';
 
     public function handle(SecretRotator $rotator): int
     {
-        $this->presentStepUpProof();
-
         try {
             $count = $rotator->rotateAll();
         } catch (DBConsoleException $e) {

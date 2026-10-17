@@ -20,7 +20,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  * and — the doctrine-not-option check — whether the admin account is
  * root-like, in which case doctor FAILS with the exact minimal-grant fix so
  * setup won't quietly proceed insecure. Also reports the secret driver and
- * catalog encryption mode, and operator security (two-factor, step-up).
+ * catalog encryption mode, and operator assurance.
  */
 final readonly class DoctorService
 {

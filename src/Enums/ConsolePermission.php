@@ -118,8 +118,9 @@ enum ConsolePermission: string implements Enumerator, Translatable
     }
 
     /**
-     * Whether this permission only reads. During the two-factor enrolment grace
-     * window an operator keeps these and loses every other.
+     * Whether this permission only reads. The default assurance policy
+     * (security.assurance.second_factor = writes) asks a second factor for
+     * every permission that is not one of these.
      */
     public function isRead(): bool
     {

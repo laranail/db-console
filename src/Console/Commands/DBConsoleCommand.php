@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
 use Simtabi\Laranail\Console\Tools\Commands\Command;
-use Simtabi\Laranail\DBConsole\Security\StepUpProof;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\Package\Tools\Commands\Concerns\ReadsOptions;
@@ -36,17 +35,6 @@ abstract class DBConsoleCommand extends Command
         }
 
         return app(ServerRegistry::class)->default();
-    }
-
-    /**
-     * Hand --otp to step-up, for a run that carries an authenticated operator.
-     * A shell run with no operator does not need it.
-     */
-    protected function presentStepUpProof(): void
-    {
-        if ($this->hasOption('otp')) {
-            app(StepUpProof::class)->present($this->strOption('otp'));
-        }
     }
 
     protected function config(): Config

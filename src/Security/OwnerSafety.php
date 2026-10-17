@@ -11,16 +11,17 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Enums\ScopeType;
 use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
 use Simtabi\Laranail\DBConsole\Models\RoleAssignment;
-use Simtabi\Laranail\DBConsole\Enums\TwoFactorEnforcement;
+use Simtabi\Laranail\DBConsole\Enums\AssuranceEnforcement;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Exceptions\OwnerWouldBeStranded;
 
 /**
- * Never strands the last Owner. Two changes are refused:
+ * Never strands the last Owner. Refused:
  *
  *   - revoking global Owner from the last operator who holds it, or (with
- *     enforcement on) from the last one with confirmed two-factor;
- *   - an enrolled global Owner losing two-factor while no other global Owner
- *     has it, with enforcement on.
+ *     enforcement on) from the last one the host reports a second factor for;
+ *   - assertMayLoseSecondFactor(), for the host to call before it disables an
+ *     operator's second factor: refused for the last global Owner with one.
  *
  * Either would leave nobody able to administer db-console under `require`.
  * Owners are read from role_assignments, which both RBAC drivers share.
@@ -29,7 +30,7 @@ final readonly class OwnerSafety
 {
     public function __construct(
         private SecurityPolicy $policy,
-        private TwoFactorEnforcer $twoFactor,
+        private OperatorAssurance $assurance,
     ) {}
 
     /**
@@ -50,31 +51,33 @@ final readonly class OwnerSafety
             throw OwnerWouldBeStranded::lastOwner(OperatorIdentity::label($assignee));
         }
 
-        if ($this->twoFactorMatters() && $this->twoFactor->isEnrolled($assignee) && ! $this->anyEnrolled($others)) {
+        if ($this->enforcementOn() && $this->assurance->hasSecondFactor($assignee) && ! $this->anyWithSecondFactor($others)) {
             throw OwnerWouldBeStranded::lastEnrolledOwner(OperatorIdentity::label($assignee), 'revoking Owner');
         }
     }
 
     /**
+     * For the host to call before disabling an operator's second factor.
+     *
      * @throws OwnerWouldBeStranded
      */
-    public function assertMayLoseTwoFactor(Authenticatable $user): void
+    public function assertMayLoseSecondFactor(Authenticatable $operator): void
     {
-        if (! $this->twoFactorMatters() || ! $this->isGlobalOwner($user)) {
+        if (! $this->enforcementOn() || ! $this->isGlobalOwner($operator)) {
             return;
         }
 
-        if (! $this->anyEnrolled($this->globalOwnersExcept($user))) {
-            throw OwnerWouldBeStranded::lastEnrolledOwner(OperatorIdentity::label($user), 'disabling two-factor');
+        if (! $this->anyWithSecondFactor($this->globalOwnersExcept($operator))) {
+            throw OwnerWouldBeStranded::lastEnrolledOwner(OperatorIdentity::label($operator), 'disabling the second factor');
         }
     }
 
     /**
-     * Global Owners who currently count as enrolled.
+     * Global Owners the host reports a second factor for.
      */
-    public function enrolledOwnerCount(): int
+    public function ownersWithSecondFactor(): int
     {
-        return count(array_filter($this->globalOwners(), $this->twoFactor->isEnrolled(...)));
+        return count(array_filter($this->globalOwners(), $this->assurance->hasSecondFactor(...)));
     }
 
     public function ownerCount(): int
@@ -82,30 +85,30 @@ final readonly class OwnerSafety
         return count($this->globalOwners());
     }
 
-    private function twoFactorMatters(): bool
+    private function enforcementOn(): bool
     {
-        return $this->policy->enforcement() !== TwoFactorEnforcement::Off;
+        return $this->policy->enforcement() !== AssuranceEnforcement::Off;
     }
 
-    private function isGlobalOwner(Authenticatable $user): bool
+    private function isGlobalOwner(Authenticatable $operator): bool
     {
-        return $this->ownerRows()->where(OperatorIdentity::key($user))->exists();
+        return $this->ownerRows()->where(OperatorIdentity::key($operator))->exists();
     }
 
     /**
      * @param list<Authenticatable> $owners
      */
-    private function anyEnrolled(array $owners): bool
+    private function anyWithSecondFactor(array $owners): bool
     {
-        return array_any($owners, $this->twoFactor->isEnrolled(...));
+        return array_any($owners, $this->assurance->hasSecondFactor(...));
     }
 
     /**
      * @return list<Authenticatable>
      */
-    private function globalOwnersExcept(Authenticatable $user): array
+    private function globalOwnersExcept(Authenticatable $operator): array
     {
-        $key = OperatorIdentity::key($user);
+        $key = OperatorIdentity::key($operator);
 
         return array_values(array_filter(
             $this->globalOwners(),

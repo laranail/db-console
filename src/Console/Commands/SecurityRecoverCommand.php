@@ -9,17 +9,18 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Security\BreakGlass;
 
 /**
- * Break-glass: lift two-factor for one operator for a short window (15 minutes
- * by default), from the host's shell only. Shell access is already the trust
- * boundary, since whoever has it can read .env. Refused when invoked from an
- * HTTP request (Artisan::call in a controller), and every issue raises a
- * critical security alert.
+ * Break-glass: lift db-console's own assurance requirements for one operator
+ * for a short window (15 minutes by default), from the host's shell only. It
+ * bypasses db-console's gate, never the host's login. Shell access is already
+ * the trust boundary, since whoever has it can read .env. Refused when invoked
+ * from an HTTP request (Artisan::call in a controller), and every issue raises
+ * a critical security alert.
  */
 final class SecurityRecoverCommand extends DBConsoleCommand
 {
     protected $signature = 'laranail::db-console.security.recover {user : The operator id (rbac.user_model)}';
 
-    protected $description = 'Break-glass: a one-time, short-lived two-factor bypass for one operator (shell only)';
+    protected $description = 'Break-glass: a short-lived bypass of db-console\'s assurance requirements for one operator (shell only)';
 
     public function handle(BreakGlass $breakGlass): int
     {
@@ -39,9 +40,9 @@ final class SecurityRecoverCommand extends DBConsoleCommand
 
         $bypass = $breakGlass->issue($user, $this->shellUser());
 
-        $this->success("Two-factor bypass issued for user {$id}, valid until {$bypass->expires_at->toAtomString()}.");
-        $this->line('It covers two-factor enforcement and one step-up. The security recipients have been alerted.');
-        $this->line('Enrol in two-factor and save the recovery codes before it expires.');
+        $this->success("Assurance bypass issued for user {$id}, valid until {$bypass->expires_at->toAtomString()}.");
+        $this->line('It lifts db-console\'s assurance requirements, not your application\'s login. The security recipients have been alerted.');
+        $this->line('Restore the operator\'s second factor in your application before it expires.');
 
         return self::SUCCESS;
     }

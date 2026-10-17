@@ -180,40 +180,43 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Operator security — two-factor and step-up
+    | Operator assurance — what an operation needs beyond its permission
     |--------------------------------------------------------------------------
-    | Applies to an authenticated operator, on every surface (API, WebUI, and
-    | CLI runs that carry one). A shell run with no operator is governed by the
-    | host's gate: shell access is already the trust boundary.
+    | db-console authenticates nobody. The host binds
+    | Contracts\OperatorAssurance to report whether an operator has a second
+    | factor and when they last confirmed who they are; db-console checks that
+    | against the rules below, on top of RBAC, for every authenticated operator
+    | (API, WebUI, and CLI runs that carry one). A shell run with no operator is
+    | governed by the host's gate: shell access is already the trust boundary.
     */
     'security' => [
-        'two_factor' => [
-            // TwoFactorEnforcement: off | report | require. Unset: require in
-            // production, report elsewhere. report logs and alerts what require
-            // would refuse, so it can be switched on safely.
-            'enforce' => env('DB_CONSOLE_2FA_ENFORCE'),
+        'assurance' => [
+            // AssuranceEnforcement: off | report | require. Unset: require in
+            // production, report elsewhere. report audits what require would
+            // refuse, so it can be switched on safely.
+            'enforce' => env('DB_CONSOLE_ASSURANCE_ENFORCE'),
 
-            // TwoFactorDriver: fortify (two_factor_confirmed_at, as laranail/authkit
-            // writes it) | null (no provider).
-            'driver' => env('DB_CONSOLE_2FA_DRIVER', 'fortify'),
+            // Which permissions need a second factor: writes (every permission
+            // that is not a view) | all | none.
+            'second_factor' => env('DB_CONSOLE_ASSURANCE_SECOND_FACTOR', 'writes'),
 
-            // Days an operator without 2FA keeps read access, counted from the
-            // first refused request. Writes are refused from the start.
-            'grace_days' => (int) env('DB_CONSOLE_2FA_GRACE_DAYS', 7),
-
-            // Minutes the break-glass bypass from security.recover lasts.
-            'break_glass_minutes' => 15,
+            // Which permissions need a confirmation within step_up.ttl.
+            'recent_confirmation' => [
+                'database.drop',
+                'account.drop',
+                'account.rotate',
+                'account.edit',     // changing an account's host
+                'secrets.manage',   // secrets rotation
+            ],
         ],
 
         'step_up' => [
-            // StepUpDriver: session (password.confirm, password or passkey) |
-            // totp (X-DB-Console-OTP header or --otp, via laranail/authkit) |
-            // none (doctor refuses it in production).
-            'driver' => env('DB_CONSOLE_STEP_UP', 'session'),
-
-            // Seconds a session confirmation stays valid.
+            // Seconds a confirmation reported by recentlyConfirmedAt() counts as recent.
             'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
         ],
+
+        // Minutes a laranail::db-console.security.recover bypass lasts.
+        'break_glass_minutes' => 15,
     ],
 
     /*

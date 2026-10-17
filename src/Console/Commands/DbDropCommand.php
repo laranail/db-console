@@ -14,14 +14,12 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  */
 final class DbDropCommand extends DBConsoleCommand
 {
-    protected $signature = 'laranail::db-console.db:drop {--server=} {--name=} {--force} {--otp= : A one-time code, when step-up asks for one}';
+    protected $signature = 'laranail::db-console.db:drop {--server=} {--name=} {--force}';
 
     protected $description = 'Drop a database (typed confirmation; backup-before-drop for non-empty databases)';
 
     public function handle(DatabaseManager $databases): int
     {
-        $this->presentStepUpProof();
-
         $name = $this->option('name');
         $name = is_string($name) ? $name : '';
         if ($name === '') {

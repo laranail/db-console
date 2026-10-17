@@ -40,8 +40,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
 
     // Authorization
     case NotAuthorized = 'not_authorized';
-    case TwoFactorRequired = 'two_factor.required';
-    case StepUpRequired = 'step_up.required';
+    case AssuranceRequired = 'assurance_required';
     case OwnerWouldBeStranded = 'security.owner_stranded';
 
     // Secrets
@@ -63,8 +62,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
     {
         return match ($this) {
             self::NotAuthorized,
-            self::TwoFactorRequired,
-            self::StepUpRequired       => 403,
+            self::AssuranceRequired    => 403,
             self::OwnerWouldBeStranded => 409,
             self::UnknownServer        => 404,
             self::IdentifierInvalid,

@@ -14,14 +14,12 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  */
 final class UserDropCommand extends DBConsoleCommand
 {
-    protected $signature = 'laranail::db-console.user:drop {--server=} {--user=} {--host=} {--force} {--otp= : A one-time code, when step-up asks for one}';
+    protected $signature = 'laranail::db-console.user:drop {--server=} {--user=} {--host=} {--force}';
 
     protected $description = 'Drop a database account';
 
     public function handle(AccountManager $accounts): int
     {
-        $this->presentStepUpProof();
-
         $user = $this->str('user');
         $host = $this->str('host') ?: 'localhost';
         if ($user === '') {

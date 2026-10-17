@@ -10,9 +10,7 @@ use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
-use Simtabi\Laranail\DBConsole\Security\StepUpGate;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
-use Simtabi\Laranail\DBConsole\Enums\SensitiveAction;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
 use Simtabi\Laranail\DBConsole\Events\AccountDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
@@ -48,7 +46,6 @@ final readonly class AccountManager
         private WizardExecutor $executor,
         private PrivilegeManager $privileges,
         private OwnershipReleasingDrop $releasingDrop,
-        private StepUpGate $stepUp,
     ) {}
 
     /**
@@ -104,7 +101,6 @@ final readonly class AccountManager
     public function drop(string $server, Username $user, Host $host): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::AccountDrop, "server:{$server}");
-        $this->stepUp->require(SensitiveAction::AccountDrop, $server);
 
         [$engine, $connection] = $this->registry->resolve($server);
         $this->requireAccounts($engine->type()->value, $engine->capabilities()->canCreateAccount);
@@ -139,7 +135,6 @@ final readonly class AccountManager
     public function rotatePassword(string $server, Username $user, Host $host, ?Password $password = null): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::AccountRotate, "server:{$server}");
-        $this->stepUp->require(SensitiveAction::AccountRotate, $server);
 
         [$engine, $connection] = $this->registry->resolve($server);
         $this->requireAccounts($engine->type()->value, $engine->capabilities()->canRotatePassword);
@@ -227,7 +222,6 @@ final readonly class AccountManager
     public function changeHost(string $server, Username $user, Host $oldHost, Host $newHost, bool $rotate = false): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::AccountEdit, "server:{$server}");
-        $this->stepUp->require(SensitiveAction::AccountHostChange, $server);
 
         [$engine, $connection] = $this->registry->resolve($server);
 

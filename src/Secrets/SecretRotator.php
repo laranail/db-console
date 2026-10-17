@@ -6,9 +6,9 @@ namespace Simtabi\Laranail\DBConsole\Secrets;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
-use Simtabi\Laranail\DBConsole\Security\StepUpGate;
-use Simtabi\Laranail\DBConsole\Enums\SensitiveAction;
 use Simtabi\Laranail\DBConsole\Events\SecretsRotated;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
 
 /**
@@ -17,7 +17,8 @@ use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
  * re-wrap under a new data key (kms), or write a new version
  * (vault/reference). The secret VALUE is unchanged; only its protection is
  * refreshed. Runs through the same SecretVault seam, so it never touches a
- * raw secret or knows the backend. An operator running it needs step-up.
+ * raw secret or knows the backend. An authenticated operator running it needs
+ * the assurance secrets.manage requires; the shell, with none, does not.
  */
 final readonly class SecretRotator
 {
@@ -25,7 +26,7 @@ final readonly class SecretRotator
         private SecretVault $vault,
         private SecretStore $store,
         private Dispatcher $events,
-        private StepUpGate $stepUp,
+        private Authorizer $authorizer,
     ) {}
 
     /**
@@ -33,7 +34,7 @@ final readonly class SecretRotator
      */
     public function rotateAll(): int
     {
-        $this->stepUp->require(SensitiveAction::SecretsRotate);
+        $this->authorizer->assure(ConsolePermission::SecretsManage, 'global');
 
         $count = 0;
         foreach ($this->store->keys() as $ref) {

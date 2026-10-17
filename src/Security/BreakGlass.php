@@ -12,9 +12,10 @@ use Simtabi\Laranail\DBConsole\Events\BreakGlassIssued;
 
 /**
  * Break-glass bypasses, issued only from the host's shell. While one is live
- * the operator counts as enrolled in two-factor, so a lost device never locks
- * the last Owner out; it may stand in for step-up exactly once. Issuing a new
- * bypass ends any earlier one, and every issue raises a critical alert.
+ * db-console's own assurance requirements are lifted for that operator, so a
+ * host-side problem (a lost device, a broken confirmation flow) never locks
+ * the last Owner out of db-console. It does not touch the host's login. Issuing
+ * a new bypass ends any earlier one, and every issue raises a critical alert.
  */
 final readonly class BreakGlass
 {
@@ -54,23 +55,5 @@ final readonly class BreakGlass
             ->where('expires_at', '>', CarbonImmutable::now())
             ->latest('expires_at')
             ->first();
-    }
-
-    /**
-     * Spend the live bypass on one step-up. False when there is none, or it was spent.
-     */
-    public function spendOnStepUp(Authenticatable $user): bool
-    {
-        $bypass = $this->active($user);
-        if (! $bypass instanceof SecurityBypass) {
-            return false;
-        }
-
-        $claimed = SecurityBypass::query()
-            ->whereKey($bypass->getKey())
-            ->whereNull('step_up_used_at')
-            ->update(['step_up_used_at' => CarbonImmutable::now()]);
-
-        return $claimed === 1;
     }
 }

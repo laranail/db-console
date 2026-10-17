@@ -8,8 +8,8 @@ use Simtabi\Laranail\DBConsole\Enums\ExceptionCode;
 
 /**
  * Refused because the change would leave no global Owner able to act: the
- * last Owner revoked, or the last Owner with confirmed two-factor losing it
- * while enforcement is on.
+ * last Owner revoked, or the last Owner the host reports a second factor for
+ * losing it while enforcement is on.
  */
 final class OwnerWouldBeStranded extends AuthorizationException
 {
@@ -25,8 +25,8 @@ final class OwnerWouldBeStranded extends AuthorizationException
     public static function lastEnrolledOwner(string $assignee, string $change): self
     {
         return new self(
-            message: "{$change} for {$assignee} would leave no global Owner with confirmed two-factor",
-            userParams: ['reason' => "{$change} would leave no global Owner with confirmed two-factor"],
+            message: "{$change} for {$assignee} would leave no global Owner with a second factor",
+            userParams: ['reason' => "{$change} would leave no global Owner with a second factor"],
             context: ['assignee' => $assignee, 'reason' => 'last_enrolled_owner', 'change' => $change],
         );
     }

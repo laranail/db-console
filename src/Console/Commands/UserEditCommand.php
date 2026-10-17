@@ -14,14 +14,12 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  */
 final class UserEditCommand extends DBConsoleCommand
 {
-    protected $signature = 'laranail::db-console.user:edit {--server=} {--user=} {--host=} {--new-host=} {--rotate} {--otp= : A one-time code, when step-up asks for one}';
+    protected $signature = 'laranail::db-console.user:edit {--server=} {--user=} {--host=} {--new-host=} {--rotate}';
 
     protected $description = 'Edit a database account (host change is a grant-preserving recreate)';
 
     public function handle(AccountManager $accounts): int
     {
-        $this->presentStepUpProof();
-
         $user = $this->str('user');
         $host = $this->str('host');
         $newHost = $this->str('new-host');

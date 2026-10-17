@@ -4,19 +4,27 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Security;
 
+use Simtabi\Laranail\DBConsole\Enums\Assurance;
 use Illuminate\Contracts\Foundation\Application;
-use Simtabi\Laranail\DBConsole\Enums\StepUpDriver;
 use Illuminate\Contracts\Config\Repository as Config;
-use Simtabi\Laranail\DBConsole\Enums\TwoFactorDriver;
-use Simtabi\Laranail\DBConsole\Enums\TwoFactorEnforcement;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Enums\AssuranceEnforcement;
 
 /**
- * The `security.*` configuration, read in one place so the enforcer, the
- * step-up gate, the break-glass command and doctor can never disagree about
- * what is configured.
+ * The `security.*` configuration, read in one place: how assurance is
+ * enforced, and which assurance each operation requires on top of its RBAC
+ * permission. The enforcer, the break-glass command and doctor all read it
+ * here, so they cannot disagree.
  */
 final readonly class SecurityPolicy
 {
+    /** `security.assurance.second_factor`: which permissions need a second factor. */
+    public const string SECOND_FACTOR_ALL = 'all';
+
+    public const string SECOND_FACTOR_WRITES = 'writes';
+
+    public const string SECOND_FACTOR_NONE = 'none';
+
     private const string PREFIX = 'laranail.db-console.security.';
 
     public function __construct(
@@ -29,9 +37,9 @@ final readonly class SecurityPolicy
         return $this->app->environment('production');
     }
 
-    public function enforcement(): TwoFactorEnforcement
+    public function enforcement(): AssuranceEnforcement
     {
-        return TwoFactorEnforcement::resolve($this->config->get(self::PREFIX . 'two_factor.enforce'), $this->isProduction());
+        return AssuranceEnforcement::resolve($this->config->get(self::PREFIX . 'assurance.enforce'), $this->isProduction());
     }
 
     /**
@@ -39,39 +47,80 @@ final readonly class SecurityPolicy
      */
     public function enforcementIsDefault(): bool
     {
-        $value = $this->config->get(self::PREFIX . 'two_factor.enforce');
+        $value = $this->config->get(self::PREFIX . 'assurance.enforce');
 
         return ! is_string($value) || trim($value) === '';
     }
 
-    public function twoFactorDriver(): TwoFactorDriver
+    /**
+     * What a permission requires, beyond the permission itself.
+     *
+     * @return list<Assurance>
+     */
+    public function requiredFor(ConsolePermission $permission): array
     {
-        return TwoFactorDriver::tryFrom((string) $this->config->get(self::PREFIX . 'two_factor.driver', 'fortify'))
-            ?? TwoFactorDriver::Fortify;
-    }
+        $required = [];
 
-    public function graceDays(): int
-    {
-        return max(0, (int) $this->config->get(self::PREFIX . 'two_factor.grace_days', 7));
-    }
+        if ($this->needsSecondFactor($permission)) {
+            $required[] = Assurance::SecondFactor;
+        }
 
-    public function breakGlassMinutes(): int
-    {
-        return max(1, (int) $this->config->get(self::PREFIX . 'two_factor.break_glass_minutes', 15));
+        if (in_array($permission, $this->recentConfirmationPermissions(), true)) {
+            $required[] = Assurance::RecentConfirmation;
+        }
+
+        return $required;
     }
 
     /**
-     * The configured step-up driver. An unrecognised value resolves to
-     * `session`, never to `none`: a typo must not switch step-up off.
+     * `all`, `writes` (default) or `none`. An unrecognised value resolves to
+     * `all`: a typo must not switch the requirement off.
      */
-    public function stepUpDriver(): StepUpDriver
+    public function secondFactorScope(): string
     {
-        return StepUpDriver::tryFrom((string) $this->config->get(self::PREFIX . 'step_up.driver', 'session'))
-            ?? StepUpDriver::Session;
+        $value = strtolower(trim((string) $this->config->get(self::PREFIX . 'assurance.second_factor', self::SECOND_FACTOR_WRITES)));
+
+        return in_array($value, [self::SECOND_FACTOR_ALL, self::SECOND_FACTOR_WRITES, self::SECOND_FACTOR_NONE], true)
+            ? $value
+            : self::SECOND_FACTOR_ALL;
+    }
+
+    /**
+     * The permissions that need a confirmation within the step-up ttl.
+     *
+     * @return list<ConsolePermission>
+     */
+    public function recentConfirmationPermissions(): array
+    {
+        $configured = (array) $this->config->get(self::PREFIX . 'assurance.recent_confirmation', []);
+
+        $permissions = [];
+        foreach ($configured as $value) {
+            $permission = is_string($value) ? ConsolePermission::fromAbility($value) : null;
+            if ($permission instanceof ConsolePermission) {
+                $permissions[] = $permission;
+            }
+        }
+
+        return $permissions;
     }
 
     public function stepUpTtl(): int
     {
         return max(1, (int) $this->config->get(self::PREFIX . 'step_up.ttl', 300));
+    }
+
+    public function breakGlassMinutes(): int
+    {
+        return max(1, (int) $this->config->get(self::PREFIX . 'break_glass_minutes', 15));
+    }
+
+    private function needsSecondFactor(ConsolePermission $permission): bool
+    {
+        return match ($this->secondFactorScope()) {
+            self::SECOND_FACTOR_NONE   => false,
+            self::SECOND_FACTOR_WRITES => ! $permission->isRead(),
+            default                    => true,
+        };
     }
 }

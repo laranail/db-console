@@ -52,16 +52,15 @@ return [
 
     'not_authorized' => 'You are not authorized to perform :ability at :scope.',
 
-    'two_factor' => [
-        'required' => 'Two-factor authentication is required for :ability. :status Enrol, and save your recovery codes, to continue.',
-    ],
+    'assurance_required' => 'You have access to :ability, but it needs more proof of who you are. :action',
 
-    'step_up' => [
-        'required' => 'Confirm it is you before you :action: :how.',
+    'assurance' => [
+        'enrol'   => 'Enrol in two-factor authentication.',
+        'confirm' => 'Confirm your password (or passkey), then retry.',
     ],
 
     'security' => [
-        'owner_stranded' => 'Refused: :reason. Another Owner with confirmed two-factor must exist first.',
+        'owner_stranded' => 'Refused: :reason. Another global Owner with a second factor must exist first.',
     ],
 
     'secret' => [
