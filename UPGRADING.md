@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### Existing accounts and databases are refused
+
+Creating an account or database that is already on the server used to succeed quietly with
+`alreadyExisted: true`, and an account kept its old password whatever you passed. It now **fails
+with `AccountAlreadyExists` / `DatabaseAlreadyExists`** (HTTP 409), changes nothing, and notifies
+the security recipients.
+
+- **To keep adopting**, pass `ExistingResourcePolicy::Adopt` as the new last argument of
+  `AccountManager::create()`, `DatabaseManager::create()` or `ProvisioningWizard::provision()`,
+  `--on-existing=adopt` on the CLI, `"on_existing": "adopt"` to the API, or set
+  `DB_CONSOLE_ACCOUNTS_ON_EXISTING` / `DB_CONSOLE_DATABASES_ON_EXISTING` (globally, or per server
+  under `servers.<name>.accounts|databases.on_existing`).
+- **Adopting needs the new `resource.adopt` permission**, which only Owner holds by default. An
+  install seeded before this release has no `resource.adopt` row, so even Owner is refused until you
+  re-run `php artisan laranail::db-console.install` (its role seeding is idempotent; it re-syncs
+  the shipped roles' permissions, so a change you made to a shipped role is reset). Grant it to a
+  custom role with `role:create`.
+- **A wizard re-run without a password** is the common case: it now needs `adopt` and
+  `resource.adopt`. It never replaces the account's password.
+- **`adopt_and_apply`** replaces an adopted account's password with the one supplied, and needs
+  `account.rotate` too. Anything logging in with the old password stops working.
+- A CLI run that is interactive and finds the resource asks what to do. Scripts should pass
+  `--no-interaction` (the configured policy applies) or `--on-existing`.
+
+### Notifications are queued and can use Slack or an inbox
+
+- `notifications.queue` was always `true` and never read; notifications were sent in the request.
+  **They are now queued**, so a queue worker must run for them to go out. Set
+  `notifications.queue` to `false` to keep sending in the request, or to a queue name.
+- `notifications.quiet_hours` is read: routine notifications are held until the window ends.
+- `alerts.channel` is read: Warning and Critical events go out on it rather than on their
+  category's channels. The default, `mail`, is what they used before.
+- New: `notifications.channels`, `notifications.slack.route` (install
+  `laravel/slack-notification-channel`) and `notifications.database.users`.
+
+### The REST API reads the keys its config documents
+
+- The API now authenticates with **`api.auth`** and mounts under **`api.path`**. Until now it read
+  `api.guard` and `api.prefix`, which the shipped config never defined, so `sanctum` and
+  `api/db-console` always applied. If you set `DB_CONSOLE_API_AUTH` or `DB_CONSOLE_API_PATH`, they
+  take effect now.
+- If your published config has `api.guard` or `api.prefix` and no `api.auth` / `api.path`, those
+  are still honoured, with a deprecation notice. Rename them. If it has both, the documented key
+  wins.
+- **`api.rate_limit` is enforced** (default `60,1`: 60 requests a minute per caller). Set it to `''`
+  to switch it off.
+- `api.require_https` and `api.confirm_destructive` are read; both default to `true`, as the API
+  behaved before.
+
 ### TLS is applied and measured
 
 The `tls` block on a server is now written into its admin connection, and

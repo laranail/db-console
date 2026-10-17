@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Existing accounts and databases are refused and reported unless an operator adopts them**
+  (owner decision 2026-10-17). `AccountManager::create()` and `DatabaseManager::create()` used to
+  adopt a resource that was already there without saying so, and dropped the account's supplied
+  password. Both now go through `Services\ExistingResourceGuard` and an `ExistingResourcePolicy`
+  (`refuse`, `adopt`, `adopt_and_apply`) resolved per call (a new optional last parameter), then
+  `servers.<name>.accounts|databases.on_existing`, then `accounts.on_existing` /
+  `databases.on_existing`, defaulting to `refuse`. A configured value that is not a policy refuses.
+  - `refuse` throws `AccountAlreadyExists` / `DatabaseAlreadyExists` (HTTP 409, codes
+    `account.already_exists` / `database.already_exists`) naming the options the caller may
+    resubmit with, and dispatches `AccountCreationRefused` / `DatabaseCreationRefused`.
+  - `adopt` needs the new **`resource.adopt`** permission (Owner only by default), records the
+    resource in the catalog with its password untouched, and dispatches `AccountAdopted` /
+    `DatabaseAdopted` (Warning, so they alert).
+  - `adopt_and_apply` also needs `account.rotate` and a pass from the new
+    `Security\Contracts\StepUpVerifier` (bound to `NullStepUpVerifier` until a driver ships), and
+    dispatches `AccountPasswordApplied`. For a database it adopts.
+  - Results carry `adopted` and `password_applied`. All five events are Security-category
+    notifications (`ExistingResourceNotification`) and webhook events.
+- **`ProvisioningWizard::provision()` takes `$onExisting`.** Without a password it never replaces an
+  adopted account's credential. With one, it checks `account.rotate` and step-up when it adopts the
+  account, before the grant, and applies the password as its last step, so an earlier failure leaves
+  the credential as it was.
+- **`--on-existing`** on `user:create`, `db:create` and `wizard`. Interactive and unset, they ask
+  what should happen to a resource that is already there, naming each option's risk, defaulting to
+  the configured policy. **`on_existing`** on the API's create endpoints; adopted resources answer
+  200, new ones 201.
+- **Slack and database notification channels** alongside mail, chosen per category by
+  `notifications.channels`; Slack goes to `notifications.slack.route` (suggests
+  `laravel/slack-notification-channel`), the in-app inbox to `notifications.database.users`.
+- **`api.rate_limit` is applied** as the `laranail-db-console.api` named limiter, keyed on the API
+  caller (`'requests,minutes'`; empty or `0` switches it off).
+- `Http\Api\ApiSettings`, the API's settings read from the documented keys.
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -47,6 +79,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   which reads rows from each statement's own database.
 
 ### Fixed
+
+- **The REST API could not serve an authenticated request.** `ApiGuard` bound a user resolver that
+  called itself, so every authenticated request recursed until the stack ran out. It also never made
+  the API guard the default, so the services' Gate saw a sanctum caller as nobody. It now binds the
+  user it resolved and calls `shouldUse()`, as Laravel's `Authenticate` middleware does.
+- **`api.auth` and `api.path` were ignored.** The code read `api.guard` and `api.prefix`, which the
+  config file never defined, so `DB_CONSOLE_API_AUTH` and `DB_CONSOLE_API_PATH` did nothing.
+- **`api.require_https`, `api.confirm_destructive`, `notifications.queue`,
+  `notifications.quiet_hours` and `alerts.channel` were configured and never read.** All five are
+  read now; the API defaults are unchanged.
 
 - **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
   failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
@@ -159,6 +201,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Creating an account or database that already exists now fails with a 409** instead of
+  succeeding with `alreadyExisted`. See UPGRADING.
+- **`resource.adopt` is the 22nd console permission.** Owner holds it; Admin, Operator, ReadOnly and
+  Auditor do not.
+- **Notifications are queued** (`notifications.queue`, default `true`): `DBConsoleNotification` now
+  implements `ShouldQueue`. Set `notifications.queue` to `false` to send in the request.
+- **A Warning or Critical event's notification goes out on `alerts.channel`** (default `mail`, as
+  before) rather than its category's channels.
+- `DBConsoleNotification::toArray()` adds `severity` and `subject`.
+- `DbConsoleCatalog::recordDatabase()` with an empty charset leaves a recorded charset alone. An
+  adopted database is recorded without one, since db-console did not choose it.
+
 - `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
 - The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
   its own `--server` resolution and `ServerAddCommand`'s `--host`/`--port` handling were the same
@@ -189,6 +243,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`assertNoNullOnlyOptionGuards()` is enforced over `src/`.**
 
 ### Deprecated
+
+- **Config keys `api.guard` and `api.prefix`.** Read only when `api.auth` / `api.path` is unset,
+  with one `E_USER_DEPRECATED` notice each. Removed no earlier than the next minor after 0.1.
 
 - **Gate abilities `db-console.<permission>` (21).** Each is still defined and asks the gate for its
   `laranail-db-console.*` ability, so a host's definition or before/after callback for the scoped
