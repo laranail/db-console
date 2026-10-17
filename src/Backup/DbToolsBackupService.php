@@ -57,6 +57,12 @@ final readonly class DbToolsBackupService implements BackupService
         }
 
         $definition = $this->registry->definition($server);
+
+        // Resolving opens the server's SSH tunnel, if it has one, and points
+        // the admin connection at it. Read before that, the config still
+        // names the remote host and the dump would go around the tunnel.
+        $this->registry->resolve($server);
+
         /** @var array<string, mixed> $adminConfig */
         $adminConfig = (array) $this->config->get("database.connections.{$definition->connection}", []);
 
@@ -67,6 +73,11 @@ final readonly class DbToolsBackupService implements BackupService
         // parseConfiguration() also removes the `url` key.
         $scopedConfig = new ConfigurationUrlParser()->parseConfiguration($adminConfig);
         $scopedConfig['database'] = $database->value;
+
+        // Laravel's MySQL socket key is unix_socket; db-tools reads socket.
+        if (is_string($scopedConfig['unix_socket'] ?? null) && $scopedConfig['unix_socket'] !== '') {
+            $scopedConfig['socket'] ??= $scopedConfig['unix_socket'];
+        }
 
         $scoped = "db_console_backup_{$server}";
         $this->config->set("database.connections.{$scoped}", $scopedConfig);
