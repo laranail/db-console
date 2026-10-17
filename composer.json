@@ -59,6 +59,7 @@
         "laravel/passport": "^13.0",
         "laravel/pint": "^1.30",
         "laravel/sanctum": "^4.3",
+        "laravel/slack-notification-channel": "^3.0",
         "mockery/mockery": "^1.6",
         "orchestra/testbench": "^11.0",
         "pestphp/pest": "^4.0",

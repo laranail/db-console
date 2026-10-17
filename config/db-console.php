@@ -205,13 +205,14 @@ return [
     |--------------------------------------------------------------------------
     */
     'api' => [
-        'enabled'       => (bool) env('DB_CONSOLE_API', false),
-        'path'          => env('DB_CONSOLE_API_PATH', 'api/db-console'),
-        'auth'          => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
-        'allowed_ips'   => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
-        'rate_limit'    => env('DB_CONSOLE_API_RATE', '60,1'), // requests, per minutes
+        'enabled'     => (bool) env('DB_CONSOLE_API', false),
+        'path'        => env('DB_CONSOLE_API_PATH', 'api/db-console'),
+        'auth'        => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
+        'allowed_ips' => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
+        'rate_limit'  => env('DB_CONSOLE_API_RATE', '60,1'), // 'requests,minutes' per caller; '' or 0 switches it off
+        // Refuse plain HTTP (loopback is always allowed).
         'require_https' => true,
-        // Destructive endpoints require a confirmation field in the body.
+        // Drop endpoints require {"confirm": "<name>"} in the body.
         'confirm_destructive' => true,
     ],
 
@@ -258,23 +259,60 @@ return [
     |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
-    | Recipients per NotificationCategory. Default: off for routine events,
-    | on for destructive and security events.
+    | Per NotificationCategory (routine, destructive, security): which
+    | channels it goes out on, and who receives it on each. A channel with no
+    | recipient is skipped, so nothing is delivered until an operator opts in.
+    | Default: mail only, off for routine events, on for destructive and
+    | security ones once DB_CONSOLE_ALERT_MAIL is set. Refused and adopted
+    | existing resources are security events.
     */
     'notifications' => [
+        // mail: the addresses per category.
         'recipients' => [
             'routine'     => [],
             'destructive' => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
             'security'    => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
         ],
+
+        // Channels per category: any of mail, slack, database.
+        'channels' => [
+            'routine'     => ['mail'],
+            'destructive' => ['mail'],
+            'security'    => ['mail'],
+        ],
+
+        // slack: needs laravel/slack-notification-channel. An incoming-webhook
+        // URL, or a channel name for a bot token (services.slack.notifications).
+        'slack' => [
+            'route' => env('DB_CONSOLE_SLACK_ROUTE'),
+        ],
+
+        // database: an in-app inbox. Ids of rbac.user_model users (the model
+        // uses Notifiable and the app has a notifications table).
+        'database' => [
+            'users' => array_filter(explode(',', (string) env('DB_CONSOLE_NOTIFY_USERS', ''))),
+        ],
+
+        // Hold routine notifications during a window, e.g.
+        // ['start' => '22:00', 'end' => '07:00', 'timezone' => 'Africa/Nairobi'].
+        // Held ones are queued until the window ends. Destructive and
+        // security notifications are never held.
         'quiet_hours' => null,
-        'queue'       => true,
+
+        // true: queue on the default queue. A string: that queue's name.
+        // false: send during the request.
+        'queue' => true,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Alerts — the high-severity channel
     |--------------------------------------------------------------------------
+    | Warning and Critical events (a refused or adopted existing resource, a
+    | failed rollback, suspicious activity) always go to the db-console log,
+    | to `webhook` when set, and as a notification on `channel` (mail, slack,
+    | database, or a comma-separated list) instead of their category's
+    | channels.
     */
     'alerts' => [
         'channel' => env('DB_CONSOLE_ALERT_CHANNEL', 'mail'),
