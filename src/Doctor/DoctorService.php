@@ -62,10 +62,12 @@ final readonly class DoctorService
             return [DoctorFinding::error("server:{$server}:reachable", $e->userMessage())];
         }
 
-        foreach ($this->tls->problems($server) as $problem) {
+        // Each call measures the live session, so ask once.
+        $tlsProblems = $this->tls->problems($server);
+        foreach ($tlsProblems as $problem) {
             $findings[] = new DoctorFinding("server:{$server}:tls", $problem['severity'], $problem['message']);
         }
-        if ($this->tls->problems($server) === []) {
+        if ($tlsProblems === []) {
             $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': " . $this->tls->status($server)->value . '.');
         }
 
