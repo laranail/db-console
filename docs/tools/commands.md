@@ -4,7 +4,11 @@ The full Artisan surface, each under the namespaced `laranail::db-console.<comma
 
 ## Overview
 
-Every command ships as `laranail::db-console.<command>`. Groups: `db:create|list|drop`, `user:create|list|password|drop|edit`, `grant|revoke|attach|detach`, `wizard`, `reconcile`, `server:add|list|use`, `audit:view|verify`, `secrets:rotate|driver`, `encryption:status`, `role:list|create|assign|revoke`, `access:show|check`, `token:issue`, `webhook:list|add|remove`, plus `doctor` and `install`. Destructive commands require typed confirmation (or `--force` in CI); `--generate` prints a password once. All accept `--no-interaction` for scripting.
+Every command ships as `laranail::db-console.<command>`. Groups: `db:create|list|drop`, `user:create|list|password|drop|edit`, `grant|revoke|attach|detach`, `wizard`, `reconcile`, `server:add|list|use`, `audit:view|verify`, `secrets:rotate|driver`, `encryption:status`, `role:list|create|assign|revoke`, `access:show|check`, `token:issue`, `webhook:list|add|remove`, plus `security.recover`, `doctor` and `install`. Destructive commands require typed confirmation (or `--force` in CI); `--generate` prints a password once. All accept `--no-interaction` for scripting.
+
+## Break-glass
+
+`security.recover <user>` lifts db-console's assurance requirements for one operator for 15 minutes, raises a critical alert, and refuses to run from an HTTP request. A command that carries an authenticated operator is held to the same assurance as the API and the WebUI; a shell run with none is not. See [Operator assurance](operator-assurance.md).
 
 ## Existing accounts and databases
 

@@ -19,9 +19,11 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Models\AuditLog;
 use Simtabi\Laranail\DBConsole\Encryption\TlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
+use Simtabi\Laranail\DBConsole\Security\BreakGlass;
 use Illuminate\Database\ConnectionResolverInterface;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
 use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
+use Simtabi\Laranail\DBConsole\Security\OwnerSafety;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
@@ -32,6 +34,7 @@ use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Listeners\WriteAuditLog;
 use Simtabi\Laranail\DBConsole\Logging\ContextScrubber;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Security\SecurityPolicy;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
@@ -45,6 +48,7 @@ use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ReconcileService;
 use Simtabi\Laranail\DBConsole\Encryption\SessionTlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\DBConsole\Security\AssuranceEnforcer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
@@ -99,6 +103,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->registerSecrets();
         $this->registerServices();
         $this->registerAccess();
+        $this->registerOperatorSecurity();
     }
 
     #[Override]
@@ -200,6 +205,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
                 'RoleListCommand', 'RoleCreateCommand', 'RoleAssignCommand', 'RoleRevokeCommand',
                 'AccessShowCommand', 'AccessCheckCommand',
                 'TokenIssueCommand', 'WebhookListCommand', 'WebhookAddCommand', 'WebhookRemoveCommand',
+                'SecurityRecoverCommand',
                 // The pre-0.1 `db-console:install`, forwarding to laranail::db-console.install.
                 'DeprecatedInstallCommand',
             ],
@@ -227,6 +233,20 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         });
 
         $this->app->bindIf(AccessManager::class, RbacAccessManager::class);
+    }
+
+    /**
+     * Operator assurance (section D of the hardening design). The host binds
+     * OperatorAssurance to answer for its own authentication; until it does,
+     * NullOperatorAssurance reports none and doctor says so.
+     */
+    private function registerOperatorSecurity(): void
+    {
+        $this->app->singleton(SecurityPolicy::class);
+        $this->app->bindIf(OperatorAssurance::class, NullOperatorAssurance::class);
+        $this->app->singleton(BreakGlass::class);
+        $this->app->singleton(AssuranceEnforcer::class);
+        $this->app->singleton(OwnerSafety::class);
     }
 
     /**

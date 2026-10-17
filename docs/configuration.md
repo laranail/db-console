@@ -40,6 +40,18 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 
 See [Adopt an existing account or database](recipes/adopt-existing-resources.md).
 
+## Operator assurance
+
+| Key | Default | Purpose |
+|---|---|---|
+| `security.assurance.enforce` | unset: `require` in production, `report` elsewhere | `off`, `report` or `require`. |
+| `security.assurance.second_factor` | `writes` | Which permissions need a second factor: `writes`, `all` or `none`. |
+| `security.assurance.recent_confirmation` | drop database, drop account, rotate, change host, secrets | Permissions that need a confirmation within the ttl. |
+| `security.step_up.ttl` | `300` | Seconds a confirmation counts as recent. |
+| `security.break_glass_minutes` | `15` | How long a `security.recover` bypass lasts. |
+
+The host binds `Contracts\OperatorAssurance`. See [Operator assurance](tools/operator-assurance.md).
+
 ## Notifications & alerts
 
 | Key | Default | Purpose |

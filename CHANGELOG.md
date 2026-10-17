@@ -58,6 +58,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`api.rate_limit` is applied** as the `laranail-db-console.api` named limiter, keyed on the API
   caller (`'requests,minutes'`; empty or `0` switches it off).
 - `Http\Api\ApiSettings`, the API's settings read from the documented keys.
+- **Operator assurance, answered by the host.** `Contracts\OperatorAssurance`
+  (`hasSecondFactor()`, `recentlyConfirmedAt()`) is how the host's authentication tells db-console
+  what it knows about an operator; db-console verifies no codes and owns no enrolment.
+  `Security\NullOperatorAssurance` is the default binding, and
+  `Security\SessionConfirmationAssurance` reads Laravel's `auth.password_confirmed_at` for hosts
+  that want a starting point.
+- **Assurance is enforced on top of RBAC** at `Services\Access\Authorizer`, the single
+  authorization entry point, so the API, the WebUI and CLI runs that carry an operator are all
+  covered. By default writes need a second factor, and dropping a database or an account,
+  rotating a password, changing an account's host and rotating secrets also need a confirmation
+  within `security.step_up.ttl` (300 s). Refusals are `AssuranceRequired` (HTTP 403,
+  `assurance_required`, with a `missing` list) and are audited as `AssuranceShortfall`.
+- `security.assurance.enforce`: `off`, `report` or `require`. Unset, it is `require` in
+  production and `report` elsewhere. `report` audits each shortfall and alerts once a day per
+  operator.
+- **Break-glass**: `laranail::db-console.security.recover <user>`, shell only, lifts db-console's
+  assurance requirements for 15 minutes and raises a critical `BreakGlassIssued` alert.
+- **The last Owner cannot be stranded**: `role:revoke` refuses to take global Owner from the last
+  holder, or (with enforcement on) the last one with a second factor, and
+  `Security\OwnerSafety::assertMayLoseSecondFactor()` lets the host refuse the same before it
+  disables one (`OwnerWouldBeStranded`, HTTP 409).
+- `doctor` reports `security:assurance` (an error when off in production),
+  `security:assurance-binding` (no host binding) and `security:owners`.
+- `ConsolePermission::isRead()`, the `security.assurance` and `security.break_glass` operation
+  types, and the `security_bypasses` catalog table.
+- See [Operator assurance](docs/tools/operator-assurance.md) and
+  [Implement OperatorAssurance](docs/recipes/implement-operator-assurance.md).
+
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -262,6 +290,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DbConsoleCatalog::recordDatabase()` with an empty charset leaves a recorded charset alone. An
   adopted database is recorded without one, since db-console did not choose it.
 
+- **The API guard makes its configured guard the request's default** (`Auth::shouldUse()`), so the
+  gate, the audit actor and the assurance check resolve the API caller rather than the default
+  web guard's user.
+- `Authorizer`, `SecretRotator`, `ApiGuard` and `DoctorService` take new constructor arguments
+  (`AssuranceEnforcer`, `Authorizer`, `AuthFactory`, `OperatorSecurityCheck`), resolved from the
+  container.
 - `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
 - The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
   its own `--server` resolution and `ServerAddCommand`'s `--host`/`--port` handling were the same

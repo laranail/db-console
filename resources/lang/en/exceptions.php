@@ -64,6 +64,17 @@ return [
         'required' => 'Confirm your identity first: :action needs a password, passkey or code confirmed within the last :seconds seconds.',
     ],
 
+    'assurance_required' => 'You have access to :ability, but it needs more proof of who you are. :action',
+
+    'assurance' => [
+        'enrol'   => 'Enrol in two-factor authentication.',
+        'confirm' => 'Confirm your password (or passkey), then retry.',
+    ],
+
+    'security' => [
+        'owner_stranded' => 'Refused: :reason. Another global Owner with a second factor must exist first.',
+    ],
+
     'secret' => [
         'unavailable'          => 'A stored credential could not be resolved from the :driver secret backend.',
         'driver_misconfigured' => 'The :driver secret driver is misconfigured: :problem.',

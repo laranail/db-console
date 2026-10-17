@@ -7,6 +7,7 @@ namespace Simtabi\Laranail\DBConsole\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Symfony\Component\HttpFoundation\Response;
 use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Illuminate\Contracts\Auth\Factory as AuthFactory;
@@ -47,7 +48,7 @@ final readonly class ApiGuard
 
         $guard = $this->settings->guard();
         $user = $request->user($guard);
-        if ($user === null) {
+        if (! $user instanceof Authenticatable) {
             return $this->deny('Unauthenticated.', 401);
         }
 

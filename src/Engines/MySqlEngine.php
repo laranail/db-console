@@ -224,20 +224,6 @@ class MySqlEngine implements EmptinessProbingEngine, Engine, HostScopingEngine
     }
 
     /**
-     * The hex digits of a 0x... hash literal from readAuthentication. The
-     * literal is spliced into the statement, so anything that is not whole
-     * bytes of hex is refused rather than quoted.
-     */
-    protected function hashHex(string $hashLiteral): string
-    {
-        if (preg_match('/^0x((?:[0-9A-Fa-f]{2})*)$/', $hashLiteral, $match) !== 1) {
-            throw new InvalidArgumentException('An authentication hash must be a 0x... hex literal.');
-        }
-
-        return $match[1];
-    }
-
-    /**
      * Every kind of object a database can hold, from information_schema,
      * which the admin reads from any database: tables and views (TABLES),
      * stored procedures and functions, events and triggers. Counting TABLES
@@ -259,6 +245,20 @@ class MySqlEngine implements EmptinessProbingEngine, Engine, HostScopingEngine
         }
 
         return new StatementList(Statement::plain('SELECT ' . implode(' + ', $parts)));
+    }
+
+    /**
+     * The hex digits of a 0x... hash literal from readAuthentication. The
+     * literal is spliced into the statement, so anything that is not whole
+     * bytes of hex is refused rather than quoted.
+     */
+    protected function hashHex(string $hashLiteral): string
+    {
+        if (preg_match('/^0x((?:[0-9A-Fa-f]{2})*)$/', $hashLiteral, $match) !== 1) {
+            throw new InvalidArgumentException('An authentication hash must be a 0x... hex literal.');
+        }
+
+        return $match[1];
     }
 
     /**

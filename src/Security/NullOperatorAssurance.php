@@ -9,10 +9,11 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 
 /**
- * The default until the host binds its own: it knows of no second factor and
- * no recent confirmation, so any policy that needs either fails closed.
+ * The default until the host binds its own: no second factor, never
+ * confirmed. With enforcement on, every operation that requires assurance is
+ * refused, and doctor says why.
  */
-final readonly class NullOperatorAssurance implements OperatorAssurance
+final class NullOperatorAssurance implements OperatorAssurance
 {
     public function hasSecondFactor(Authenticatable $operator): bool
     {

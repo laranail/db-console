@@ -81,6 +81,30 @@ the security recipients.
   to switch it off.
 - `api.require_https` and `api.confirm_destructive` are read; both default to `true`, as the API
   behaved before.
+### Operator assurance is required in production
+
+**In production, db-console now refuses writes from an operator without a second factor, and the
+dangerous operations without a recent confirmation**, as your application reports them through
+`Contracts\OperatorAssurance`. Until you bind one, `NullOperatorAssurance` reports none, so those
+operations are refused. Before deploying:
+
+1. Bind your implementation (see the *Implement OperatorAssurance* recipe; Fortify and
+   laranail/authkit both work with a few lines in your application).
+2. Run `doctor`: `security:assurance-binding` names your class, and `security:owners` warns when
+   no global Owner has a second factor.
+3. To stage it, set `DB_CONSOLE_ASSURANCE_ENFORCE=report` first: nothing is refused, and each
+   shortfall is audited and alerted. Switch to `require` when they stop.
+4. `DB_CONSOLE_ASSURANCE_ENFORCE=off` restores the old behaviour; `doctor` errors on that in
+   production.
+
+An API client that is refused gets 403 with `"code": "assurance_required"` and a `missing` list.
+`secrets:rotate` run by an authenticated operator needs the same assurance; from the shell with no
+operator it runs as before. Run the migrations: `security_bypasses` is new.
+
+### Revoking the last Owner is refused
+
+`role:revoke --role=owner --scope=global` fails for the last global Owner, and, while enforcement
+is on, for the last one with a second factor. Assign another Owner first.
 
 ### TLS is applied and measured
 

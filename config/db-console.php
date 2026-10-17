@@ -208,6 +208,50 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operator assurance — what an operation needs beyond its permission
+    |--------------------------------------------------------------------------
+    | db-console authenticates nobody. The host binds
+    | Contracts\OperatorAssurance to report whether an operator has a second
+    | factor and when they last confirmed who they are; db-console checks that
+    | against the rules below, on top of RBAC, for every authenticated operator
+    | (API, WebUI, and CLI runs that carry one). A shell run with no operator is
+    | governed by the host's gate: shell access is already the trust boundary.
+    */
+    'security' => [
+        'assurance' => [
+            // AssuranceEnforcement: off | report | require. Unset: require in
+            // production, report elsewhere. report audits what require would
+            // refuse, so it can be switched on safely.
+            'enforce' => env('DB_CONSOLE_ASSURANCE_ENFORCE'),
+
+            // Which permissions need a second factor: writes (every permission
+            // that is not a view) | all | none.
+            'second_factor' => env('DB_CONSOLE_ASSURANCE_SECOND_FACTOR', 'writes'),
+
+            // Which permissions need a confirmation within step_up.ttl.
+            'recent_confirmation' => [
+                'database.drop',
+                'account.drop',
+                'account.rotate',
+                'account.edit',     // changing an account's host
+                'secrets.manage',   // secrets rotation
+            ],
+        ],
+
+        'step_up' => [
+            // Seconds a confirmation reported by recentlyConfirmedAt() counts as
+            // recent: for assurance.recent_confirmation, and for applying a
+            // password to an adopted account (accounts.on_existing
+            // adopt_and_apply). With no OperatorAssurance bound, both are refused.
+            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
+        ],
+
+        // Minutes a laranail::db-console.security.recover bypass lasts.
+        'break_glass_minutes' => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | REST API — off by default (the highest-exposure surface)
     |--------------------------------------------------------------------------
     */
@@ -328,24 +372,6 @@ return [
     'alerts' => [
         'channel' => env('DB_CONSOLE_ALERT_CHANNEL', 'mail'),
         'webhook' => env('DB_CONSOLE_ALERT_WEBHOOK'),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Operator security
-    |--------------------------------------------------------------------------
-    | Authentication stays with the host application, which binds
-    | Contracts\OperatorAssurance from its own two-factor and confirmation
-    | records. db-console enforces policy on the answers.
-    */
-    'security' => [
-        'step_up' => [
-            // How recently (seconds) the operator must have confirmed their
-            // identity before an action that needs it: today, applying a
-            // password to an adopted account (accounts.on_existing
-            // adopt_and_apply). With no OperatorAssurance bound, it is refused.
-            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
-        ],
     ],
 
     /*

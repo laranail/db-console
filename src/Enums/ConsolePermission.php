@@ -121,6 +121,24 @@ enum ConsolePermission: string implements Enumerator, Translatable
     }
 
     /**
+     * Whether this permission only reads. The default assurance policy
+     * (security.assurance.second_factor = writes) asks a second factor for
+     * every permission that is not one of these.
+     */
+    public function isRead(): bool
+    {
+        return match ($this) {
+            self::Access,
+            self::DashboardView,
+            self::AuditView,
+            self::ServerView,
+            self::DatabaseView,
+            self::AccountView => true,
+            default           => false,
+        };
+    }
+
+    /**
      * The bare ability this permission was checked by until 0.1: `db-console.<permission>`.
      * Still defined on the gate as a deprecated alias of ability().
      */

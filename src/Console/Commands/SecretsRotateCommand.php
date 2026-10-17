@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
 use Simtabi\Laranail\DBConsole\Secrets\SecretRotator;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Rotate stored secrets via the active SecretVault driver.
@@ -17,7 +18,14 @@ final class SecretsRotateCommand extends DBConsoleCommand
 
     public function handle(SecretRotator $rotator): int
     {
-        $count = $rotator->rotateAll();
+        try {
+            $count = $rotator->rotateAll();
+        } catch (DBConsoleException $e) {
+            $this->failure($e->userMessage());
+
+            return self::FAILURE;
+        }
+
         $this->components->info("Rotated {$count} stored secret(s).");
 
         return self::SUCCESS;

@@ -178,7 +178,10 @@ describe('an existing account', function (): void {
 
         expect($result->data['password_applied'])->toBeTrue()
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()))
-            ->and($assurance->askedAbout)->toBe(['7']);
+            // Asked twice about the operator the request carries, and nobody else:
+            // once by the Authorizer's assurance check (security.assurance), once
+            // by the existing-resource guard before it applies the password.
+            ->and($assurance->askedAbout)->toBe(['7', '7']);
         Event::assertDispatched(AccountPasswordApplied::class);
     });
 

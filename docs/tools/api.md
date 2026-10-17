@@ -14,6 +14,10 @@ The REST API is disabled by default (`api.enabled`) and mounts under `api.path` 
 
 `api.guard` and `api.prefix` were what the code read until 0.1, though the config file defines `api.auth` and `api.path`. They are still honoured when the documented key is unset, with one deprecation notice each, and are removed no earlier than the next minor after 0.1. Exceptions render as secret-free JSON with a meaningful HTTP status. API tokens carry abilities that can never exceed the issuing operator's own permissions.
 
+## Operator assurance
+
+An operation the caller has the permission for, but not the assurance (a second factor, a recent confirmation), is refused with 403, code `assurance_required`, and a `missing` list (`second_factor`, `recent_confirmation`) the client can act on. The host reports both through `Contracts\OperatorAssurance`. See [Operator assurance](operator-assurance.md).
+
 ---
 
 [← Docs index](../../README.md#documentation)

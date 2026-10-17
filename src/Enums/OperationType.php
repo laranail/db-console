@@ -71,6 +71,12 @@ enum OperationType: string implements Enumerator, Translatable
     #[Label('Rotate stored secrets')]
     case SecretsRotated = 'secrets.rotated';
 
+    #[Label('Assurance shortfall')]
+    case SecurityAssurance = 'security.assurance';
+
+    #[Label('Break-glass bypass')]
+    case SecurityBreakGlass = 'security.break_glass';
+
     /**
      * Whether this operation destroys data or access when it succeeds.
      */
