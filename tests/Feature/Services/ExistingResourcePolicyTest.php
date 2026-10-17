@@ -13,6 +13,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
@@ -23,6 +24,7 @@ use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Enums\NotificationCategory;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
@@ -30,22 +32,35 @@ use Simtabi\Laranail\DBConsole\Events\AccountPasswordApplied;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
+use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\ConfirmationRequired;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
-use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Notifications\ExistingResourceNotification;
 
 /*
  * Owner decision 2026-10-17: an existing account or database is refused and
  * reported by default. Adopting it is an explicit override only an operator
  * holding resource.adopt may make, and applying a password to an adopted
- * account also needs account.rotate and step-up.
+ * account also needs account.rotate and a recent identity confirmation,
+ * which the host reports through OperatorAssurance.
  */
 
 const POLICY_THEIR_PASSWORD = 'theirs';
-const POLICY_OUR_PASSWORD = 'Ours-Strong-Password-2026!';
+
+/**
+ * The password db-console is asked to set, generated once per run so no
+ * literal credential sits in the repository.
+ */
+function policyOurPassword(): string
+{
+    static $password = null;
+
+    return $password ??= Password::generate()->reveal();
+}
 
 /**
  * Allow every ability except the ones listed, so a test can take one
@@ -64,6 +79,13 @@ beforeEach(function (): void {
     Gate::before(fn ($user = null, string $ability = ''): bool => ! in_array($ability, $GLOBALS['policyDenied'], true));
 
     $this->engine = FakeProvisioningEngine::install();
+
+    // An authenticated operator whose host says they confirmed just now, so
+    // adopt_and_apply is decided by the permissions unless a test changes it.
+    $operator = new User;
+    $operator->id = 7;
+    $this->actingAs($operator);
+    app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
 });
 
 function policyTheirAccount(): void
@@ -73,7 +95,7 @@ function policyTheirAccount(): void
 
 function policyCreateShop(?ExistingResourcePolicy $policy = null, ?Password $password = null): OperationResult
 {
-    return app(AccountManager::class)->create('fake', new Username('shop'), new Host('%'), $password ?? new Password(POLICY_OUR_PASSWORD), $policy);
+    return app(AccountManager::class)->create('fake', new Username('shop'), new Host('%'), $password ?? new Password(policyOurPassword()), $policy);
 }
 
 function policyProvisionShop(?Password $password, ?ExistingResourcePolicy $policy = null): OperationResult
@@ -146,42 +168,55 @@ describe('an existing account', function (): void {
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
     });
 
-    it('takes the supplied password under adopt_and_apply, after step-up', function (): void {
+    it('takes the supplied password under adopt_and_apply, asking the host about the operator', function (): void {
         Event::fake([AccountPasswordApplied::class]);
-        $verifier = new class implements StepUpVerifier
-        {
-            /** @var list<string> */
-            public array $calls = [];
-
-            public function verify(ConsolePermission $action, ?string $scope = null): void
-            {
-                $this->calls[] = "{$action->value}@{$scope}";
-            }
-        };
-        app()->instance(StepUpVerifier::class, $verifier);
+        $assurance = FixedOperatorAssurance::confirmedNow();
+        app()->instance(OperatorAssurance::class, $assurance);
         policyTheirAccount();
 
-        $result = app(AccountManager::class)->create('fake', new Username('shop'), new Host('%'), new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
+        $result = app(AccountManager::class)->create('fake', new Username('shop'), new Host('%'), new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply);
 
         expect($result->data['password_applied'])->toBeTrue()
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_OUR_PASSWORD))
-            ->and($verifier->calls)->toBe(['account.rotate@server:fake']);
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()))
+            ->and($assurance->askedAbout)->toBe(['7']);
         Event::assertDispatched(AccountPasswordApplied::class);
     });
 
-    it('changes nothing when step-up refuses', function (): void {
-        app()->instance(StepUpVerifier::class, new class implements StepUpVerifier
-        {
-            public function verify(ConsolePermission $action, ?string $scope = null): void
-            {
-                throw NotAuthorized::forAbility('step-up', $scope);
-            }
-        });
+    it('changes nothing without a recent confirmation', function (?int $secondsAgo): void {
+        config()->set('laranail.db-console.security.step_up.ttl', 300);
+        app()->instance(OperatorAssurance::class, new FixedOperatorAssurance(
+            $secondsAgo === null ? null : now()->subSeconds($secondsAgo)->toImmutable(),
+        ));
         policyTheirAccount();
 
-        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(DbAccount::query()->count())->toBe(0);
+    })->with(['never confirmed' => [null], 'confirmed too long ago' => [301]]);
+
+    it('fails closed with the default assurance, which knows of no confirmation', function (): void {
+        app()->forgetInstance(OperatorAssurance::class);
+        app()->offsetUnset(OperatorAssurance::class);
+        app()->bind(OperatorAssurance::class, NullOperatorAssurance::class);
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
+    });
+
+    it('fails closed with no authenticated operator', function (): void {
+        auth()->logout();
+        policyTheirAccount();
+
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(ConfirmationRequired::class);
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+    });
+
+    it('answers a missing confirmation with 403 confirmation.required', function (): void {
+        $e = ConfirmationRequired::forAction('adopt_and_apply', 300);
+
+        expect($e->code()->value)->toBe('confirmation.required')
+            ->and($e->code()->httpStatus())->toBe(403)
+            ->and($e->userMessage())->toContain('300 seconds');
     });
 
     it('gets a generated password under adopt_and_apply when none was supplied, shown once', function (): void {
@@ -232,7 +267,7 @@ describe('policy layers, most specific first', function (): void {
 
         expect($result->alreadyExisted)->toBeFalse()
             ->and($result->data['adopted'])->toBeFalse()
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_OUR_PASSWORD));
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()));
     });
 });
 
@@ -386,7 +421,7 @@ describe('the provisioning wizard', function (): void {
         policyTheirAccount();
         $this->engine->failGrants = true;
 
-        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(1)
             ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1);
@@ -396,7 +431,7 @@ describe('the provisioning wizard', function (): void {
         policyTheirAccount();
         $this->engine->failGrants = true;
 
-        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(DBConsoleException::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply))->toThrow(DBConsoleException::class);
 
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0);
@@ -406,7 +441,7 @@ describe('the provisioning wizard', function (): void {
         policyDenyOnly([ConsolePermission::AccountRotate]);
         policyTheirAccount();
 
-        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
@@ -415,10 +450,10 @@ describe('the provisioning wizard', function (): void {
     it('applies the new password once the grant has landed', function (): void {
         policyTheirAccount();
 
-        $result = policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
+        $result = policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply);
 
         expect($result->data['password_applied'])->toBeTrue()
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_OUR_PASSWORD))
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyOurPassword()))
             ->and(FakeProvisioningEngine::count('fake_grants', 'shop'))->toBe(1);
     });
 });

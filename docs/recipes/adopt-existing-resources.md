@@ -6,13 +6,17 @@ Take over an account or database that was on the server before db-console, delib
 
 A create that finds its account or database already there changes nothing, answers `AccountAlreadyExists` or `DatabaseAlreadyExists` (HTTP 409), and notifies the security recipients. Something else may be using that login or that data, so taking it over is a separate decision, made by an operator holding `resource.adopt` (Owner only by default).
 
+## Identity confirmation
+
+Authentication stays with the host application. It binds `Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance` (`hasSecondFactor()`, `recentlyConfirmedAt()`) from its own two-factor and password or passkey confirmation records, and db-console refuses `adopt_and_apply` with `ConfirmationRequired` (HTTP 403, `confirmation.required`) unless the operator confirmed within `security.step_up.ttl` seconds (default 300). Until the host binds one, `NullOperatorAssurance` reports no confirmation, so `adopt_and_apply` is refused.
+
 ## The three policies
 
 | Policy | What happens | Needs |
 |---|---|---|
 | `refuse` (default) | Nothing changes; the refusal is reported. | `account.create` / `database.create` |
 | `adopt` | Recorded as managed, as it was found. An account keeps its password. | `resource.adopt` |
-| `adopt_and_apply` | Adopted, then the account gets the supplied password (a generated one when none). A database is only adopted. | `resource.adopt`, `account.rotate`, step-up |
+| `adopt_and_apply` | Adopted, then the account gets the supplied password (a generated one when none). A database is only adopted. | `resource.adopt`, `account.rotate`, a recent identity confirmation |
 
 The policy is resolved most specific first: the call, then `servers.<name>.accounts.on_existing` (or `databases.on_existing`), then the global `accounts.on_existing` / `databases.on_existing`.
 

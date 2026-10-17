@@ -321,6 +321,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operator security
+    |--------------------------------------------------------------------------
+    | Authentication stays with the host application, which binds
+    | Contracts\OperatorAssurance from its own two-factor and confirmation
+    | records. db-console enforces policy on the answers.
+    */
+    'security' => [
+        'step_up' => [
+            // How recently (seconds) the operator must have confirmed their
+            // identity before an action that needs it: today, applying a
+            // password to an adopted account (accounts.on_existing
+            // adopt_and_apply). With no OperatorAssurance bound, it is refused.
+            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Audit trail
     |--------------------------------------------------------------------------
     */

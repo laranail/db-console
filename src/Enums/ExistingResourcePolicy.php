@@ -27,7 +27,7 @@ enum ExistingResourcePolicy: string implements Enumerator, Translatable
     #[Label('Adopt'), Description('Start managing it as it is, without touching its password. Risk: db-console now manages a resource something else may own; needs resource.adopt.')]
     case Adopt = 'adopt';
 
-    #[Label('Adopt and apply the password'), Description('Adopt it, then replace its password with the one supplied. Risk: anything already logging in with the old password stops working; needs resource.adopt, account.rotate and step-up.')]
+    #[Label('Adopt and apply the password'), Description('Adopt it, then replace its password with the one supplied. Risk: anything already logging in with the old password stops working; needs resource.adopt, account.rotate and a recent identity confirmation.')]
     case AdoptAndApply = 'adopt_and_apply';
 
     /**

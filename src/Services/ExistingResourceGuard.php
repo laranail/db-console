@@ -4,20 +4,24 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Services;
 
+use DateTimeInterface;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
+use Illuminate\Contracts\Auth\Factory as AuthFactory;
 use Illuminate\Contracts\Config\Repository as Config;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourceKind;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\ConfirmationRequired;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
-use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 
 /**
  * The one place that decides what a create does about an account or database
@@ -36,7 +40,8 @@ final readonly class ExistingResourceGuard
         private Config $config,
         private Authorizer $authorizer,
         private Gate $gate,
-        private StepUpVerifier $stepUp,
+        private OperatorAssurance $assurance,
+        private AuthFactory $auth,
         private Dispatcher $events,
         private DBConsoleLogger $log,
     ) {}
@@ -75,15 +80,23 @@ final readonly class ExistingResourceGuard
 
     /**
      * Applying a password to an account db-console did not create replaces a
-     * credential something else may be using: it needs account.rotate and a
-     * fresh step-up, on top of resource.adopt.
+     * credential something else may be using: it needs account.rotate, on
+     * top of resource.adopt, and an identity confirmation within
+     * security.step_up.ttl seconds as the host's OperatorAssurance reports
+     * it. Authentication stays with the host; this only enforces the answer,
+     * and fails closed when there is no operator or no confirmation on record.
      */
     public function authorizeApply(string $server): void
     {
-        $scope = "server:{$server}";
+        $this->authorizer->authorize(ConsolePermission::AccountRotate, "server:{$server}");
 
-        $this->authorizer->authorize(ConsolePermission::AccountRotate, $scope);
-        $this->stepUp->verify(ConsolePermission::AccountRotate, $scope);
+        $ttl = max(1, (int) $this->config->get('laranail.db-console.security.step_up.ttl', 300));
+        $operator = $this->auth->guard()->user();
+        $confirmedAt = $operator instanceof Authenticatable ? $this->assurance->recentlyConfirmedAt($operator) : null;
+
+        if (! $confirmedAt instanceof DateTimeInterface || $confirmedAt->getTimestamp() < now()->getTimestamp() - $ttl) {
+            throw ConfirmationRequired::forAction(ExistingResourcePolicy::AdoptAndApply->value, $ttl);
+        }
     }
 
     /**

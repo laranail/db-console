@@ -60,6 +60,10 @@ return [
 
     'not_authorized' => 'You are not authorized to perform :ability at :scope.',
 
+    'confirmation' => [
+        'required' => 'Confirm your identity first: :action needs a password, passkey or code confirmed within the last :seconds seconds.',
+    ],
+
     'secret' => [
         'unavailable'          => 'A stored credential could not be resolved from the :driver secret backend.',
         'driver_misconfigured' => 'The :driver secret driver is misconfigured: :problem.',

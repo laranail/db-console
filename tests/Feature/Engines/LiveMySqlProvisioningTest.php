@@ -14,6 +14,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
 use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
@@ -21,12 +22,14 @@ use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 
 /*
  * Against a real MySQL or MariaDB: the `live-mysql` job in
@@ -430,7 +433,28 @@ it('rolls the wizard back without dropping a database it did not create', functi
  * in with it, not by reading what db-console recorded.
  */
 
-const LIVE_MY_THEIR_PASSWORD = 'Their-My-Account-Password-2026!';
+/**
+ * The password the account had before db-console saw it, generated once per
+ * run so no literal credential sits in the repository.
+ */
+function liveMyTheirPassword(): string
+{
+    static $password = null;
+
+    return $password ??= Password::generate()->reveal();
+}
+
+/**
+ * An authenticated operator whose host reports a confirmation just now: what
+ * adopt_and_apply needs on top of its permissions.
+ */
+function liveMyConfirmedOperator(): void
+{
+    $operator = new User;
+    $operator->id = 7;
+    test()->actingAs($operator);
+    app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
+}
 
 function liveMyCanLogIn(string $user, string $password): bool
 {
@@ -450,7 +474,7 @@ function liveMyCanLogIn(string $user, string $password): bool
 
 function liveMyTheirAccount(string $user): void
 {
-    liveMyAs(null)->statement("CREATE USER '{$user}'@'%' IDENTIFIED BY '" . LIVE_MY_THEIR_PASSWORD . "'");
+    liveMyAs(null)->statement("CREATE USER '{$user}'@'%' IDENTIFIED BY '" . liveMyTheirPassword() . "'");
 }
 
 it('refuses an account it did not create, and the account keeps its own password', function (): void {
@@ -461,7 +485,7 @@ it('refuses an account it did not create, and the account keeps its own password
     expect(fn () => app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD)))
         ->toThrow(AccountAlreadyExists::class);
 
-    expect(liveMyCanLogIn($user, LIVE_MY_THEIR_PASSWORD))->toBeTrue()
+    expect(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeTrue()
         ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeFalse()
         ->and(DbAccount::query()->count())->toBe(0);
 });
@@ -474,7 +498,7 @@ it('adopts an account on request without touching its password', function (): vo
     $result = app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD), ExistingResourcePolicy::Adopt);
 
     expect($result->data['adopted'])->toBeTrue()
-        ->and(liveMyCanLogIn($user, LIVE_MY_THEIR_PASSWORD))->toBeTrue()
+        ->and(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeTrue()
         ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeFalse()
         ->and(DbAccount::query()->count())->toBe(1);
 });
@@ -484,11 +508,12 @@ it('gives an adopted account the supplied password under adopt_and_apply', funct
     $this->cleanup = [['account', $user, '%']];
     liveMyTheirAccount($user);
 
+    liveMyConfirmedOperator();
     $result = app(AccountManager::class)->create('live_mysql', new Username($user), new Host('%'), new Password(LIVE_MY_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
 
     expect($result->data['password_applied'])->toBeTrue()
         ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeTrue()
-        ->and(liveMyCanLogIn($user, LIVE_MY_THEIR_PASSWORD))->toBeFalse();
+        ->and(liveMyCanLogIn($user, liveMyTheirPassword()))->toBeFalse();
 });
 
 it('refuses an existing database, and adopts it on request', function (): void {

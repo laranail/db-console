@@ -22,7 +22,9 @@ the security recipients.
 - **A wizard re-run without a password** is the common case: it now needs `adopt` and
   `resource.adopt`. It never replaces the account's password.
 - **`adopt_and_apply`** replaces an adopted account's password with the one supplied, and needs
-  `account.rotate` too. Anything logging in with the old password stops working.
+  `account.rotate` too, plus an identity confirmation within `security.step_up.ttl` seconds that
+  your application reports by binding `Contracts\OperatorAssurance`. Without a binding it is
+  refused. Anything logging in with the old password stops working.
 - A CLI run that is interactive and finds the resource asks what to do. Scripts should pass
   `--no-interaction` (the configured policy applies) or `--on-existing`.
 

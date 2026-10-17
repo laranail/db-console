@@ -3,9 +3,13 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Gate;
+use Simtabi\Laranail\DBConsole\Domain\Password;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 
 /*
  * The CLI end of the existing-resource policy: --on-existing, a prompt naming
@@ -63,8 +67,13 @@ describe('user:create', function (): void {
 
     it('asks, naming each option\'s risk, when interactive and the account exists', function (): void {
         FakeProvisioningEngine::addAccount('shop', '%', 'theirs');
+        $password = Password::generate()->reveal();
+        $operator = new User;
+        $operator->id = 7;
+        $this->actingAs($operator);
+        app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
 
-        $this->artisan('laranail::db-console.user:create', ['--server' => 'fake', '--user' => 'shop', '--host' => '%', '--password' => 'Ours-Strong-Password-2026!'])
+        $this->artisan('laranail::db-console.user:create', ['--server' => 'fake', '--user' => 'shop', '--host' => '%', '--password' => $password])
             ->expectsChoice(
                 "Account 'shop'@'%' already exists. What should happen to it?",
                 'adopt_and_apply',
@@ -73,7 +82,7 @@ describe('user:create', function (): void {
             ->expectsOutputToContain('its password replaced')
             ->assertSuccessful();
 
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', 'Ours-Strong-Password-2026!'));
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', $password));
     });
 
     it('does not ask about an account that is not there', function (): void {

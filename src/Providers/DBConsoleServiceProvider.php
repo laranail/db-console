@@ -48,20 +48,20 @@ use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
 use Simtabi\Laranail\DBConsole\Listeners\SendNotifications;
-use Simtabi\Laranail\DBConsole\Security\NullStepUpVerifier;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\Package\Tools\Commands\InstallCommand;
 use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
 use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
 use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
 use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
-use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
@@ -356,8 +356,9 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->app->singleton(SecretRotator::class);
         $this->app->singleton(WebhookManager::class);
 
-        // No step-up until a driver is configured; the permission checks alone decide.
-        $this->app->bindIf(StepUpVerifier::class, NullStepUpVerifier::class);
+        // The host binds its own from its 2FA and confirmation records; until
+        // then, anything needing a recent confirmation fails closed.
+        $this->app->bindIf(OperatorAssurance::class, NullOperatorAssurance::class);
         $this->app->singleton(ExistingResourceGuard::class);
     }
 

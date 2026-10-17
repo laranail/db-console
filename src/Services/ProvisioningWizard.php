@@ -47,7 +47,8 @@ final readonly class ProvisioningWizard
      * rules keep a re-run safe:
      *  - without a password the wizard never replaces an adopted account's
      *    credential: adopt_and_apply is treated as adopt;
-     *  - with one, the right to apply it (account.rotate and step-up) is
+     *  - with one, the right to apply it (account.rotate and a recent
+     *    identity confirmation) is
      *    checked when the account is adopted, before the grant, and the
      *    password itself is applied last, so any earlier failure leaves the
      *    account's credential as it was.

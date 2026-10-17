@@ -22,13 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `adopt` needs the new **`resource.adopt`** permission (Owner only by default), records the
     resource in the catalog with its password untouched, and dispatches `AccountAdopted` /
     `DatabaseAdopted` (Warning, so they alert).
-  - `adopt_and_apply` also needs `account.rotate` and a pass from the new
-    `Security\Contracts\StepUpVerifier` (bound to `NullStepUpVerifier` until a driver ships), and
-    dispatches `AccountPasswordApplied`. For a database it adopts.
+  - `adopt_and_apply` also needs `account.rotate` and an identity confirmation within
+    `security.step_up.ttl` seconds (default 300), read from the new `Contracts\OperatorAssurance`
+    that the host binds (`hasSecondFactor()`, `recentlyConfirmedAt()`). Authentication stays with
+    the host. Until it binds one, `NullOperatorAssurance` reports none, so `adopt_and_apply` is
+    refused with `ConfirmationRequired` (HTTP 403, `confirmation.required`). It dispatches
+    `AccountPasswordApplied`. For a database it adopts.
   - Results carry `adopted` and `password_applied`. All five events are Security-category
     notifications (`ExistingResourceNotification`) and webhook events.
 - **`ProvisioningWizard::provision()` takes `$onExisting`.** Without a password it never replaces an
-  adopted account's credential. With one, it checks `account.rotate` and step-up when it adopts the
+  adopted account's credential. With one, it checks `account.rotate` and the confirmation when it adopts the
   account, before the grant, and applies the password as its last step, so an earlier failure leaves
   the credential as it was.
 - **`--on-existing`** on `user:create`, `db:create` and `wizard`. Interactive and unset, they ask
