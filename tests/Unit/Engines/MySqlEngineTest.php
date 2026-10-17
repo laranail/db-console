@@ -188,6 +188,15 @@ describe('recreating an account from its stored hash', function (): void {
             ->and($statements[0]->redacted)->not->toContain('94BDCEBE');
     });
 
+    it('refuses a MySQL hash literal that is not hex, since it is spliced into the statement', function (string $literal): void {
+        expect(fn (): StatementList => engine()->createAccountWithAuth(
+            new Username('shop_user'),
+            new Host('%'),
+            'caching_sha2_password',
+            $literal,
+        ))->toThrow(InvalidArgumentException::class);
+    })->with(["0x41' OR '1", '0x4', 'AB12', '0x41; DROP USER root']);
+
     it('refuses a MariaDB hash literal that is not hex', function (): void {
         expect(fn (): StatementList => (new MariaDbEngine)->createAccountWithAuth(
             new Username('shop_user'),

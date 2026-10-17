@@ -81,6 +81,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connected by host and port instead. The backup connection now carries both keys.
 - **Backup before drop resolves the server first**, so a server's SSH tunnel is open and its
   admin connection points at it before the dump reads that connection.
+- **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
+  It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already
+  did; the two share the check.
 - **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
   failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
   `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any
