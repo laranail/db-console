@@ -168,8 +168,11 @@ it('runs as the minimal admin doctor recommends, not root', function (): void {
 
     // Without this the rest of the group proves nothing: root bypasses every
     // privilege check the grant recommendation is about.
-    $finding = (fn () => $this->checkAdminPrivileges('live_mysql'))->call(app(DoctorService::class));
-    expect($finding->severity)->toBe(Severity::Info);
+    $findings = (fn (): array => $this->checkAdminPrivileges('live_mysql'))->call(app(DoctorService::class));
+    expect($findings)->not->toBeEmpty();
+    foreach ($findings as $finding) {
+        expect($finding->severity)->toBe(Severity::Info);
+    }
 
     if (liveMyEngine() === 'mysql') {
         // The job sets it the way DigitalOcean does; a table without a
