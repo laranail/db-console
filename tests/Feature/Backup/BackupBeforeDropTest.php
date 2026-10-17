@@ -49,12 +49,29 @@ beforeEach(function (): void {
     Gate::before(fn ($user = null): bool => true);
     $this->migrateCatalog();
 
-    config()->set('filesystems.disks.local', ['driver' => 'local', 'root' => sys_get_temp_dir() . '/db-console-backup-test']);
+    // A directory per test, removed afterwards: a fixed path outlived the run.
+    $this->backupRoot = sys_get_temp_dir() . '/db-console-backup-test-' . bin2hex(random_bytes(6));
+    config()->set('filesystems.disks.local', ['driver' => 'local', 'root' => $this->backupRoot]);
     // SQLite reports every database as non-empty, so the drop always snapshots.
     config()->set('database.connections.backup_admin', ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
     config()->set('laranail.db-console.servers.lite', [
         'engine' => 'sqlite', 'connection' => 'backup_admin', 'tls' => ['enabled' => false],
     ]);
+});
+
+afterEach(function (): void {
+    if (! is_dir($this->backupRoot)) {
+        return;
+    }
+
+    $entries = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($this->backupRoot, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST,
+    );
+    foreach ($entries as $entry) {
+        $entry->isDir() ? @rmdir($entry->getPathname()) : @unlink($entry->getPathname());
+    }
+    @rmdir($this->backupRoot);
 });
 
 function useBackupManager(bool $fails): RecordingBackupManager
@@ -139,7 +156,7 @@ it('prunes only this database\'s own snapshots older than retention_days', funct
     useBackupManager(fails: false);
     config()->set('laranail.db-console.backup.retention_days', 30);
 
-    $dir = sys_get_temp_dir() . '/db-console-backup-test/db-console/backups/lite';
+    $dir = $this->backupRoot . '/db-console/backups/lite';
     @mkdir($dir, 0700, true);
     $old = "{$dir}/shop_prod-20250101T000000Z.sql";
     $recent = "{$dir}/shop_prod-" . now()->subDays(2)->utc()->format('Ymd\THis\Z') . '.sql';
@@ -157,5 +174,4 @@ it('prunes only this database\'s own snapshots older than retention_days', funct
         ->and(file_exists($otherDb))->toBeTrue('another database\'s snapshot is never touched')
         ->and(file_exists($foreign))->toBeTrue('a file this service did not name is never touched');
 
-    array_map(@unlink(...), glob("{$dir}/*") ?: []);
 });
