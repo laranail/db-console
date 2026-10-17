@@ -28,6 +28,7 @@ use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Engines\DatabaseScopedGrantsEngine;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
@@ -206,15 +207,57 @@ final readonly class PrivilegeManager
         $this->authorizer->authorize(ConsolePermission::AccountView, "server:{$server}");
 
         [$engine, $connection] = $this->registry->resolve($server);
+        $context = ['operation' => 'account.view'];
+
+        $unreadable = [];
+        if ($engine instanceof DatabaseScopedGrantsEngine) {
+            [$databases, $unreadable] = $this->grantDatabases($engine, $connection, $user, $context);
+            $statements = $engine->showGrantsIn($user, $databases);
+        } else {
+            $statements = $engine->showGrants($user, $host);
+        }
 
         $grants = [];
-        foreach ($engine->showGrants($user, $host) as $statement) {
-            foreach ($connection->select($statement->sql, ['operation' => 'account.view']) as $row) {
-                $grants[] = implode(' ', array_map(strval(...), array_values($row)));
-            }
+        foreach ($this->scoped->select($connection, $statements, $context) as $row) {
+            $grants[] = implode(' ', array_map(strval(...), array_values($row)));
+        }
+
+        // A database the admin may not connect to still has grants in it;
+        // saying so beats a list that looks complete.
+        foreach ($unreadable as $name) {
+            $grants[] = "database {$name} not readable: the admin may not connect to it";
         }
 
         return $grants;
+    }
+
+    /**
+     * The databases to read an account's grants in, and those the admin may
+     * not connect to.
+     *
+     * @param array<string, mixed> $context
+     *
+     * @return array{list<DbName>, list<string>}
+     */
+    private function grantDatabases(DatabaseScopedGrantsEngine $engine, AdminConnection $connection, Username $user, array $context): array
+    {
+        $readable = [];
+        $unreadable = [];
+
+        foreach ($engine->grantDatabases($user) as $statement) {
+            foreach ($connection->selectStatement($statement, $context) as $row) {
+                $name = (string) reset($row);
+                if (in_array($row['can_connect'] ?? true, [false, 0, '0', 'f', 'false'], true)) {
+                    $unreadable[] = $name;
+
+                    continue;
+                }
+
+                $readable[] = new DbName($name);
+            }
+        }
+
+        return [$readable, $unreadable];
     }
 
     /**

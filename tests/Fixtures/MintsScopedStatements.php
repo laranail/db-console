@@ -41,6 +41,16 @@ trait MintsScopedStatements
             ->inDatabase(new DbName('target_db'));
     }
 
+    public function tablesEverywhere(): StatementList
+    {
+        $read = "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name";
+
+        return new StatementList(
+            Statement::plain($read),
+            Statement::plain($read)->inDatabase(new DbName('target_db')),
+        );
+    }
+
     public function countOnTarget(): Statement
     {
         return Statement::plain('SELECT COUNT(*) FROM t')->inDatabase(new DbName('target_db'));

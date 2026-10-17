@@ -104,6 +104,30 @@ final readonly class ScopedConnections
     }
 
     /**
+     * The rows of every read statement, in order, each read on the database
+     * it is scoped to.
+     *
+     * @param array<string, mixed> $context
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function select(AdminConnection $admin, StatementList $statements, array $context = []): array
+    {
+        $opened = [];
+        $rows = [];
+
+        try {
+            foreach ($statements as $statement) {
+                $rows = [...$rows, ...$this->connectionFor($admin, $statement, $opened)->selectStatement($statement, $context)];
+            }
+
+            return $rows;
+        } finally {
+            $this->close($opened);
+        }
+    }
+
+    /**
      * @param array<string, AdminConnection> $opened connections opened so far, by name
      */
     private function connectionFor(AdminConnection $admin, Statement $statement, array &$opened): AdminConnection

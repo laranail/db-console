@@ -28,7 +28,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
+final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -390,12 +390,70 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, GrantVerif
 
     public function showGrants(Username $u, Host $h): StatementList
     {
-        return new StatementList(
+        return $this->showGrantsIn($u, []);
+    }
+
+    public function grantDatabases(Username $u): StatementList
+    {
+        // Grants on objects inside a database are recorded in the shared
+        // catalog against that database, like ownership, so the databases a
+        // drop must release in are the ones whose grants are worth reading.
+        return $this->dependentDatabases($u);
+    }
+
+    public function showGrantsIn(Username $u, array $databases): StatementList
+    {
+        $q = Quoter::for($this->type());
+        $grantee = '(SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ' . $q->literal($u->value) . ')';
+
+        // Grants on databases sit in the shared catalog and read the same
+        // from anywhere. Explicit grants only: what a role holds through
+        // PUBLIC or by owning an object has no ACL entry naming it.
+        $statements = [
             Statement::plain(
-                'SELECT table_schema, table_name, privilege_type FROM information_schema.role_table_grants'
-                . ' WHERE grantee = ' . Quoter::for($this->type())->literal($u->value),
+                "SELECT 'database' AS object_type, d.datname::text AS database_name, d.datname::text AS object_name, a.privilege_type"
+                . ' FROM pg_catalog.pg_database d CROSS JOIN LATERAL aclexplode(d.datacl) AS a'
+                . " WHERE a.grantee = {$grantee}"
+                . ' ORDER BY 2, 4',
             ),
-        );
+            Statement::plain($this->objectGrants($grantee)),
+        ];
+
+        foreach ($databases as $db) {
+            $statements[] = Statement::plain($this->objectGrants($grantee))->inDatabase($db);
+        }
+
+        return new StatementList(...$statements);
+    }
+
+    /**
+     * Grants on schemas, relations, functions and default privileges in the
+     * database the session is connected to.
+     */
+    private function objectGrants(string $grantee): string
+    {
+        $database = 'current_database()::text';
+
+        return implode(' UNION ALL ', [
+            "SELECT 'schema' AS object_type, {$database} AS database_name, n.nspname::text AS object_name, a.privilege_type"
+            . ' FROM pg_catalog.pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) AS a'
+            . " WHERE a.grantee = {$grantee}",
+            "SELECT CASE c.relkind WHEN 'S' THEN 'sequence' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view'"
+            . " WHEN 'f' THEN 'foreign table' ELSE 'table' END, {$database}, n.nspname || '.' || c.relname, a.privilege_type"
+            . ' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
+            . ' CROSS JOIN LATERAL aclexplode(c.relacl) AS a'
+            . " WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f') AND a.grantee = {$grantee}",
+            "SELECT 'function', {$database}, n.nspname || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')', a.privilege_type"
+            . ' FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace'
+            . ' CROSS JOIN LATERAL aclexplode(p.proacl) AS a'
+            . " WHERE a.grantee = {$grantee}",
+            "SELECT 'default privileges', {$database}, CASE da.defaclobjtype WHEN 'r' THEN 'tables' WHEN 'S' THEN 'sequences'"
+            . " WHEN 'f' THEN 'functions' WHEN 'T' THEN 'types' WHEN 'n' THEN 'schemas' ELSE da.defaclobjtype::text END"
+            . " || COALESCE(' in schema ' || n.nspname, ''), a.privilege_type"
+            . ' FROM pg_catalog.pg_default_acl da LEFT JOIN pg_catalog.pg_namespace n ON n.oid = da.defaclnamespace'
+            . ' CROSS JOIN LATERAL aclexplode(da.defaclacl) AS a'
+            . " WHERE a.grantee = {$grantee}",
+        ]) . ' ORDER BY 1, 2, 3, 4';
     }
 
     /**
