@@ -210,3 +210,97 @@ jobs:
           DB_CONSOLE_LIVE_MYSQL_ADMIN_USER: db_console_admin
           DB_CONSOLE_LIVE_MYSQL_ADMIN_PASSWORD: secret
         run: vendor/bin/pest --no-coverage --colors=never --group=live-mysql --fail-on-skipped
+
+  # SSH tunnels against a real OpenSSH server, with both drivers. The server
+  # runs in a container on the service network, so from it the databases are
+  # `postgres` and `mysql`, and it mounts both servers' socket directories so
+  # forwards to a remote Unix socket are exercised too. A second, unrelated
+  # host key proves the pin refuses. --fail-on-skipped turns a missing
+  # variable into a failure rather than an empty pass.
+  live-ssh:
+    name: live SSH tunnels · openssh + phpseclib
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: db_console
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: db_console_test
+        volumes:
+          - pgsocket:/var/run/postgresql
+        options: >-
+          --health-cmd "pg_isready -U db_console" --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: secret
+          MYSQL_DATABASE: db_console_test
+        volumes:
+          - mysqlsocket:/var/run/mysqld
+        options: >-
+          --health-cmd "mysqladmin ping -psecret" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          extensions: 'dom, curl, libxml, mbstring, zip, fileinfo, pdo, pdo_sqlite, pdo_pgsql, pdo_mysql, sodium'
+          coverage: none
+          tools: composer:v2
+      - name: Install dependencies
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+      - name: Generate the client key and an unrelated host key
+        run: |
+          ssh-keygen -q -t ed25519 -N '' -C db-console-ci -f "$RUNNER_TEMP/id_tunnel"
+          ssh-keygen -q -t ed25519 -N '' -C impostor -f "$RUNNER_TEMP/impostor_host_key"
+      - name: Start an OpenSSH server on the service network
+        run: |
+          docker run -d --name sshd \
+            --network "${{ job.services.postgres.network }}" \
+            -p 2222:22 \
+            -v pgsocket:/var/run/postgresql \
+            -v mysqlsocket:/var/run/mysqld \
+            -v "$RUNNER_TEMP/id_tunnel.pub:/authorized_keys:ro" \
+            alpine:3.22 sh -euc '
+              apk add --no-cache openssh-server >/dev/null
+              ssh-keygen -A
+              adduser -D tunnel
+              # Alpine creates the account locked ("!"), which sshd refuses
+              # even for a key; "*" has no password and is not locked.
+              sed -i "s/^tunnel:!/tunnel:*/" /etc/shadow
+              install -d -m 700 -o tunnel -g tunnel /home/tunnel/.ssh
+              install -m 600 -o tunnel -g tunnel /authorized_keys /home/tunnel/.ssh/authorized_keys
+              exec /usr/sbin/sshd -D -e \
+                -o AllowTcpForwarding=yes -o AllowStreamLocalForwarding=yes \
+                -o PasswordAuthentication=no -o PermitRootLogin=no
+            '
+          for attempt in $(seq 1 60); do
+            if ssh-keyscan -p 2222 -t ed25519 127.0.0.1 >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker logs sshd
+          ssh-keyscan -p 2222 -t ed25519 127.0.0.1
+      - name: Read the pinned host key from the server itself
+        run: |
+          {
+            echo "DB_CONSOLE_LIVE_SSH_HOST_KEY=$(docker exec sshd cat /etc/ssh/ssh_host_ed25519_key.pub)"
+            echo "DB_CONSOLE_LIVE_SSH_WRONG_HOST_KEY=$(cat "$RUNNER_TEMP/impostor_host_key.pub")"
+          } >> "$GITHUB_ENV"
+      - name: Copy the MySQL CA out of the service container
+        run: docker cp "${{ job.services.mysql.id }}:/var/lib/mysql/ca.pem" "$RUNNER_TEMP/mysql-ca.pem"
+      - name: Live SSH tunnels
+        env:
+          DB_CONSOLE_LIVE_SSH_PORT: '2222'
+          DB_CONSOLE_LIVE_SSH_USER: tunnel
+          DB_CONSOLE_LIVE_SSH_KEY: ${{ runner.temp }}/id_tunnel
+          DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
+        run: vendor/bin/pest --no-coverage --colors=never --group=live-ssh --fail-on-skipped
+      - name: SSH server log
+        if: failure()
+        run: docker logs sshd
