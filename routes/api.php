@@ -30,6 +30,7 @@ Route::prefix(app(ApiSettings::class)->path())
 
         Route::get('servers/{server}/accounts', [AccountController::class, 'index']);
         Route::post('servers/{server}/accounts', [AccountController::class, 'store']);
+        Route::get('servers/{server}/accounts/{username}/grants', [AccountController::class, 'grants']);
         Route::delete('servers/{server}/accounts/{username}', [AccountController::class, 'destroy']);
 
         Route::post('servers/{server}/grants', [GrantController::class, 'store']);
