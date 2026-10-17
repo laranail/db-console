@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `tls` block was never applied, and `doctor` reported TLS from config alone.** Nothing turned
+  `tls.ca/cert/key/verify` into driver options, so an admin connection could run in plaintext while
+  `TlsChecker` reported `required_ok` because `tls.enabled` was true. `ServerRegistry` now writes the
+  block into the admin connection before connecting (PDO SSL options for MySQL/MariaDB; `sslmode`,
+  `sslrootcert`, `sslcert`, `sslkey` for PostgreSQL; `encrypt`, `trust_server_certificate` for SQL
+  Server), purging a connection already opened without it. `TlsChecker` asks the live session
+  through the new `TlsProbe` contract (default `SessionTlsProbe`), so a plaintext session is `off`
+  and fails `doctor` whatever the config says. A new `TlsStatus::Unmeasured` case covers TLS that
+  is configured but could not be checked.
+
+  **Behaviour change:** `TlsChecker::status()` now opens the admin connection to measure it, where
+  it used to read config only; `encryption:status` therefore needs the server reachable to report
+  anything but `unmeasured`. A PostgreSQL server without SSL now refuses a connection with
+  `tls.enabled=true` (`sslmode=require`) instead of falling back to plaintext.
+
+- **`TlsChecker::isLocal()` treated a connection configured only by `url` (`DATABASE_URL`) as
+  localhost**, which exempted exactly the managed-database setups from the TLS check. It now parses
+  the url and checks every `read`/`write` host.
+
 - **`audit:view --limit=<non-numeric>` printed nothing.** `(int)` on a typo is `0`, and `limit(0)`
   returns no rows -- so a mistyped limit rendered an empty audit view, which reads exactly like
   "there is no audit history" rather than like a bad argument. Now `intOption('limit', 25)`, which

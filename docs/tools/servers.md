@@ -8,7 +8,31 @@ A **server** is a named target with an engine and a dedicated admin connection. 
 
 ## TLS
 
-Each server carries a `tls` block (`enabled`, `verify`, `ca`, `cert`, `key`). `doctor` errors on a non-local server with TLS off and warns when TLS is on but unverified.
+Each server carries a `tls` block (`enabled`, `verify`, `ca`, `cert`, `key`). When `enabled` is true, `ServerRegistry` writes it into the admin connection before connecting, overriding the same keys in `config/database.php`:
+
+| Driver | What the block sets |
+|---|---|
+| `mysql`, `mariadb` | `options`: `Pdo\Mysql::ATTR_SSL_CA`, `ATTR_SSL_CERT`, `ATTR_SSL_KEY`, `ATTR_SSL_VERIFY_SERVER_CERT` |
+| `pgsql` | `sslmode` (`verify-full` when `verify`, else `require`), `sslrootcert`, `sslcert`, `sslkey` |
+| `sqlsrv` | `encrypt=yes`, `trust_server_certificate` (`no` when `verify`) |
+
+A key the block leaves null is not removed, so a CA set on the connection itself still applies. With `enabled` false the connection is left exactly as configured.
+
+> pdo_mysql starts TLS only when a CA, certificate, key, CA path or cipher is set. `tls.enabled=true` with no `tls.ca` connects in plaintext, and `doctor` reports it. For a managed provider, download its CA certificate and point `tls.ca` at it.
+
+### Measured, not assumed
+
+`TlsChecker` asks the live session whether it is encrypted (`Ssl_cipher` on MySQL, `pg_stat_ssl` on PostgreSQL, `CONNECTIONPROPERTY('encrypt_option')` on SQL Server). None of these needs a privileged account, so the check works under a managed provider's admin user.
+
+| Status | Meaning | `doctor`, non-local server |
+|---|---|---|
+| `required_ok` | encrypted, `enabled` and `verify` on | ok |
+| `unverified` | encrypted, but `verify` off or `enabled` off | warning |
+| `off` | the session is plaintext, whatever the config says | error |
+| `unmeasured` | `enabled` on, but the session could not be asked | warning |
+| `n/a` | SQLite | — |
+
+A server is local when every host it can reach is `localhost`, `127.0.0.1` or `::1`, including a host given only in `url` (`DATABASE_URL`) and the `read`/`write` hosts. Local servers are exempt from these findings.
 
 ## Multi-server isolation
 
