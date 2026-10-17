@@ -39,6 +39,18 @@ enum ExistingResourcePolicy: string implements Enumerator, Translatable
     }
 
     /**
+     * The cases that make sense for $kind, in order of increasing risk.
+     *
+     * @return list<self>
+     */
+    public static function casesFor(ExistingResourceKind $kind): array
+    {
+        return $kind === ExistingResourceKind::Database
+            ? [self::Refuse, self::Adopt]
+            : self::cases();
+    }
+
+    /**
      * The policy for $kind: a database has no password to apply, so
      * AdoptAndApply adopts it.
      */
@@ -50,17 +62,5 @@ enum ExistingResourcePolicy: string implements Enumerator, Translatable
     public function adopts(): bool
     {
         return $this !== self::Refuse;
-    }
-
-    /**
-     * The cases that make sense for $kind, in order of increasing risk.
-     *
-     * @return list<self>
-     */
-    public static function casesFor(ExistingResourceKind $kind): array
-    {
-        return $kind === ExistingResourceKind::Database
-            ? [self::Refuse, self::Adopt]
-            : self::cases();
     }
 }

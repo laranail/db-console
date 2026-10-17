@@ -5,33 +5,34 @@ declare(strict_types=1);
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Notification;
 use Simtabi\Laranail\DBConsole\Domain\Host;
+use Illuminate\Support\Facades\Notification;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
-use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
-use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
+use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
+use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Enums\NotificationCategory;
-use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
-use Simtabi\Laranail\DBConsole\Events\AccountPasswordApplied;
-use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Events\AccountCreationRefused;
+use Simtabi\Laranail\DBConsole\Events\AccountPasswordApplied;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
-use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Events\DatabaseCreationRefused;
+use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
+use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
 use Simtabi\Laranail\DBConsole\Notifications\ExistingResourceNotification;
@@ -70,12 +71,12 @@ function policyTheirAccount(): void
     FakeProvisioningEngine::addAccount('shop', '%', POLICY_THEIR_PASSWORD);
 }
 
-function policyCreateShop(?ExistingResourcePolicy $policy = null, ?Password $password = null): Simtabi\Laranail\DBConsole\Services\Results\OperationResult
+function policyCreateShop(?ExistingResourcePolicy $policy = null, ?Password $password = null): OperationResult
 {
     return app(AccountManager::class)->create('fake', new Username('shop'), new Host('%'), $password ?? new Password(POLICY_OUR_PASSWORD), $policy);
 }
 
-function policyProvisionShop(?Password $password, ?ExistingResourcePolicy $policy = null): Simtabi\Laranail\DBConsole\Services\Results\OperationResult
+function policyProvisionShop(?Password $password, ?ExistingResourcePolicy $policy = null): OperationResult
 {
     return app(ProvisioningWizard::class)->provision(
         'fake',
@@ -94,7 +95,7 @@ describe('an existing account', function (): void {
         Event::fake([AccountCreationRefused::class, AccountAdopted::class, AccountCreated::class]);
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
 
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(DbAccount::query()->count())->toBe(0);
@@ -108,7 +109,7 @@ describe('an existing account', function (): void {
         config()->set('laranail.db-console.notifications.recipients.security', ['security@example.com']);
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
 
         Notification::assertSentOnDemand(ExistingResourceNotification::class);
     });
@@ -133,7 +134,7 @@ describe('an existing account', function (): void {
         policyDenyOnly([ConsolePermission::ResourceAdopt]);
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop(ExistingResourcePolicy::Adopt))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::Adopt))->toThrow(NotAuthorized::class);
         expect(DbAccount::query()->count())->toBe(0);
     });
 
@@ -141,7 +142,7 @@ describe('an existing account', function (): void {
         policyDenyOnly([ConsolePermission::AccountRotate]);
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
     });
 
@@ -178,7 +179,7 @@ describe('an existing account', function (): void {
         });
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(DbAccount::query()->count())->toBe(0);
     });
@@ -207,7 +208,7 @@ describe('policy layers, most specific first', function (): void {
         config()->set('laranail.db-console.servers.fake.accounts.on_existing', 'refuse');
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
     });
 
     it('lets a call override the server', function (): void {
@@ -221,7 +222,7 @@ describe('policy layers, most specific first', function (): void {
         config()->set('laranail.db-console.accounts.on_existing', 'yes-please');
         policyTheirAccount();
 
-        expect(fn () => policyCreateShop())->toThrow(AccountAlreadyExists::class);
+        expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
     });
 
     it('creates a new account normally whatever the policy, with no adopt permission', function (): void {
@@ -364,7 +365,7 @@ describe('the provisioning wizard', function (): void {
     it('refuses a re-run by default, and undoes only what the run created', function (): void {
         policyTheirAccount();
 
-        expect(fn () => policyProvisionShop(null))->toThrow(AccountAlreadyExists::class);
+        expect(fn (): OperationResult => policyProvisionShop(null))->toThrow(AccountAlreadyExists::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1);
@@ -374,7 +375,7 @@ describe('the provisioning wizard', function (): void {
         policyDenyOnly([ConsolePermission::ResourceAdopt]);
         policyTheirAccount();
 
-        expect(fn () => policyProvisionShop(null, ExistingResourcePolicy::Adopt))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyProvisionShop(null, ExistingResourcePolicy::Adopt))->toThrow(NotAuthorized::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1);
@@ -385,7 +386,7 @@ describe('the provisioning wizard', function (): void {
         policyTheirAccount();
         $this->engine->failGrants = true;
 
-        expect(fn () => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(1)
             ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1);
@@ -395,7 +396,7 @@ describe('the provisioning wizard', function (): void {
         policyTheirAccount();
         $this->engine->failGrants = true;
 
-        expect(fn () => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(DBConsoleException::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(DBConsoleException::class);
 
         expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
             ->and(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0);
@@ -405,7 +406,7 @@ describe('the provisioning wizard', function (): void {
         policyDenyOnly([ConsolePermission::AccountRotate]);
         policyTheirAccount();
 
-        expect(fn () => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
+        expect(fn (): OperationResult => policyProvisionShop(new Password(POLICY_OUR_PASSWORD), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));

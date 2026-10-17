@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Simtabi\Laranail\Enumerator\Rules\EnumValue;
 use Simtabi\Laranail\DBConsole\Validation\Rules\HostRule;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Validation\Rules\UsernameRule;
 use Simtabi\Laranail\DBConsole\Validation\Rules\PasswordStrengthRule;
 
@@ -31,6 +33,8 @@ final class CreateAccountRequest extends FormRequest
             'password'    => ['required_without:generate', 'nullable', 'string', new PasswordStrengthRule],
             'generate'    => ['nullable', 'boolean'],
             'require_tls' => ['nullable', 'boolean'],
+            // What to do when it already exists; absent = the configured policy (refuse by default).
+            'on_existing' => ['nullable', 'string', EnumValue::for(ExistingResourcePolicy::class)],
         ];
     }
 }
