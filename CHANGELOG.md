@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Services\OwnershipReleasingDrop`, which drops a Postgres role so that a failure leaves as little
   behind as Postgres allows (see Fixed).
 - The `grant.not_applied` exception code (`GrantNotApplied`, HTTP 502).
+- **`doctor` checks a Postgres admin.** It skipped Postgres and reported every admin as fine, a
+  superuser included. It now reads the role from `pg_roles` (`Engines\AdminInspectingEngine`,
+  judged by `Doctor\PostgresAdminCheck`) and fails a superuser, an admin without `CREATEDB` or
+  `CREATEROLE`, and a server older than 13, and warns when the admin connects through a known
+  pooler port (6432, 6543, 25061).
+- `Engines\DatabaseScopedGrantsEngine`, `Engines\ScramSha256` and `ScopedConnections::select()`,
+  which reads rows from each statement's own database.
 
 ### Fixed
 
@@ -67,6 +74,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and throws `GrantNotApplied`, naming each privilege. Revokes run in one transaction too.
 - **A drop whose emptiness check failed was not audited.** The check now runs inside the drop's
   failure handling, so it is logged and dispatches `OperationFailed` like any other failed drop.
+- **PostgreSQL showed a role's grants in the admin's own database only.** `showGrants()` read
+  `information_schema.role_table_grants` on the admin connection, so a role provisioned into any
+  other database showed nothing, and schema and database grants never showed at all. Database
+  grants are now read from `pg_database`, and schema, table, sequence, function and default-privilege
+  grants inside every database the role has entries in. Each line is `<kind> <database> <object>
+  <privilege>`; a database the admin cannot connect to is listed as not readable.
+- **PostgreSQL could not create a `LATIN1` or `SQL_ASCII` database**, the two non-UTF8 encodings it
+  offers: a copy of `template1` keeps its `UTF8` encoding. Any encoding other than `UTF8` now copies
+  `template0` with the `C` locale. The `UTF8` path is unchanged.
+- **PostgreSQL role passwords were sent in clear**, where `log_statement = 'ddl'` or a failed
+  statement could write them to the server log. `CREATE ROLE` and `ALTER ROLE` now send a
+  SCRAM-SHA-256 verifier computed client-side, which Postgres stores as given.
 - **PostgreSQL's "is empty" check always answered "not empty".** It is now read inside the target
   database, so a wizard rollback drops the database it created instead of leaving it behind, and an
   empty database is no longer backed up before a drop.
