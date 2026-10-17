@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### SSH tunnels
+
+Nothing changes unless a server's `ssh.enabled` is set. Two things to know when it is:
+
+- **`ssh.host_key` is required.** A server without a pinned host key is refused with
+  `ServerMisconfigured`. Take the key from the server (`/etc/ssh/ssh_host_ed25519_key.pub`) or
+  `ssh-keyscan -t ed25519 <host>` over a network you trust.
+- **MySQL with `tls.verify=true` through a TCP tunnel** checks the certificate against
+  127.0.0.1 and fails unless the certificate names it: pdo_mysql cannot verify one name while
+  dialling another. Set `tls.verify=false` for that server, or forward to `ssh.remote_socket`.
+  PostgreSQL keeps verifying the real name.
+- **Backup before drop through a PostgreSQL tunnel with `verify-full`** fails, and so stops the
+  drop: db-tools runs `pg_dump --host`, which has no `hostaddr`. Until db-tools learns it, set
+  `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` or `tls.verify=false` for that server.
+
+A PostgreSQL server whose `host` is a socket directory is now local, so `doctor` no longer reports
+its TLS.
+
 ### TLS is applied and measured
 
 The `tls` block on a server is now written into its admin connection, and

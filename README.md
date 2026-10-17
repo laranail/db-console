@@ -97,7 +97,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 
 ### Reference
 
-- [Engines](docs/tools/engines.md) · [Servers & connections](docs/tools/servers.md) · [Secret vault](docs/tools/secret-vault.md) · [Catalog encryption](docs/tools/catalog-encryption.md)
+- [Engines](docs/tools/engines.md) · [Servers & connections](docs/tools/servers.md) · [SSH tunnels & sockets](docs/tools/ssh-tunnels.md) · [Secret vault](docs/tools/secret-vault.md) · [Catalog encryption](docs/tools/catalog-encryption.md)
 - [RBAC](docs/tools/rbac.md) · [Audit trail](docs/tools/audit.md) · [Wizard & rollback](docs/tools/wizard-executor.md) · [Attach / detach](docs/tools/attach-detach.md) · [Reconcile](docs/tools/reconcile.md) · [Backup before drop](docs/tools/backups.md)
 - [doctor](docs/tools/doctor.md) · [Commands](docs/tools/commands.md) · [REST API](docs/tools/api.md) · [Webhooks](docs/tools/webhooks.md) · [Events & notifications](docs/tools/events-notifications.md)
 

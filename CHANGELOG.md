@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **SSH tunnels to database servers** (Phase D4). A server's `ssh` block routes its admin
+  connection through a tunnel, behind the `Tunnels\Contracts\TunnelDriver` contract with two
+  drivers chosen per server: `openssh` (the default; `ssh -N -L` with `BatchMode`,
+  `StrictHostKeyChecking=yes` against a generated `known_hosts`, `ExitOnForwardFailure` and
+  `ServerAliveInterval`) and `phpseclib` (pure PHP, forwarding from a child process). Both refuse
+  a host key that is not the pinned `ssh.host_key`, and there is no trust on first use. A private
+  key comes from `ssh.key` (a path) or `ssh.key_secret` (a secrets-driver reference written to a
+  `0600` file in a `0700` directory and removed with the tunnel). `ServerRegistry` opens the tunnel
+  on first use, rewrites the admin connection to its local end, reopens it if it dies, and
+  `closeTunnels()` stops it and restores the connection when the application terminates.
+- **Sockets in both directions.** `ssh.remote_socket` forwards to a Unix socket on the SSH host
+  (OpenSSH `-L port:/socket`, phpseclib `direct-streamlocal@openssh.com`), and `ssh.local=socket`
+  makes the tunnel's local end a `0600` socket in a `0700` directory instead of a loopback port.
+  PostgreSQL's local socket is named `.s.PGSQL.5432`, where libpq looks for it.
+- **TLS through a tunnel.** The `tls` block still applies end to end. PostgreSQL with
+  `sslmode=verify-full` dials the forward through libpq's `hostaddr` and keeps verifying the
+  certificate against the real host name.
+- `doctor` checks `server:<name>:ssh-driver`, `ssh-host-key` (with the pinned fingerprint) and
+  `ssh-tunnel`, before the reachability round trip, which then runs through the tunnel.
+- `TunnelFailed` (`server.tunnel_failed`, HTTP 502) and the `TunnelDriverType` enum.
+- **A live SSH job** (`live-ssh` in `tests.yml`): an OpenSSH server container in front of
+  PostgreSQL 18 and MySQL 8.4, sharing their socket directories, running both drivers over TCP and
+  remote sockets, a socket local end, two concurrent sessions through one tunnel, TLS measured
+  inside the tunnel, `doctor`, and an unrelated host key that must be refused.
+- `phpseclib/phpseclib` `^4.0.1` as a suggestion, for the phpseclib driver.
+
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -48,6 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A PostgreSQL server connected over its Unix socket** (`host` a directory) was classed as
+  remote, so `doctor` reported "TLS configured but plaintext" for a connection that never leaves
+  the host. Socket connections are now local, MySQL's `unix_socket` included.
+- **Backup before drop ignored a MySQL `unix_socket`.** db-tools reads `socket`, so `mysqldump`
+  connected by host and port instead. The backup connection now carries both keys.
+- **Backup before drop resolves the server first**, so a server's SSH tunnel is open and its
+  admin connection points at it before the dump reads that connection.
 - **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
   failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
   `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any

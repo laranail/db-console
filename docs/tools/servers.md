@@ -32,7 +32,11 @@ A key the block leaves null is not removed, so a CA set on the connection itself
 | `unmeasured` | `enabled` on, but the session could not be asked | warning |
 | `n/a` | SQLite | — |
 
-A server is local when every host it can reach is `localhost`, `127.0.0.1` or `::1`, including a host given only in `url` (`DATABASE_URL`) and the `read`/`write` hosts. Local servers are exempt from these findings.
+A server is local when every host it can reach is `localhost`, `127.0.0.1` or `::1`, including a host given only in `url` (`DATABASE_URL`) and the `read`/`write` hosts, or when it connects over a Unix socket (MySQL `unix_socket`, a PostgreSQL socket directory as `host`). A tunnelled server is local only when its target is a socket or the loopback on the SSH host: the connection's own `127.0.0.1` says nothing. Local servers are exempt from these findings.
+
+## SSH tunnels
+
+A server's `ssh` block routes its admin connection through an SSH tunnel, with the `openssh` or `phpseclib` driver, a pinned host key, and a TCP or Unix socket at either end. See [SSH tunnels and sockets](ssh-tunnels.md).
 
 ## Multi-server isolation
 
