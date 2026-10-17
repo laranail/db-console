@@ -15,10 +15,12 @@ use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 
 /*
@@ -124,7 +126,10 @@ beforeEach(function (): void {
         $this->markTestSkipped('needs DB_CONSOLE_LIVE_MYSQL_PORT and _ADMIN_USER (the live-mysql CI job)');
     }
 
-    Gate::before(fn ($user = null): bool => true);
+    // Everything is allowed, except an ability a test denies to make one
+    // wizard step fail after the ones before it ran against the server.
+    $GLOBALS['liveMyDenied'] = [];
+    Gate::before(fn ($user = null, string $ability = ''): bool => ! in_array($ability, $GLOBALS['liveMyDenied'], true));
     $this->migrateCatalog();
 
     config()->set('database.connections.live_mysql', liveMyConnection(null, liveMy('ADMIN_USER'), liveMy('ADMIN_PASSWORD')));
@@ -351,14 +356,17 @@ it('reports emptiness from the admin connection, so a rollback drops only what i
         ->and(liveMyDatabaseCount($used))->toBe(1);
 });
 
-it('rolls the wizard back when a later step fails, leaving no database behind', function (): void {
+it('rolls the wizard back without dropping an account it did not create', function (): void {
     $db = liveMyName('rolled');
-    $user = liveMyName('taken');
+    $user = liveMyName('existing');
     $this->cleanup = [['account', $user, '%'], ['database', $db, null]];
 
-    // The account already exists, so the wizard's second step fails after
-    // its first created the database.
+    // Somebody's account, there before the run. The wizard adopts it rather
+    // than failing its account step...
     liveMyAs(null)->statement("CREATE USER '{$user}'@'%' IDENTIFIED BY '" . LIVE_MY_PASSWORD . "'");
+
+    // ...and then its grant step fails, after it created the database.
+    $GLOBALS['liveMyDenied'] = [ConsolePermission::GrantCreate->ability()];
 
     expect(fn () => app(ProvisioningWizard::class)->provision(
         'live_mysql',
@@ -368,10 +376,33 @@ it('rolls the wizard back when a later step fails, leaving no database behind', 
         new Host('%'),
         PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
         new Password(LIVE_MY_PASSWORD),
-    ))->toThrow(Throwable::class);
+    ))->toThrow(DBConsoleException::class);
 
+    // The rollback undoes what this run created, and only that.
     expect(liveMyDatabaseCount($db))->toBe(0)
-        // The rollback undoes only what the run created: the account it
-        // collided with was there before and stays.
         ->and(liveMyAccountCount($user))->toBe(1);
+});
+
+it('rolls the wizard back without dropping a database it did not create', function (): void {
+    $db = liveMyName('existing');
+    $user = liveMyName('fresh');
+    $this->cleanup = [['account', $user, '%'], ['database', $db, null]];
+
+    // An empty database that was there before the run: emptiness alone does
+    // not make it this run's to drop.
+    liveMyAs(null)->statement("CREATE DATABASE `{$db}`");
+    $GLOBALS['liveMyDenied'] = [ConsolePermission::GrantCreate->ability()];
+
+    expect(fn () => app(ProvisioningWizard::class)->provision(
+        'live_mysql',
+        new DbName($db),
+        new Charset('utf8mb4', 'utf8mb4_unicode_ci'),
+        new Username($user),
+        new Host('%'),
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        new Password(LIVE_MY_PASSWORD),
+    ))->toThrow(DBConsoleException::class);
+
+    expect(liveMyDatabaseCount($db))->toBe(1)
+        ->and(liveMyAccountCount($user))->toBe(0);
 });

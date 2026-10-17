@@ -159,3 +159,40 @@ describe('exact grant statements with preset translation', function (): void {
         ]);
     });
 });
+
+describe('recreating an account from its stored hash', function (): void {
+    it('feeds MySQL the hash as a hex literal, since caching_sha2 hashes are binary', function (): void {
+        $statements = iterator_to_array(engine()->createAccountWithAuth(
+            new Username('shop_user'),
+            new Host('%'),
+            'caching_sha2_password',
+            '0x2441243030352400',
+        ));
+
+        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'%' IDENTIFIED WITH `caching_sha2_password` AS 0x2441243030352400")
+            ->and($statements[0]->redacted)->not->toContain('0x24');
+    });
+
+    it('feeds MariaDB the hash as a quoted string, the only form its grammar accepts after AS', function (): void {
+        // '*94BDCEBE19083CE2A1F959FD02F964C7AF4CFC29' is mysql_native_password's
+        // stored form of 'test'; readAuthentication returns it hex-encoded.
+        $statements = iterator_to_array((new MariaDbEngine)->createAccountWithAuth(
+            new Username('shop_user'),
+            new Host('%'),
+            'mysql_native_password',
+            '0x' . strtoupper(bin2hex('*94BDCEBE19083CE2A1F959FD02F964C7AF4CFC29')),
+        ));
+
+        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'%' IDENTIFIED WITH `mysql_native_password` AS '*94BDCEBE19083CE2A1F959FD02F964C7AF4CFC29'")
+            ->and($statements[0]->redacted)->not->toContain('94BDCEBE');
+    });
+
+    it('refuses a MariaDB hash literal that is not hex', function (): void {
+        expect(fn () => (new MariaDbEngine)->createAccountWithAuth(
+            new Username('shop_user'),
+            new Host('%'),
+            'mysql_native_password',
+            "0x41' OR '1",
+        ))->toThrow(InvalidArgumentException::class);
+    });
+});
