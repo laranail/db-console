@@ -48,6 +48,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A MySQL database holding only a routine, an event or a trigger read as empty**, so a wizard
+  rollback dropped it with them. The MySQL family now implements `EmptinessProbingEngine` and counts
+  `TABLES`, `ROUTINES`, `EVENTS` and `TRIGGERS`.
+- **Postgres grants covered schema `public` only.** Grants, revokes and the privilege check now
+  cover every user schema the admin can grant on, and default privileges are database-wide (no
+  `IN SCHEMA`) with `ON SCHEMAS`, so schemas and objects created later are covered. Revokes also
+  clear the per-schema defaults earlier releases set. A schema owned by a superuser is skipped.
+- **A Postgres reader missed tables other roles created later.** A default privilege belongs to the
+  role that creates the object. A grant now sets defaults `FOR ROLE` each role that can create
+  objects in the database. A writer granted after the readers inherits the admin's database-wide
+  defaults, which list every role db-console granted there.
+- **Granting on objects another role owns failed or did nothing.** `RoleMembership` takes membership
+  in the roles `OwnerDelegatingEngine::rolesToAssume()` lists for the duration of the grant or
+  revoke, and gives it back afterwards. A role the admin cannot take is reported in the result
+  (`not_covered`) and logged.
+- **A Postgres database with an application role's session open could not be dropped.**
+  `WITH (FORCE)` ends only sessions the admin may end, and a CREATEROLE admin on PG16+ does not
+  inherit the roles it creates. The drop now reads whose sessions they are (`SessionEndingEngine`),
+  takes membership so `FORCE` can end them, and refuses up front, before the backup runs, when a
+  superuser or a role the admin cannot act as holds one.
+
+### Changed
+
+- `laranail/db-tools` (dev, suggested) is required at `^0.1.6`, whose backups honour `url`, pass TLS
+  to the dump client and take a consistent dump on managed servers.
+- The `live-mysql` job runs MySQL with GTID on, as DigitalOcean does, installs each family's own dump
+  client, and drops a non-empty database with backups on as the recommended admin, then restores the
+  dump.
+
+### Fixed
+
 - **The recommended MySQL/MariaDB admin could not grant the `app_standard` preset**, nor `full`:
   `GRANT` needs `GRANT OPTION` on each privilege it hands out, and the recommendation left out
   `CREATE TEMPORARY TABLES`, `LOCK TABLES`, `REFERENCES`, `CREATE ROUTINE`, `ALTER ROUTINE`, `EVENT`

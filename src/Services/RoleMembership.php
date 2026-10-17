@@ -106,7 +106,7 @@ final readonly class RoleMembership
     /**
      * Postgres returns booleans; other drivers and fakes return 1/0 or 't'/'f'.
      */
-    private static function truthy(mixed $value): bool
+    private function truthy(mixed $value): bool
     {
         return in_array($value, [true, 1, '1', 't', 'true'], true);
     }
@@ -129,11 +129,11 @@ final readonly class RoleMembership
 
         foreach ($this->scoped->select($admin, $engine->rolesToAssume($set, $db, $user), $context) as $row) {
             $name = (string) $row['rolname'];
-            if (self::truthy($row['held'])) {
+            if ($this->truthy($row['held'])) {
                 continue;
             }
 
-            if (! self::truthy($row['can_admin'])) {
+            if (! $this->truthy($row['can_admin'])) {
                 $notCovered[] = $name;
 
                 continue;

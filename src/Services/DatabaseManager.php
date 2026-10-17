@@ -219,7 +219,7 @@ final readonly class DatabaseManager
     /**
      * Postgres returns booleans; other drivers return 1/0 or 't'/'f'.
      */
-    private static function truthy(mixed $value): bool
+    private function truthy(mixed $value): bool
     {
         return in_array($value, [true, 1, '1', 't', 'true'], true);
     }
@@ -239,11 +239,11 @@ final readonly class DatabaseManager
         foreach ($engine->sessionRoles($db) as $statement) {
             foreach ($connection->selectStatement($statement, ['operation' => 'database.view']) as $row) {
                 $name = (string) $row['rolname'];
-                if (self::truthy($row['held'])) {
+                if ($this->truthy($row['held'])) {
                     continue;
                 }
 
-                if (self::truthy($row['superuser']) || ! self::truthy($row['can_admin'])) {
+                if ($this->truthy($row['superuser']) || ! $this->truthy($row['can_admin'])) {
                     $blocking[] = $name;
 
                     continue;
