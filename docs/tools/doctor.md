@@ -45,7 +45,7 @@ Every server also gets the checks in `Doctor\HostingCheck`, judged from what the
 | `server:<name>:server-settings` | info | MySQL family: reports `sql_require_primary_key` and `gtid_mode`, which a managed MySQL turns on |
 | `server:<name>:forced-drop` | warning | PostgreSQL: the admin is not a superuser and not a member of `pg_signal_backend`, so dropping a database another role is connected to fails |
 
-The `capabilities` finding reads `ServerRegistry::capabilities()`, so it includes `provider_backups` on a managed server.
+The `capabilities` finding reads `ServerRegistry::capabilities()`, so it includes `provider_backups` on a managed server. [Managed databases](../managed-databases.md) explains what each of these means on a provider's cluster.
 
 ---
 
