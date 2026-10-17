@@ -11,7 +11,10 @@ Postgres provisioning works on any server now, which changes what some calls do:
   CURRENT_USER`). Nothing is deleted, and its privileges are revoked. The admin must hold ADMIN
   OPTION on the role, which it does for roles it created.
 - **Dropping a database terminates its sessions** (`DROP DATABASE ... WITH (FORCE)`, PostgreSQL 13
-  or later).
+  or later): those the admin may signal. A session of a role it cannot signal still blocks it.
+- **Revoking a privilege revokes the Postgres privilege it maps to**, even when another privilege
+  the role holds maps to the same one: `show_view` and `select` are both `SELECT`; `create`,
+  `create_view` and `create_routine` are all schema `CREATE`. Revoke fails closed.
 - **Grants go to the target database.** If you worked around the old behaviour by granting inside
   the target yourself, those grants still stand. `ALTER`, `DROP`, `INDEX`, `ALTER ROUTINE`, `LOCK
   TABLES` and `EVENT` now grant nothing on Postgres, rather than `SELECT`, `CREATE` or `EXECUTE` on

@@ -217,6 +217,20 @@ it('revokes inside the target database, including the default privileges', funct
     ]);
 });
 
+// Fail closed: Postgres implements show_view as SELECT, so revoking show_view
+// has to remove SELECT, or the role keeps read access it was meant to lose.
+it('revokes the shared Postgres privilege when any privilege mapped to it is revoked', function () use ($engine): void {
+    expect(pgScoped($engine->revoke(
+        PrivilegeSet::custom(['show_view']),
+        new DbName('analytics'),
+        new Username('report_user'),
+        new Host('%'),
+    )))->toBe([
+        '[analytics] REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM "report_user"',
+        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM "report_user"',
+    ]);
+});
+
 it('classifies every allow-listed privilege, so every preset builds', function () use ($engine): void {
     foreach (PrivilegePreset::cases() as $preset) {
         if ($preset === PrivilegePreset::Custom) {

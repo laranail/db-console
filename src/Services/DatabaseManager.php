@@ -83,8 +83,16 @@ final readonly class DatabaseManager
 
         // Backup before drop: snapshot a non-empty database first so an
         // accidental drop is recoverable (section 7). Disabled/absent → a
-        // logged notice, never a silent skip.
-        if (! $this->isEmpty($server, $db)) {
+        // logged notice, never a silent skip. The emptiness check reads the
+        // server (inside the target, on Postgres), so its failure is a failed
+        // drop and is audited as one.
+        try {
+            $empty = $this->isEmpty($server, $db);
+        } catch (DBConsoleException $e) {
+            $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
+        }
+
+        if (! $empty) {
             $path = $this->backups->snapshot($server, $db);
             if ($path !== null) {
                 $this->events->dispatch(new DatabaseBackedUp($server, ['target' => $db->value, 'path' => $path]));

@@ -90,10 +90,11 @@ final readonly class ScopedConnections
         $config = $underlying->getConfig();
         unset($config['url']);
         $config['database'] = $database;
-        $config['name'] = $name;
 
         try {
-            return new AdminConnection($admin->server, $this->db->build($config));
+            // connectUsing() rather than build(): build() also keeps the config,
+            // password included, for the life of the process.
+            return new AdminConnection($admin->server, $this->db->connectUsing($name, $config, true));
         } catch (Throwable $e) {
             throw ExceptionTranslator::from($e, ['server' => $admin->server, 'target' => $database]);
         }

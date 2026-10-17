@@ -128,8 +128,9 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
     {
         $q = Quoter::for($this->type());
 
-        // FORCE (PG13+) terminates the sessions still connected, which a
-        // managed service's monitoring and any pooler always hold.
+        // FORCE (PG13+) terminates the sessions still connected that the
+        // admin may signal: its own, and those of roles whose privileges it
+        // holds. A session of a role it cannot signal still blocks the drop.
         return new StatementList(Statement::plain('DROP DATABASE ' . $q->identifier($db->value) . ' WITH (FORCE)'));
     }
 
@@ -246,7 +247,8 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         }
 
         // Objects the admin creates later (a migration it runs) are covered
-        // too, not only the ones that exist now.
+        // too, not only the ones that exist now. Default privileges are per
+        // creating role, so tables another role creates are not covered.
         foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
             if ($targets[$kind] !== []) {
                 $statements[] = $inTarget(
@@ -266,7 +268,12 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         $inTarget = static fn (string $sql): Statement => Statement::plain($sql)->inDatabase($db);
 
         // CONNECT and schema USAGE are not revoked: every set implies them,
-        // so revoking a subset must not strip the rest.
+        // so revoking a subset must not strip the rest. Several abstract
+        // privileges share one Postgres privilege (select and show_view are
+        // both SELECT; create, create_view and create_routine are all schema
+        // CREATE; insert and update both need sequence USAGE). Revoking any of
+        // them revokes the shared privilege: the alternative leaves the role
+        // holding access it was meant to lose.
         $statements = [];
         if ($targets['database'] !== []) {
             $statements[] = Statement::plain(

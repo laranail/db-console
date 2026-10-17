@@ -31,7 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SCHEMA public` acts on the connected database, which was the admin connection's, so the target
   received `CONNECT` and nothing else. Schema, table, sequence and function grants now run inside the
   target database, with `GRANT USAGE ON SCHEMA public` (and `CREATE` when the set has it: PG15
-  revoked it from `PUBLIC`) and `ALTER DEFAULT PRIVILEGES` so tables created later are covered.
+  revoked it from `PUBLIC`) and `ALTER DEFAULT PRIVILEGES`, so tables the admin creates later are
+  covered too.
 - **PostgreSQL put `CREATE` and `EXECUTE` in a table grant, and turned any privilege it did not
   recognise into `SELECT`.** Each privilege now goes on the object Postgres grants it on: `CREATE`
   on the schema, `EXECUTE` on functions, `CREATE TEMPORARY TABLES` as `TEMPORARY` on the database,
@@ -39,10 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ALTER ROUTINE`, `LOCK TABLES` and `EVENT` grant nothing, since Postgres reserves the first four
   to an object's owner. An unclassified privilege throws `UnknownPrivilege`.
 - **PostgreSQL drops failed whenever anything was attached.** `DROP DATABASE` now uses `WITH
-  (FORCE)`, which a managed service's monitoring sessions require. `DROP ROLE` is preceded by
+  (FORCE)`, which ends the sessions the admin may terminate; one held by a role it cannot signal
+  still blocks the drop. `DROP ROLE` is preceded by
   `REASSIGN OWNED BY ... TO CURRENT_USER` and `DROP OWNED BY ...` inside every database the role has
   objects or privileges in, read from `pg_shdepend`, after the admin takes membership in the role.
   A CREATEROLE admin on PG16+ does not inherit the roles it creates.
+- **A drop whose emptiness check failed was not audited.** The check now runs inside the drop's
+  failure handling, so it is logged and dispatches `OperationFailed` like any other failed drop.
 - **PostgreSQL's "is empty" check always answered "not empty".** It is now read inside the target
   database, so a wizard rollback drops the database it created instead of leaving it behind, and an
   empty database is no longer backed up before a drop.
