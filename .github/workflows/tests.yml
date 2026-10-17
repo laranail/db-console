@@ -180,11 +180,13 @@ jobs:
               if docker exec "$1" sh -c "$2" > /dev/null 2>&1; then return 0; fi
               sleep 2
             done
-            docker logs "$1"
+            echo "$1 never answered: $2"
+            docker exec "$1" sh -c "$2" || true
+            docker logs "$1" 2>&1 | tail -n 30
             return 1
           }
-          wait_for mysql-tls 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent'
-          wait_for mysql-plain 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent'
+          wait_for mysql-tls 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --get-server-public-key --silent'
+          wait_for mysql-plain 'mysqladmin ping -h 127.0.0.1 -uroot -psecret --get-server-public-key --silent'
           wait_for pgsql-tls 'pg_isready -h 127.0.0.1 -U postgres'
           wait_for pgsql-plain 'pg_isready -h 127.0.0.1 -U postgres'
       - name: Create restricted admins (the minimal MySQL grant; CREATEDB CREATEROLE NOSUPERUSER)
