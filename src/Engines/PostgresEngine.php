@@ -28,7 +28,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
+final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, SessionEndingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -74,6 +74,29 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         'sequences' => 'SEQUENCES',
         'functions' => 'FUNCTIONS',
     ];
+
+    /**
+     * A schema created by a user, as opposed to pg_catalog, pg_toast,
+     * temporary schemas and information_schema. Expects the alias `n`.
+     */
+    /**
+     * Whether the admin may take membership in role `r`. Before PG16 a
+     * CREATEROLE admin may grant any non-superuser role without ADMIN OPTION;
+     * from 16 it needs ADMIN OPTION, which it holds on the roles it created.
+     */
+    private const string CAN_ADMIN = "(NOT r.rolsuper AND (pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')"
+        . " OR (current_setting('server_version_num')::int < 160000"
+        . ' AND (SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = current_user))))';
+
+    private const string USER_SCHEMA = "n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'";
+
+    /**
+     * A user schema the admin can grant on: one whose owner's privileges it
+     * has (itself included), or public, where PUBLIC's privileges count on
+     * PostgreSQL 14 and earlier. A schema another superuser owns is skipped,
+     * not failed: nobody but a superuser can grant there.
+     */
+    private const string GRANTABLE_SCHEMA = "(n.nspname = 'public' OR pg_has_role(n.nspowner, 'USAGE'))";
 
     /**
      * MySQL character-set names mapped to the Postgres encoding they mean.
@@ -277,24 +300,35 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
                 'GRANT ' . implode(', ', ['CONNECT', ...$targets['database']])
                 . ' ON DATABASE ' . $q->identifier($db->value) . " TO {$role}",
             ),
-            $inTarget('GRANT ' . implode(', ', ['USAGE', ...$targets['schema']]) . " ON SCHEMA public TO {$role}"),
         ];
 
+        // Existing objects, in every user schema the admin can grant on.
+        $perSchema = ['GRANT ' . implode(', ', ['USAGE', ...$targets['schema']]) . " ON SCHEMA %I TO {$role}"];
         foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
             if ($targets[$kind] !== []) {
-                $statements[] = $inTarget('GRANT ' . implode(', ', $targets[$kind]) . " ON ALL {$keyword} IN SCHEMA public TO {$role}");
+                $perSchema[] = 'GRANT ' . implode(', ', $targets[$kind]) . " ON ALL {$keyword} IN SCHEMA %I TO {$role}";
             }
         }
+        $statements[] = $inTarget($this->forEachSchema($perSchema));
 
-        // Objects the admin creates later (a migration it runs) are covered
-        // too, not only the ones that exist now. Default privileges are per
-        // creating role, so tables another role creates are not covered.
-        foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
-            if ($targets[$kind] !== []) {
-                $statements[] = $inTarget(
-                    'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ' . implode(', ', $targets[$kind]) . " ON {$keyword} TO {$role}",
-                );
-            }
+        // Objects the admin creates later, in any schema (no IN SCHEMA), and
+        // schemas created later.
+        foreach ($this->defaultGrants($targets) as $grant) {
+            $statements[] = $inTarget("ALTER DEFAULT PRIVILEGES GRANT {$grant} TO {$role}");
+        }
+
+        // Objects other roles create later. A default privilege belongs to
+        // the creating role, so it is set FOR ROLE each role that can create
+        // objects here. Needs their privileges: see rolesToAssume().
+        $statements[] = $inTarget($this->forEachWriter(
+            $u,
+            array_map(static fn (string $grant): string => "ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT {$grant} TO {$role}", $this->defaultGrants($targets)),
+        ));
+
+        // A writer granted after the readers: give its future objects to every
+        // role the admin's own database-wide defaults already list.
+        if (in_array('CREATE', $targets['schema'], true)) {
+            $statements[] = $inTarget($this->mirrorDefaultsOnto($u));
         }
 
         return new StatementList(...$statements);
@@ -321,25 +355,81 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
             );
         }
 
+        $perSchema = [];
         if ($targets['schema'] !== []) {
-            $statements[] = $inTarget('REVOKE ' . implode(', ', $targets['schema']) . " ON SCHEMA public FROM {$role}");
+            $perSchema[] = 'REVOKE ' . implode(', ', $targets['schema']) . " ON SCHEMA %I FROM {$role}";
         }
-
         foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
             if ($targets[$kind] !== []) {
-                $statements[] = $inTarget('REVOKE ' . implode(', ', $targets[$kind]) . " ON ALL {$keyword} IN SCHEMA public FROM {$role}");
+                $perSchema[] = 'REVOKE ' . implode(', ', $targets[$kind]) . " ON ALL {$keyword} IN SCHEMA %I FROM {$role}";
+                // Grants made before this release set defaults per schema.
+                $perSchema[] = 'ALTER DEFAULT PRIVILEGES IN SCHEMA %I REVOKE ' . implode(', ', $targets[$kind]) . " ON {$keyword} FROM {$role}";
             }
         }
+        if ($perSchema !== []) {
+            $statements[] = $inTarget($this->forEachSchema($perSchema));
+        }
 
-        foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
-            if ($targets[$kind] !== []) {
-                $statements[] = $inTarget(
-                    'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ' . implode(', ', $targets[$kind]) . " ON {$keyword} FROM {$role}",
-                );
-            }
+        $defaults = $this->defaultGrants($targets, revoking: true);
+        foreach ($defaults as $grant) {
+            $statements[] = $inTarget("ALTER DEFAULT PRIVILEGES REVOKE {$grant} FROM {$role}");
+        }
+
+        if ($defaults !== []) {
+            $statements[] = $inTarget($this->forEachWriter(
+                $u,
+                array_map(static fn (string $grant): string => "ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE {$grant} FROM {$role}", $defaults),
+            ));
         }
 
         return new StatementList(...$statements);
+    }
+
+    public function sessionRoles(DbName $db): StatementList
+    {
+        // pg_signal_backend lets the admin end any non-superuser's session;
+        // without it, only those of roles whose privileges it has.
+        return new StatementList(
+            Statement::plain(
+                'SELECT DISTINCT a.usename AS rolname, r.rolsuper AS superuser,'
+                . " (pg_has_role(r.oid, 'USAGE') OR (NOT r.rolsuper AND pg_has_role('pg_signal_backend', 'USAGE'))) AS held,"
+                . ' ' . self::CAN_ADMIN . ' AS can_admin'
+                . ' FROM pg_catalog.pg_stat_activity a JOIN pg_catalog.pg_roles r ON r.rolname = a.usename'
+                . ' WHERE a.datname = ' . Quoter::for($this->type())->literal($db->value)
+                . ' AND a.pid <> pg_backend_pid()'
+                . ' ORDER BY 1',
+            ),
+        );
+    }
+
+    public function rolesToAssume(PrivilegeSet $s, DbName $db, Username $u): StatementList
+    {
+        $grantee = Quoter::for($this->type())->literal($u->value);
+        $isWriter = in_array('CREATE', $this->targets($s)['schema'], true);
+
+        // Owners of user schemas, tables, sequences and functions, and roles
+        // holding CREATE on a user schema: the ones whose objects the grant
+        // acts on or whose future objects the defaults are set for. A writer's
+        // own defaults are set FOR ROLE it, so it is listed too.
+        $actsOn = '(EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n WHERE ' . self::USER_SCHEMA . ' AND (n.nspowner = r.oid'
+            . " OR EXISTS (SELECT 1 FROM aclexplode(n.nspacl) a WHERE a.grantee = r.oid AND a.privilege_type = 'CREATE')))"
+            . ' OR EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
+            . ' WHERE ' . self::USER_SCHEMA . " AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S') AND c.relowner = r.oid)"
+            . ' OR EXISTS (SELECT 1 FROM pg_catalog.pg_proc f JOIN pg_catalog.pg_namespace n ON n.oid = f.pronamespace'
+            . ' WHERE ' . self::USER_SCHEMA . ' AND f.proowner = r.oid))';
+
+        $who = $isWriter
+            ? "(r.rolname = {$grantee} OR {$actsOn})"
+            : "r.rolname <> {$grantee} AND {$actsOn}";
+
+        return new StatementList(
+            Statement::plain(
+                "SELECT r.rolname, pg_has_role(r.oid, 'USAGE') AS held, " . self::CAN_ADMIN . ' AS can_admin'
+                . ' FROM pg_catalog.pg_roles r'
+                . " WHERE NOT r.rolsuper AND r.rolname <> current_user AND {$who}"
+                . ' ORDER BY r.rolname',
+            )->inDatabase($db),
+        );
     }
 
     public function missingGrants(PrivilegeSet $s, DbName $db, Username $u): StatementList
@@ -349,17 +439,19 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         $database = $q->literal($db->value);
         $targets = $this->targets($s);
         $privileges = static fn (array $list): string => 'ARRAY[' . implode(', ', array_map($q->literal(...), $list)) . ']';
+        $grantable = self::USER_SCHEMA . ' AND ' . self::GRANTABLE_SCHEMA;
 
         // One SELECT per object kind the set touches, each yielding the
-        // (object, privilege) pairs the role lacks. Effective privileges
-        // count, including ones held through PUBLIC or ownership.
+        // (object, privilege) pairs the role lacks, over every schema the
+        // grant covered. Effective privileges count, including ones held
+        // through PUBLIC or ownership.
         $checks = [
             "SELECT 'database ' || {$database} AS object, p AS privilege"
             . ' FROM unnest(' . $privileges(['CONNECT', ...$targets['database']]) . ') AS p'
             . " WHERE NOT has_database_privilege({$role}, {$database}, p)",
-            "SELECT 'schema public' AS object, p AS privilege"
-            . ' FROM unnest(' . $privileges(['USAGE', ...$targets['schema']]) . ') AS p'
-            . " WHERE NOT has_schema_privilege({$role}, 'public', p)",
+            "SELECT 'schema ' || quote_ident(n.nspname) AS object, p AS privilege"
+            . ' FROM pg_catalog.pg_namespace n CROSS JOIN unnest(' . $privileges(['USAGE', ...$targets['schema']]) . ') AS p'
+            . " WHERE {$grantable} AND NOT has_schema_privilege({$role}, n.nspname, p)",
         ];
 
         $relations = [
@@ -368,19 +460,19 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         ];
         foreach ($relations as $kind => [$relkinds, $label, $function]) {
             if ($targets[$kind] !== []) {
-                $checks[] = "SELECT '{$label} ' || quote_ident(c.relname) AS object, p AS privilege"
+                $checks[] = "SELECT '{$label} ' || quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object, p AS privilege"
                     . ' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
                     . ' CROSS JOIN unnest(' . $privileges($targets[$kind]) . ') AS p'
-                    . " WHERE n.nspname = 'public' AND c.relkind IN ({$relkinds})"
+                    . " WHERE {$grantable} AND c.relkind IN ({$relkinds})"
                     . " AND NOT {$function}({$role}, c.oid, p)";
             }
         }
 
         if ($targets['functions'] !== []) {
-            $checks[] = "SELECT 'function ' || quote_ident(f.proname) AS object, p AS privilege"
+            $checks[] = "SELECT 'function ' || quote_ident(n.nspname) || '.' || quote_ident(f.proname) AS object, p AS privilege"
                 . ' FROM pg_catalog.pg_proc f JOIN pg_catalog.pg_namespace n ON n.oid = f.pronamespace'
                 . ' CROSS JOIN unnest(' . $privileges($targets['functions']) . ') AS p'
-                . " WHERE n.nspname = 'public' AND f.prokind = 'f'"
+                . " WHERE {$grantable} AND f.prokind = 'f'"
                 . " AND NOT has_function_privilege({$role}, f.oid, p)";
         }
 
@@ -487,6 +579,103 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         $role = Quoter::for($this->type())->identifier($u->value);
 
         return ["REASSIGN OWNED BY {$role} TO CURRENT_USER", "DROP OWNED BY {$role}"];
+    }
+
+    /**
+     * A DO block running each statement template once per user schema the
+     * admin can grant on, with `%I` replaced by the schema name. Statement
+     * templates come from this class only: fixed keywords and an identifier
+     * already quoted by the Quoter.
+     *
+     * @param list<string> $templates
+     */
+    private function forEachSchema(array $templates): string
+    {
+        $body = implode(' ', array_map(
+            static fn (string $template): string => "EXECUTE format('{$template}', s);",
+            $templates,
+        ));
+
+        return 'DO $grant$ DECLARE s name; BEGIN FOR s IN SELECT n.nspname FROM pg_catalog.pg_namespace n WHERE '
+            . self::USER_SCHEMA . ' AND ' . self::GRANTABLE_SCHEMA
+            . " ORDER BY n.nspname LOOP {$body} END LOOP; END \$grant\$";
+    }
+
+    /**
+     * A DO block running each template once per role, other than the admin
+     * and $grantee, that can create objects in a user schema here (owns one,
+     * or holds CREATE on one) and whose privileges the admin has: the roles a
+     * default privilege has to be set FOR. `%I` is the role.
+     *
+     * @param list<string> $templates
+     */
+    private function forEachWriter(Username $grantee, array $templates): string
+    {
+        $body = implode(' ', array_map(
+            static fn (string $template): string => "EXECUTE format('{$template}', w);",
+            $templates,
+        ));
+
+        return 'DO $writers$ DECLARE w name; BEGIN FOR w IN SELECT r.rolname FROM pg_catalog.pg_roles r'
+            . ' WHERE r.rolname NOT IN (current_user, ' . Quoter::for($this->type())->literal($grantee->value) . ')'
+            . " AND NOT r.rolsuper AND pg_has_role(r.oid, 'USAGE')"
+            . ' AND (EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n WHERE ' . self::USER_SCHEMA
+            . ' AND (n.nspowner = r.oid OR EXISTS (SELECT 1 FROM aclexplode(n.nspacl) a'
+            . " WHERE a.grantee = r.oid AND a.privilege_type = 'CREATE')))"
+            // Before PG15 CREATE on public comes through PUBLIC and leaves no
+            // ACL entry, so a role that has created objects counts too.
+            . ' OR EXISTS (SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
+            . ' WHERE ' . self::USER_SCHEMA . " AND c.relkind IN ('r', 'p', 'v', 'm', 'f', 'S') AND c.relowner = r.oid))"
+            . " ORDER BY r.rolname LOOP {$body} END LOOP; END \$writers\$";
+    }
+
+    /**
+     * A DO block copying the admin's database-wide default privileges -- one
+     * entry per role db-console granted in this database -- onto $writer, so
+     * objects the writer creates reach those roles too.
+     */
+    private function mirrorDefaultsOnto(Username $writer): string
+    {
+        $q = Quoter::for($this->type());
+        $role = $q->identifier($writer->value);
+
+        return 'DO $mirror$ DECLARE d record; BEGIN FOR d IN'
+            . " SELECT CASE acl.defaclobjtype WHEN 'r' THEN 'TABLES' WHEN 'S' THEN 'SEQUENCES'"
+            . " WHEN 'f' THEN 'FUNCTIONS' WHEN 'n' THEN 'SCHEMAS' WHEN 'T' THEN 'TYPES' END AS kind,"
+            . " a.grantee::regrole::text AS grantee, string_agg(DISTINCT a.privilege_type, ', ') AS privileges"
+            . ' FROM pg_catalog.pg_default_acl acl, aclexplode(acl.defaclacl) a'
+            . ' WHERE acl.defaclrole = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = current_user)'
+            . " AND acl.defaclnamespace = 0 AND acl.defaclobjtype IN ('r', 'S', 'f', 'n', 'T')"
+            . ' AND a.grantee <> 0 AND a.grantee <> acl.defaclrole'
+            . ' AND a.grantee <> (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ' . $q->literal($writer->value) . ')'
+            . ' GROUP BY 1, 2'
+            . " LOOP EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE {$role} GRANT %s ON %s TO %s', d.privileges, d.kind, d.grantee);"
+            . ' END LOOP; END $mirror$';
+    }
+
+    /**
+     * The database-wide default privileges a set implies, as `<privileges> ON
+     * <kind>`. Revoking leaves schema USAGE, which every set implies.
+     *
+     * @param array{database: list<string>, schema: list<string>, tables: list<string>, sequences: list<string>, functions: list<string>} $targets
+     *
+     * @return list<string>
+     */
+    private function defaultGrants(array $targets, bool $revoking = false): array
+    {
+        $grants = [];
+        foreach (self::SCHEMA_OBJECTS as $kind => $keyword) {
+            if ($targets[$kind] !== []) {
+                $grants[] = implode(', ', $targets[$kind]) . " ON {$keyword}";
+            }
+        }
+
+        $schemas = $revoking ? $targets['schema'] : ['USAGE', ...$targets['schema']];
+        if ($schemas !== []) {
+            $grants[] = implode(', ', $schemas) . ' ON SCHEMAS';
+        }
+
+        return $grants;
     }
 
     /**

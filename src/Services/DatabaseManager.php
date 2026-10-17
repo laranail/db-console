@@ -7,6 +7,7 @@ namespace Simtabi\Laranail\DBConsole\Services;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
@@ -15,11 +16,16 @@ use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Engines\SessionEndingEngine;
+use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
+use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
+use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
@@ -40,6 +46,7 @@ final readonly class DatabaseManager
         private DBConsoleLogger $log,
         private BackupService $backups,
         private ScopedConnections $scoped,
+        private RoleMembership $membership,
     ) {}
 
     public function create(string $server, DbName $db, Charset $charset): OperationResult
@@ -81,6 +88,17 @@ final readonly class DatabaseManager
 
         [$engine, $connection] = $this->registry->resolve($server);
 
+        // Whose sessions the forced drop has to end, refused up front when the
+        // admin cannot end them, before the backup or anything else runs.
+        $sessionRoles = [];
+        if ($engine instanceof SessionEndingEngine && $engine instanceof OwnershipReleasingEngine) {
+            try {
+                $sessionRoles = $this->sessionRolesToTake($engine, $connection, $db);
+            } catch (DBConsoleException $e) {
+                $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
+            }
+        }
+
         // Backup before drop: snapshot a non-empty database first so an
         // accidental drop is recoverable (section 7). Disabled/absent → a
         // logged notice, never a silent skip. The emptiness check reads the
@@ -99,11 +117,20 @@ final readonly class DatabaseManager
             }
         }
 
+        $context = ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value];
+        $drop = static function () use ($connection, $engine, $db, $context): null {
+            $connection->run($engine->dropDatabase($db), $context);
+
+            return null;
+        };
+
         try {
-            $connection->run(
-                $engine->dropDatabase($db),
-                ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value],
-            );
+            if ($sessionRoles !== [] && $engine instanceof OwnershipReleasingEngine) {
+                // Membership lets WITH (FORCE) end those roles' sessions.
+                $this->membership->actingAs($engine, $connection, $sessionRoles, $context, $drop);
+            } else {
+                $drop();
+            }
         } catch (DBConsoleException $e) {
             $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
         }
@@ -187,6 +214,57 @@ final readonly class DatabaseManager
             ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value, 'rollback' => true],
         );
         $this->catalog->forgetDatabase($server, $db);
+    }
+
+    /**
+     * Postgres returns booleans; other drivers return 1/0 or 't'/'f'.
+     */
+    private static function truthy(mixed $value): bool
+    {
+        return in_array($value, [true, 1, '1', 't', 'true'], true);
+    }
+
+    /**
+     * The roles whose sessions on $db the admin has to take membership in to
+     * end them. Throws when a session belongs to a superuser, or to a role the
+     * admin can neither end nor take.
+     *
+     * @return list<Username>
+     */
+    private function sessionRolesToTake(SessionEndingEngine $engine, AdminConnection $connection, DbName $db): array
+    {
+        $toTake = [];
+        $blocking = [];
+
+        foreach ($engine->sessionRoles($db) as $statement) {
+            foreach ($connection->selectStatement($statement, ['operation' => 'database.view']) as $row) {
+                $name = (string) $row['rolname'];
+                if (self::truthy($row['held'])) {
+                    continue;
+                }
+
+                if (self::truthy($row['superuser']) || ! self::truthy($row['can_admin'])) {
+                    $blocking[] = $name;
+
+                    continue;
+                }
+
+                try {
+                    $toTake[] = new Username($name);
+                } catch (InvalidIdentifier) {
+                    $blocking[] = $name;
+                }
+            }
+        }
+
+        if ($blocking !== []) {
+            throw InsufficientPrivilege::forOperation(
+                "dropping database '{$db->value}': it has sessions held by '" . implode("', '", $blocking)
+                . "', which the admin cannot end",
+            );
+        }
+
+        return $toTake;
     }
 
     private function fail(OperationType $operation, string $server, string $target, DBConsoleException $e): never
