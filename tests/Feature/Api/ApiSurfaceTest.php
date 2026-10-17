@@ -152,6 +152,15 @@ describe('api.auth and api.path', function (): void {
         $this->actingAs(apiCaller(), 'sanctum')->getJson('/api/db-console/servers')->assertNotFound();
     });
 
+    it('prefers api.path when the old api.prefix is set too', function (): void {
+        config()->set('laranail.db-console.api.path', 'ops/dbc');
+        config()->set('laranail.db-console.api.prefix', 'legacy/dbc');
+        mountDbConsoleApi();
+
+        $this->actingAs(apiCaller(), 'sanctum')->getJson('/ops/dbc/servers')->assertOk();
+        $this->actingAs(apiCaller(), 'sanctum')->getJson('/legacy/dbc/servers')->assertNotFound();
+    });
+
     it('falls back to api.prefix when api.path is unset', function (): void {
         config()->set('laranail.db-console.api.path');
         config()->set('laranail.db-console.api.prefix', 'legacy/dbc');
