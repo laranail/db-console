@@ -9,17 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A live provisioning job against PostgreSQL 18** (`live-pgsql` in `tests.yml`). It runs the
+- **A live provisioning job against PostgreSQL 14 to 18** (`live-pgsql` in `tests.yml`), plus the
+  19 release candidate as a leg whose failures do not fail the run. 18 is the latest release, 15
+  to 17 the three before it, and 14 the oldest the project still supports. It runs the
   `live-pgsql` group as an admin holding only `CREATEDB CREATEROLE`, the shape of a managed
   service's admin user: provision, migrate as the new role, read a table created after the grant,
-  drop the role while it still owns objects, drop a database with a session open, and check
-  emptiness. The engine tests compare SQL strings, which is how every Postgres defect below passed.
+  drop the role while it still owns objects, drop a database with a session open, check
+  emptiness, and fail a drop and a grant part way. The engine tests compare SQL strings, which is
+  how every Postgres defect below passed.
 - **Statements can be scoped to a database** (`Statement::inDatabase()`, `Statement::$database`),
   and `Servers\ScopedConnections` runs each one on a short-lived connection to its database, built
   from the admin connection's own configuration. `AdminConnection::run()` refuses a statement
   scoped to a database it is not on, so a grant can no longer land in the wrong database quietly.
-- `Engines\OwnershipReleasingEngine` and `Engines\EmptinessProbingEngine`, implemented by
-  `PostgresEngine`, following the `HostScopingEngine` pattern for dialect only one engine needs.
+- `Engines\OwnershipReleasingEngine`, `Engines\EmptinessProbingEngine` and
+  `Engines\GrantVerifyingEngine`, implemented by `PostgresEngine`, following the `HostScopingEngine`
+  pattern for dialect only one engine needs.
+- `ScopedConnections::transaction()` runs work in a transaction on every connection it touches,
+  through a `ScopedSession` that can checkpoint with `commit()`. For engines with transactional DDL.
+- `Services\OwnershipReleasingDrop`, which drops a Postgres role so that a failure leaves as little
+  behind as Postgres allows (see Fixed).
+- The `grant.not_applied` exception code (`GrantNotApplied`, HTTP 502).
 
 ### Fixed
 
@@ -45,6 +54,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `REASSIGN OWNED BY ... TO CURRENT_USER` and `DROP OWNED BY ...` inside every database the role has
   objects or privileges in, read from `pg_shdepend`, after the admin takes membership in the role.
   A CREATEROLE admin on PG16+ does not inherit the roles it creates.
+- **A Postgres role drop that failed part way left the admin a member of the role**, with its
+  privileges, and could leave the role's objects in some databases reassigned. The drop now refuses
+  before changing anything when a database the role has objects in is out of the admin's reach;
+  takes membership only when the admin does not already have the role's privileges; releases
+  ownership in one transaction per database and drops the role in another; and gives the
+  membership back when a step fails, escalating as `RollbackFailed` if that fails too.
+- **A Postgres grant could report success without granting.** When the admin holds a privilege
+  without the grant option, as on a database or schema another role owns, `GRANT` warns, grants
+  what it can and succeeds. A grant now runs in one transaction on the target database together
+  with a check of the role's effective privileges, and anything missing rolls the whole grant back
+  and throws `GrantNotApplied`, naming each privilege. Revokes run in one transaction too.
 - **A drop whose emptiness check failed was not audited.** The check now runs inside the drop's
   failure handling, so it is logged and dispatches `OperationFailed` like any other failed drop.
 - **PostgreSQL's "is empty" check always answered "not empty".** It is now read inside the target
