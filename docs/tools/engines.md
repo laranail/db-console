@@ -102,6 +102,8 @@ Two rules of Postgres shape the rest:
 
 `DROP DATABASE ... WITH (FORCE)` ends only the sessions the admin may end. `SessionEndingEngine::sessionRoles()` lists whose sessions they are. The drop takes membership in roles the admin can act as, so `FORCE` can end their sessions, and refuses with `InsufficientPrivilege` before anything runs when a superuser, or a role it cannot act as, holds one.
 
+On a managed server, `doctor`'s `server:<name>:forced-drop` check tells you whether the admin can end other roles' sessions at all; see [Managed databases](../managed-databases.md).
+
 ---
 
 [← Docs index](../../README.md#documentation)

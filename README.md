@@ -92,6 +92,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 - [Architecture](docs/architecture.md) — the layers, the invariants, and why they are shaped this way.
 - [Release](docs/release.md) — versioning and the release process.
 - [Comparison](docs/comparison.md) — why this exists and how it differs from a raw admin GUI.
+- [Managed databases](docs/managed-databases.md) — DigitalOcean, RDS and Cloud SQL: hosting, TLS, the admin, doctor and backups.
 
 ### Reference
 
@@ -102,6 +103,7 @@ Full documentation is hosted at **<https://opensource.simtabi.com/documentation/
 ### Recipes
 
 - [Provision a minimal admin per engine](docs/recipes/provision-minimal-admin.md)
+- [Connect to DigitalOcean Managed Databases](docs/recipes/digitalocean.md)
 - [Adopt an existing account or database](docs/recipes/adopt-existing-resources.md)
 - [Configure a KMS / Vault / reference secret driver](docs/recipes/configure-secret-driver.md)
 - [Issue an API token](docs/recipes/issue-api-token.md)
