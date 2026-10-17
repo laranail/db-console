@@ -306,6 +306,9 @@ return [
         'auth'        => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
         'allowed_ips' => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
         'rate_limit'  => env('DB_CONSOLE_API_RATE', '60,1'), // 'requests,minutes' per caller; '' or 0 switches it off
+        // Failed authentications one IP may make per window ('failures,minutes')
+        // before it is answered 429 until the window ends; '' or 0 switches it off.
+        'auth_failure_limit' => env('DB_CONSOLE_API_AUTH_FAILURE_LIMIT', '10,1'),
         // Refuse plain HTTP (loopback is always allowed).
         'require_https' => true,
         // Drop endpoints require {"confirm": "<name>"} in the body.

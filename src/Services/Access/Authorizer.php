@@ -6,6 +6,7 @@ namespace Simtabi\Laranail\DBConsole\Services\Access;
 
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
+use Simtabi\Laranail\DBConsole\Enums\Assurance;
 use Illuminate\Contracts\Auth\Factory as AuthFactory;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
@@ -40,13 +41,18 @@ final readonly class Authorizer
      * denial. The scope is a string like 'server:prod-mysql' or
      * 'database:prod-mysql/shop_prod' (null = no specific scope).
      *
+     * $alsoRequire names assurance the operation needs on top of what
+     * security.assurance asks of the permission (see AssuranceEnforcer).
+     *
+     * @param list<Assurance> $alsoRequire
+     *
      * @throws NotAuthorized when the gate denies
      * @throws AssuranceRequired when the gate allows but the operator lacks the required assurance
      */
-    public function authorize(ConsolePermission $permission, ?string $scope = null): void
+    public function authorize(ConsolePermission $permission, ?string $scope = null, array $alsoRequire = []): void
     {
         if ($this->gate->allows($permission->ability(), $scope)) {
-            $this->assure($permission, $scope);
+            $this->assure($permission, $scope, $alsoRequire);
 
             return;
         }
@@ -65,11 +71,13 @@ final readonly class Authorizer
      * (secrets rotation, which runs from the shell): an authenticated operator
      * still needs the assurance the permission requires.
      *
+     * @param list<Assurance> $alsoRequire
+     *
      * @throws AssuranceRequired
      */
-    public function assure(ConsolePermission $permission, ?string $scope = null): void
+    public function assure(ConsolePermission $permission, ?string $scope = null, array $alsoRequire = []): void
     {
-        $this->assurance->enforce($this->auth->guard()->user(), $permission, $this->serverFromScope($scope));
+        $this->assurance->enforce($this->auth->guard()->user(), $permission, $this->serverFromScope($scope), $alsoRequire);
     }
 
     private function serverFromScope(?string $scope): string

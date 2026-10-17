@@ -8,7 +8,9 @@ A create that finds its account or database already there changes nothing, answe
 
 ## Identity confirmation
 
-Authentication stays with the host application. It binds `Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance` (`hasSecondFactor()`, `recentlyConfirmedAt()`) from its own two-factor and password or passkey confirmation records, and db-console refuses `adopt_and_apply` with `ConfirmationRequired` (HTTP 403, `confirmation.required`) unless the operator confirmed within `security.step_up.ttl` seconds (default 300). Until the host binds one, `NullOperatorAssurance` reports no confirmation, so `adopt_and_apply` is refused.
+Authentication stays with the host application. It binds `Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance` (`hasSecondFactor()`, `recentlyConfirmedAt()`) from its own two-factor and password or passkey confirmation records, and db-console decides `adopt_and_apply` through the same assurance policy as every other permission (see [Operator assurance](../tools/operator-assurance.md)), with a confirmation within `security.step_up.ttl` seconds (default 300) always required, whatever `assurance.recent_confirmation` lists. Under `require` a shortfall is `AssuranceRequired` (HTTP 403, `assurance_required`); under `report` it is allowed and audited; a live break-glass bypass lets it through; a shell run with no operator is left to the gate.
+
+Every refusal is reported to the security recipients as `AccountCreationRefused` / `DatabaseCreationRefused`, with a `reason`: `policy` (the policy refused), `not_authorized` (no `resource.adopt` or `account.rotate`) or `assurance_required`.
 
 ## The three policies
 
