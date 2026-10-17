@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Servers;
 
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 
 /**
- * A resolved server definition: its name, engine, admin connection key, and
- * TLS options. Built from config (static) or a DbServer catalog row
+ * A resolved server definition: its name, engine, admin connection key, TLS
+ * options and hosting. Built from config (static) or a DbServer catalog row
  * (dynamic); both surface through the ServerRegistry identically.
  */
 final readonly class ServerDefinition
@@ -23,6 +24,7 @@ final readonly class ServerDefinition
         public array $tls,
         public bool $showAtRestStatus = true,
         public bool $editable = false,
+        public Hosting $hosting = Hosting::SelfHosted,
     ) {}
 
     public function tlsEnabled(): bool

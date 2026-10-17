@@ -9,6 +9,9 @@ namespace Simtabi\Laranail\DBConsole\Domain;
  * operations the active engine doesn't support instead of failing at
  * runtime — this object is what lets one codebase span engines whose
  * account models genuinely differ.
+ *
+ * The engine supplies what it can do anywhere; withHosting() adds what the
+ * server's hosting means (ServerRegistry::capabilities() does both).
  */
 final readonly class Capabilities
 {
@@ -20,7 +23,22 @@ final readonly class Capabilities
         public bool $canRotatePassword,
         public EncryptionCapabilities $encryption,
         public ?string $accountModelNote = null,
+        public ?HostingProfile $hosting = null,
     ) {}
+
+    public function withHosting(HostingProfile $hosting): self
+    {
+        return new self(
+            canCreateDatabase: $this->canCreateDatabase,
+            canCreateAccount: $this->canCreateAccount,
+            canScopeAccountsByHost: $this->canScopeAccountsByHost,
+            canGrantTableLevel: $this->canGrantTableLevel,
+            canRotatePassword: $this->canRotatePassword,
+            encryption: $this->encryption,
+            accountModelNote: $this->accountModelNote,
+            hosting: $hosting,
+        );
+    }
 
     /**
      * Flat form for doctor output and API resources.
@@ -39,6 +57,11 @@ final readonly class Capabilities
             'can_require_tls_on_account' => $this->encryption->canRequireTlsOnAccount,
             'at_rest_mechanism'          => $this->encryption->atRestMechanism,
             'account_model_note'         => $this->accountModelNote,
+            ...($this->hosting instanceof HostingProfile ? [
+                'hosting'              => $this->hosting->hosting->value,
+                'default_account_host' => $this->hosting->defaultAccountHost,
+                'provider_backups'     => $this->hosting->providerBackups,
+            ] : []),
         ];
     }
 }

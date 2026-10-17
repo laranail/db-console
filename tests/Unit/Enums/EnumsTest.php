@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Simtabi\Laranail\DBConsole\Enums\Charset;
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\Collation;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
@@ -42,7 +43,7 @@ function allDBConsoleEnums(): array
         ConsoleRole::class, ConsolePermission::class, ScopeType::class,
         ApiAuthGuard::class, WebhookEvent::class, OperationType::class,
         OperationOutcome::class, Severity::class, NotificationCategory::class,
-        ExceptionCode::class,
+        ExceptionCode::class, Hosting::class,
     ];
 }
 
