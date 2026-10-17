@@ -12,15 +12,20 @@ use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Exceptions\GrantNotApplied;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 
 /*
@@ -516,4 +521,110 @@ it('passes the restricted admin in the doctor and fails a superuser', function (
     ]);
 
     expect($findings('live_pgsql_super')['server:live_pgsql_super:admin'])->toBe(Severity::Error);
+});
+
+/*
+ * Existing roles and databases (owner decision 2026-10-17): refused by
+ * default, adopted only on request, and given a new password only under
+ * adopt_and_apply. Whether a password "was applied" is answered by logging
+ * in with it, not by reading what db-console recorded.
+ */
+
+const LIVE_PG_THEIR_PASSWORD = 'Their-Pg-Role-Password-2026!';
+
+function livePgCanLogIn(string $role, string $password): bool
+{
+    $name = 'live_pg_login_' . $role . '_' . substr(hash('sha256', $password), 0, 8);
+    config()->set("database.connections.{$name}", livePgConnection('postgres', $role, $password));
+
+    try {
+        DB::connection($name)->select('SELECT 1');
+
+        return true;
+    } catch (Throwable) {
+        return false;
+    } finally {
+        DB::purge($name);
+    }
+}
+
+it('refuses a role it did not create, and the role keeps its own password', function (): void {
+    $role = liveName('theirs');
+    $this->cleanup = [['role', $role]];
+    livePgSuper('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . LIVE_PG_THEIR_PASSWORD . "'");
+
+    expect(fn () => app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD)))
+        ->toThrow(AccountAlreadyExists::class);
+
+    expect(livePgCanLogIn($role, LIVE_PG_THEIR_PASSWORD))->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(0);
+});
+
+it('adopts a role on request without touching its password', function (): void {
+    $role = liveName('adopted');
+    $this->cleanup = [['role', $role]];
+    livePgAs('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . LIVE_PG_THEIR_PASSWORD . "'");
+
+    $result = app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_THEIR_PASSWORD))->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(1);
+});
+
+it('gives an adopted role the supplied password under adopt_and_apply', function (): void {
+    $role = liveName('applied');
+    $this->cleanup = [['role', $role]];
+    livePgAs('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . LIVE_PG_THEIR_PASSWORD . "'");
+
+    $result = app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
+
+    expect($result->data['password_applied'])->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_THEIR_PASSWORD))->toBeFalse();
+});
+
+it('refuses an existing database, and adopts it on request', function (): void {
+    $db = liveName('existing');
+    $this->cleanup = [['database', $db]];
+    livePgAs('postgres')->statement("CREATE DATABASE \"{$db}\"");
+
+    expect(fn () => app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8')))
+        ->toThrow(DatabaseAlreadyExists::class);
+    expect(ManagedDatabase::query()->count())->toBe(0);
+
+    $result = app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(ManagedDatabase::query()->count())->toBe(1)
+        ->and((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(1);
+});
+
+it('re-runs the wizard without a password when the operator adopts, keeping the role\'s password', function (): void {
+    $db = liveName('rerun');
+    $role = liveName('rerun');
+    $this->cleanup = [['role', $role], ['database', $db]];
+    $provision = fn (?Password $password, ?ExistingResourcePolicy $policy) => app(ProvisioningWizard::class)->provision(
+        'live_pgsql',
+        new DbName($db),
+        new Charset('utf8'),
+        new Username($role),
+        new Host('%'),
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        $password,
+        $policy,
+    );
+
+    $provision(new Password(LIVE_PG_PASSWORD), null);
+
+    expect(fn () => $provision(null, null))->toThrow(DatabaseAlreadyExists::class);
+
+    $rerun = $provision(null, ExistingResourcePolicy::Adopt);
+
+    expect($rerun->data['adopted'])->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeTrue();
+    livePgAs($db, $role)->statement('CREATE TABLE rerun_check (id integer)');
+    livePgClose($db, $role);
 });
