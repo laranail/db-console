@@ -9,6 +9,7 @@ use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Engines\MySqlEngine;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Engines\MariaDbEngine;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
@@ -188,7 +189,7 @@ describe('recreating an account from its stored hash', function (): void {
     });
 
     it('refuses a MariaDB hash literal that is not hex', function (): void {
-        expect(fn () => (new MariaDbEngine)->createAccountWithAuth(
+        expect(fn (): StatementList => (new MariaDbEngine)->createAccountWithAuth(
             new Username('shop_user'),
             new Host('%'),
             'mysql_native_password',

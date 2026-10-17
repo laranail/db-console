@@ -6,7 +6,6 @@ namespace Simtabi\Laranail\DBConsole\Doctor;
 
 use Illuminate\Database\Connection;
 use Illuminate\Contracts\Events\Dispatcher;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
@@ -212,16 +211,6 @@ final readonly class DoctorService
 
     private function minimalGrantFix(string $server): string
     {
-        $engine = $this->registry->engine($server);
-
-        if ($engine->type() === EngineType::Pgsql) {
-            return PostgresAdminCheck::minimalRole();
-        }
-
-        return implode("\n", [
-            "CREATE USER 'db_console_admin'@'%' IDENTIFIED BY '...';",
-            "GRANT CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE USER, RELOAD ON *.* TO 'db_console_admin'@'%';",
-            "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREATE VIEW, SHOW VIEW ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;",
-        ]);
+        return implode("\n", MinimalAdminGrant::statements($this->registry->engine($server)));
     }
 }

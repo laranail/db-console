@@ -48,14 +48,25 @@ final readonly class ProvisioningWizard
         PrivilegeSet $privileges,
         ?Password $password = null,
     ): OperationResult {
+        // Filled by the forward steps, read by their compensations.
+        /** @var OperationResult|null $databaseResult */
+        $databaseResult = null;
+        /** @var OperationResult|null $accountResult */
         $accountResult = null;
 
         $this->executor->execute($server, OperationType::DatabaseCreate, [
             WizardStep::make(
                 "create database {$database->value}",
-                fn (): OperationResult => $this->databases->create($server, $database, $charset),
-                function () use ($server, $database): void {
-                    $this->databases->rollbackCreatedDatabase($server, $database);
+                function () use (&$databaseResult, $server, $database, $charset): OperationResult {
+                    return $databaseResult = $this->databases->create($server, $database, $charset);
+                },
+                // An existing database or account is adopted, not created, so
+                // a rollback leaves it alone: undoing the run must not drop
+                // what was there before it.
+                function () use (&$databaseResult, $server, $database): void {
+                    if ($databaseResult instanceof OperationResult && ! $databaseResult->alreadyExisted) {
+                        $this->databases->rollbackCreatedDatabase($server, $database);
+                    }
                 },
             ),
             WizardStep::make(
@@ -63,8 +74,10 @@ final readonly class ProvisioningWizard
                 function () use (&$accountResult, $server, $username, $host, $password): OperationResult {
                     return $accountResult = $this->accounts->create($server, $username, $host, $password);
                 },
-                function () use ($server, $username, $host): void {
-                    $this->accounts->rollbackCreatedAccount($server, $username, $host);
+                function () use (&$accountResult, $server, $username, $host): void {
+                    if ($accountResult instanceof OperationResult && ! $accountResult->alreadyExisted) {
+                        $this->accounts->rollbackCreatedAccount($server, $username, $host);
+                    }
                 },
             ),
             WizardStep::make(
