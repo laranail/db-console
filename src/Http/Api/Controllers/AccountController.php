@@ -9,8 +9,10 @@ use Illuminate\Http\JsonResponse;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateAccountRequest;
 
 /**
@@ -33,14 +35,18 @@ final class AccountController
             new Username((string) $request->validated('username')),
             new Host((string) ($request->validated('host') ?? 'localhost')),
             $password,
+            ExistingResourcePolicy::tryFrom((string) $request->validated('on_existing')),
         );
 
-        return OperationResponse::make($result, 201);
+        // 201 for a new account; 200 for one adopted as it was found. A
+        // refused one never gets here: AccountAlreadyExists renders the 409.
+        return OperationResponse::make($result, $result->alreadyExisted ? 200 : 201);
     }
 
-    public function destroy(Request $request, string $server, string $username, AccountManager $accounts): JsonResponse
+    public function destroy(Request $request, string $server, string $username, AccountManager $accounts, ApiSettings $settings): JsonResponse
     {
-        if ($request->input('confirm') !== $username) {
+        // api.confirm_destructive (default true): the body must repeat the name.
+        if ($settings->confirmsDestructive() && $request->input('confirm') !== $username) {
             return new JsonResponse(['message' => "Confirmation required: send {\"confirm\":\"{$username}\"} to drop this account."], 422);
         }
 

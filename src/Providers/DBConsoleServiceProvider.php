@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Providers;
 
 use Override;
+use Illuminate\Http\Request;
 use Psr\Log\LoggerInterface;
 use Composer\InstalledVersions;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Contracts\Auth\Access\Gate;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Facades\RateLimiter;
 use Simtabi\Laranail\Package\Tools\Package;
 use Simtabi\Laranail\DBConsole\Doctor\Checks;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -18,6 +21,7 @@ use Simtabi\Laranail\DBConsole\Encryption\TlsProbe;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Illuminate\Database\ConnectionResolverInterface;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Database\Events\ConnectionEstablished;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
@@ -30,9 +34,6 @@ use Simtabi\Laranail\DBConsole\Logging\ContextScrubber;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
-use Simtabi\Laranail\DBConsole\Security\NullStepUpVerifier;
-use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
-use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
 use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
 use Simtabi\Laranail\DBConsole\Http\Middleware\ApiGuard;
@@ -49,15 +50,18 @@ use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
 use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
 use Simtabi\Laranail\DBConsole\Listeners\SendNotifications;
+use Simtabi\Laranail\DBConsole\Security\NullStepUpVerifier;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\Package\Tools\Commands\InstallCommand;
 use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
 use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
 use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
+use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
 use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
+use Simtabi\Laranail\DBConsole\Security\Contracts\StepUpVerifier;
 use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
@@ -104,6 +108,28 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->guardSecretDriver();
         $this->registerAuditPipeline();
         $this->registerGate();
+        $this->registerApiRateLimiter();
+    }
+
+    /**
+     * The api.rate_limit limiter ('requests,minutes'), keyed on the API
+     * caller, or the client IP before authentication. Switched off by an
+     * empty or zero value.
+     */
+    private function registerApiRateLimiter(): void
+    {
+        RateLimiter::for(ApiSettings::RATE_LIMITER, function (Request $request): Limit {
+            $limit = $this->app->make(ApiSettings::class)->rateLimit();
+            if ($limit === null) {
+                return Limit::none();
+            }
+
+            [$requests, $minutes] = $limit;
+            $caller = $request->user();
+            $key = $caller instanceof Authenticatable ? 'user:' . $caller->getAuthIdentifier() : 'ip:' . $request->ip();
+
+            return Limit::perMinutes($minutes, $requests)->by($key);
+        });
     }
 
     /**
