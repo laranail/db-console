@@ -28,7 +28,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipReleasingEngine
+final class PostgresEngine implements EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -165,7 +165,8 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
 
         return new StatementList(
             Statement::plain(
-                'SELECT DISTINCT d.datname FROM pg_catalog.pg_shdepend s'
+                "SELECT DISTINCT d.datname, has_database_privilege(d.datname, 'CONNECT') AS can_connect"
+                . ' FROM pg_catalog.pg_shdepend s'
                 . ' JOIN pg_catalog.pg_database d ON d.oid = s.dbid'
                 . " WHERE s.refclassid = 'pg_catalog.pg_authid'::regclass"
                 . ' AND s.refobjid = (SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ' . $q->literal($u->value) . ')'
@@ -175,32 +176,58 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         );
     }
 
-    public function dropAccountReleasing(Username $u, Host $h, array $databases): StatementList
+    public function holdsPrivilegesOf(Username $u): StatementList
     {
         $q = Quoter::for($this->type());
-        $role = $q->identifier($u->value);
-        $release = ["REASSIGN OWNED BY {$role} TO CURRENT_USER", "DROP OWNED BY {$role}"];
 
-        // REASSIGN/DROP OWNED need the privileges of the role. On PG16+ a
-        // CREATEROLE admin holds ADMIN OPTION on the roles it created but
-        // does not inherit them, so it takes membership first.
-        $statements = [Statement::plain("GRANT {$role} TO CURRENT_USER")];
+        // USAGE: the role's privileges are available without SET ROLE, which
+        // is what REASSIGN OWNED and DROP OWNED check. True for a superuser.
+        return new StatementList(Statement::plain('SELECT pg_has_role(' . $q->literal($u->value) . ", 'USAGE')"));
+    }
 
+    public function takeMembership(Username $u): StatementList
+    {
+        // On PG16+ a CREATEROLE admin holds ADMIN OPTION on the roles it
+        // created but does not inherit them; before 16 CREATEROLE can grant
+        // any non-superuser role. Either way this grants what the release
+        // needs. The membership inherits when the admin role does.
+        return new StatementList(Statement::plain('GRANT ' . Quoter::for($this->type())->identifier($u->value) . ' TO CURRENT_USER'));
+    }
+
+    public function releaseMembership(Username $u): StatementList
+    {
+        return new StatementList(Statement::plain('REVOKE ' . Quoter::for($this->type())->identifier($u->value) . ' FROM CURRENT_USER'));
+    }
+
+    public function releaseOwnershipIn(Username $u, array $databases): StatementList
+    {
+        $statements = [];
         foreach ($databases as $db) {
-            foreach ($release as $sql) {
+            foreach ($this->release($u) as $sql) {
                 $statements[] = Statement::plain($sql)->inDatabase($db);
             }
         }
 
-        // On the admin's own database this also revokes the role's
-        // privileges on shared objects, such as CONNECT on a database.
-        foreach ($release as $sql) {
-            $statements[] = Statement::plain($sql);
-        }
+        return new StatementList(...$statements);
+    }
 
-        $statements[] = Statement::plain("DROP ROLE {$role}");
+    public function dropReleasedAccount(Username $u, Host $h): StatementList
+    {
+        // On the admin's own database the release also revokes the role's
+        // privileges on shared objects, such as CONNECT on a database.
+        $statements = array_map(Statement::plain(...), $this->release($u));
+        $statements[] = Statement::plain('DROP ROLE ' . Quoter::for($this->type())->identifier($u->value));
 
         return new StatementList(...$statements);
+    }
+
+    public function dropAccountReleasing(Username $u, Host $h, array $databases): StatementList
+    {
+        return new StatementList(
+            ...$this->takeMembership($u)->all(),
+            ...$this->releaseOwnershipIn($u, $databases)->all(),
+            ...$this->dropReleasedAccount($u, $h)->all(),
+        );
     }
 
     public function setPassword(Username $u, Host $h, Password $p): StatementList
@@ -230,10 +257,11 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         $targets = $this->targets($s);
         $inTarget = static fn (string $sql): Statement => Statement::plain($sql)->inDatabase($db);
 
-        // Database-level grants are recorded in the shared catalog and run
-        // from anywhere; everything below acts on the connected database.
+        // Database-level grants could run from anywhere; they run in the
+        // target too, so the whole grant shares one connection and one
+        // transaction with its verification (GrantVerifyingEngine).
         $statements = [
-            Statement::plain(
+            $inTarget(
                 'GRANT ' . implode(', ', ['CONNECT', ...$targets['database']])
                 . ' ON DATABASE ' . $q->identifier($db->value) . " TO {$role}",
             ),
@@ -276,7 +304,7 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         // holding access it was meant to lose.
         $statements = [];
         if ($targets['database'] !== []) {
-            $statements[] = Statement::plain(
+            $statements[] = $inTarget(
                 'REVOKE ' . implode(', ', $targets['database']) . ' ON DATABASE ' . $q->identifier($db->value) . " FROM {$role}",
             );
         }
@@ -302,6 +330,51 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
         return new StatementList(...$statements);
     }
 
+    public function missingGrants(PrivilegeSet $s, DbName $db, Username $u): StatementList
+    {
+        $q = Quoter::for($this->type());
+        $role = $q->literal($u->value);
+        $database = $q->literal($db->value);
+        $targets = $this->targets($s);
+        $privileges = static fn (array $list): string => 'ARRAY[' . implode(', ', array_map($q->literal(...), $list)) . ']';
+
+        // One SELECT per object kind the set touches, each yielding the
+        // (object, privilege) pairs the role lacks. Effective privileges
+        // count, including ones held through PUBLIC or ownership.
+        $checks = [
+            "SELECT 'database ' || {$database} AS object, p AS privilege"
+            . ' FROM unnest(' . $privileges(['CONNECT', ...$targets['database']]) . ') AS p'
+            . " WHERE NOT has_database_privilege({$role}, {$database}, p)",
+            "SELECT 'schema public' AS object, p AS privilege"
+            . ' FROM unnest(' . $privileges(['USAGE', ...$targets['schema']]) . ') AS p'
+            . " WHERE NOT has_schema_privilege({$role}, 'public', p)",
+        ];
+
+        $relations = [
+            'tables'    => ["'r', 'p', 'v', 'm', 'f'", 'table', 'has_table_privilege'],
+            'sequences' => ["'S'", 'sequence', 'has_sequence_privilege'],
+        ];
+        foreach ($relations as $kind => [$relkinds, $label, $function]) {
+            if ($targets[$kind] !== []) {
+                $checks[] = "SELECT '{$label} ' || quote_ident(c.relname) AS object, p AS privilege"
+                    . ' FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
+                    . ' CROSS JOIN unnest(' . $privileges($targets[$kind]) . ') AS p'
+                    . " WHERE n.nspname = 'public' AND c.relkind IN ({$relkinds})"
+                    . " AND NOT {$function}({$role}, c.oid, p)";
+            }
+        }
+
+        if ($targets['functions'] !== []) {
+            $checks[] = "SELECT 'function ' || quote_ident(f.proname) AS object, p AS privilege"
+                . ' FROM pg_catalog.pg_proc f JOIN pg_catalog.pg_namespace n ON n.oid = f.pronamespace'
+                . ' CROSS JOIN unnest(' . $privileges($targets['functions']) . ') AS p'
+                . " WHERE n.nspname = 'public' AND f.prokind = 'f'"
+                . " AND NOT has_function_privilege({$role}, f.oid, p)";
+        }
+
+        return new StatementList(Statement::plain(implode(' UNION ALL ', $checks) . ' ORDER BY 1, 2')->inDatabase($db));
+    }
+
     public function countUserObjects(DbName $db): StatementList
     {
         return new StatementList(
@@ -323,6 +396,16 @@ final class PostgresEngine implements EmptinessProbingEngine, Engine, OwnershipR
                 . ' WHERE grantee = ' . Quoter::for($this->type())->literal($u->value),
             ),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function release(Username $u): array
+    {
+        $role = Quoter::for($this->type())->identifier($u->value);
+
+        return ["REASSIGN OWNED BY {$role} TO CURRENT_USER", "DROP OWNED BY {$role}"];
     }
 
     /**

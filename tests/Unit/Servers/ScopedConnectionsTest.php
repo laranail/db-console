@@ -7,6 +7,7 @@ use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Servers\ScopedSession;
 use Simtabi\Laranail\DBConsole\Engines\PostgresEngine;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
@@ -72,8 +73,9 @@ it('marks Postgres grants for the target database', function (): void {
         new Host('%'),
     )->all();
 
-    expect($this->admin->runsHere($grant[0]))->toBeTrue()      // GRANT CONNECT ON DATABASE: shared catalog
-        ->and($this->admin->runsHere($grant[1]))->toBeFalse();  // GRANT USAGE ON SCHEMA: per database
+    foreach ($grant as $statement) {
+        expect($this->admin->runsHere($statement))->toBeFalse();
+    }
 });
 
 it('runs each statement on the database it is scoped to', function (): void {
@@ -108,4 +110,73 @@ it('reads a scalar from the database a statement is scoped to', function (): voi
     };
 
     expect((int) app(ScopedConnections::class)->scalar($this->admin, $engine->countOnTarget()))->toBe(2);
+});
+
+it('commits the work of a transaction on every connection it touched', function (): void {
+    $engine = new class
+    {
+        use MintsScopedStatements;
+    };
+
+    app(ScopedConnections::class)->transaction($this->admin, function (ScopedSession $session) use ($engine): void {
+        $session->run($engine->list());
+    });
+
+    expect(scopedTables($this->dir . '/admin_db'))->toBe(['on_admin'])
+        ->and(scopedTables($this->dir . '/target_db'))->toBe(['on_target']);
+});
+
+// SQLite, like Postgres, has transactional DDL, so a rolled-back CREATE TABLE
+// is observable.
+it('rolls back every connection it touched when the work throws', function (): void {
+    $engine = new class
+    {
+        use MintsScopedStatements;
+    };
+
+    expect(fn () => app(ScopedConnections::class)->transaction($this->admin, function (ScopedSession $session) use ($engine): void {
+        $session->run($engine->list());
+
+        throw new RuntimeException('verification failed');
+    }))->toThrow(RuntimeException::class, 'verification failed');
+
+    expect(scopedTables($this->dir . '/admin_db'))->toBe([])
+        ->and(scopedTables($this->dir . '/target_db'))->toBe([])
+        ->and(array_keys(DB::getConnections()))->not->toContain('db-console-scoped:local:target_db')
+        // The admin connection outlives the transaction, so closing it does
+        // not end one left open: it has to be rolled back.
+        ->and(DB::connection('scoped_admin')->transactionLevel())->toBe(0);
+});
+
+it('keeps what was committed at a checkpoint when later work throws', function (): void {
+    $engine = new class
+    {
+        use MintsScopedStatements;
+    };
+
+    expect(fn () => app(ScopedConnections::class)->transaction($this->admin, function (ScopedSession $session) use ($engine): void {
+        $session->run($engine->targetOnly());
+        $session->commit();
+        $session->run($engine->adminOnly());
+
+        throw new RuntimeException('drop failed');
+    }))->toThrow(RuntimeException::class);
+
+    expect(scopedTables($this->dir . '/target_db'))->toBe(['on_target'])
+        ->and(scopedTables($this->dir . '/admin_db'))->toBe([]);
+});
+
+it('reads rows inside the transaction, seeing its own uncommitted work', function (): void {
+    $engine = new class
+    {
+        use MintsScopedStatements;
+    };
+
+    $rows = app(ScopedConnections::class)->transaction($this->admin, function (ScopedSession $session) use ($engine): array {
+        $session->run($engine->targetOnly());
+
+        return $session->select($engine->tablesOnTarget());
+    });
+
+    expect($rows)->toBe([['name' => 'on_target']]);
 });

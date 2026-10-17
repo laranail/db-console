@@ -7,18 +7,23 @@ namespace Simtabi\Laranail\DBConsole\Services;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
+use Simtabi\Laranail\DBConsole\Servers\ScopedSession;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Events\DatabasesAttached;
 use Simtabi\Laranail\DBConsole\Events\DatabasesDetached;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesGranted;
 use Simtabi\Laranail\DBConsole\Events\PrivilegesRevoked;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
+use Simtabi\Laranail\DBConsole\Exceptions\GrantNotApplied;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
@@ -51,12 +56,13 @@ final readonly class PrivilegeManager
         $target = $this->label($user, $host, $db);
 
         try {
-            // Postgres grants run inside the target database; see Statement.
-            $this->scoped->run(
-                $connection,
-                $engine->grant($set, $db, $user, $host),
-                ['operation' => OperationType::GrantCreate->value, 'target' => $target],
-            );
+            $context = ['operation' => OperationType::GrantCreate->value, 'target' => $target];
+
+            if ($engine instanceof GrantVerifyingEngine) {
+                $this->grantVerified($engine, $connection, $set, $db, $user, $host, $context);
+            } else {
+                $this->scoped->run($connection, $engine->grant($set, $db, $user, $host), $context);
+            }
         } catch (DBConsoleException $e) {
             $this->fail(OperationType::GrantCreate, $server, $target, $e);
         }
@@ -88,12 +94,17 @@ final readonly class PrivilegeManager
         $target = $this->label($user, $host, $db);
 
         try {
-            // Postgres grants run inside the target database; see Statement.
-            $this->scoped->run(
-                $connection,
-                $engine->revoke($set, $db, $user, $host),
-                ['operation' => OperationType::GrantRevoke->value, 'target' => $target],
-            );
+            $context = ['operation' => OperationType::GrantRevoke->value, 'target' => $target];
+
+            // Postgres revokes run inside the target database (see Statement),
+            // all or nothing where DDL is transactional.
+            if ($engine instanceof GrantVerifyingEngine) {
+                $this->scoped->transaction($connection, function (ScopedSession $session) use ($engine, $set, $db, $user, $host): void {
+                    $session->run($engine->revoke($set, $db, $user, $host));
+                }, $context);
+            } else {
+                $this->scoped->run($connection, $engine->revoke($set, $db, $user, $host), $context);
+            }
         } catch (DBConsoleException $e) {
             $this->fail(OperationType::GrantRevoke, $server, $target, $e);
         }
@@ -236,6 +247,40 @@ final readonly class PrivilegeManager
         } catch (DBConsoleException $e) {
             return ['user' => $user->value, 'host' => $host->value, 'database' => $db->value, 'ok' => false, 'error' => $e->userMessage()];
         }
+    }
+
+    /**
+     * Grant and check the result in one transaction on the target database.
+     * Postgres warns and grants what it can when the admin lacks a grant
+     * option, so the GRANT succeeding proves nothing; the check reads the
+     * account's effective privileges, and anything missing rolls the whole
+     * grant back.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function grantVerified(
+        Engine&GrantVerifyingEngine $engine,
+        AdminConnection $connection,
+        PrivilegeSet $set,
+        DbName $db,
+        Username $user,
+        Host $host,
+        array $context,
+    ): void {
+        $this->scoped->transaction($connection, function (ScopedSession $session) use ($engine, $set, $db, $user, $host): void {
+            $session->run($engine->grant($set, $db, $user, $host));
+
+            $missing = [];
+            foreach ($engine->missingGrants($set, $db, $user) as $statement) {
+                foreach ($session->select($statement) as $row) {
+                    $missing[] = ['object' => (string) $row['object'], 'privilege' => (string) $row['privilege']];
+                }
+            }
+
+            if ($missing !== []) {
+                throw GrantNotApplied::missing($db->value, $user->value, $missing);
+            }
+        }, $context);
     }
 
     private function label(Username $user, Host $host, DbName $db): string
