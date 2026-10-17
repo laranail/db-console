@@ -555,6 +555,6 @@ it('re-runs the wizard without a password when the operator adopts, keeping the 
 
     expect($rerun->data['adopted'])->toBeTrue()
         ->and(liveMyCanLogIn($user, LIVE_MY_PASSWORD))->toBeTrue();
-    liveMyAs($db, $user)->statement('CREATE TABLE rerun_check (id int)');
+    liveMyAs($db, $user)->statement('CREATE TABLE rerun_check (id int PRIMARY KEY)');
     liveMyClose($db, $user);
 });
