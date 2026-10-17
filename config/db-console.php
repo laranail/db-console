@@ -56,6 +56,51 @@ return [
                 // encrypted at rest. DBConsole never enables or manages it.
                 'show_status' => true,
             ],
+
+            // Reach the admin connection through an SSH tunnel (a bastion, or
+            // the database host itself). The tunnel opens on first use, the
+            // admin connection is pointed at its local end, and it closes when
+            // the application terminates. TLS above still applies end to end.
+            'ssh' => [
+                'enabled' => (bool) env('DB_CONSOLE_PRIMARY_SSH', false),
+
+                // openssh (the ssh binary, default) or phpseclib (pure PHP,
+                // needs phpseclib/phpseclib ^4.0.1).
+                'driver' => env('DB_CONSOLE_PRIMARY_SSH_DRIVER', 'openssh'),
+
+                'host' => env('DB_CONSOLE_PRIMARY_SSH_HOST'),
+                'port' => (int) env('DB_CONSOLE_PRIMARY_SSH_PORT', 22),
+                'user' => env('DB_CONSOLE_PRIMARY_SSH_USER'),
+
+                // Required. The server's public host key line, e.g. the
+                // output of `ssh-keyscan -t ed25519 <host>` or the contents of
+                // /etc/ssh/ssh_host_ed25519_key.pub. Never trusted on first use.
+                'host_key' => env('DB_CONSOLE_PRIMARY_SSH_HOST_KEY'),
+
+                // Exactly one: a private key file, or a secrets-driver
+                // reference whose value is the key (written to a 0600 file in
+                // a 0700 directory for the life of the tunnel).
+                'key'        => env('DB_CONSOLE_PRIMARY_SSH_KEY'),
+                'key_secret' => env('DB_CONSOLE_PRIMARY_SSH_KEY_SECRET'),
+
+                // Where the SSH host connects onward to. Defaults to the admin
+                // connection's own host and port; remote_socket forwards to a
+                // Unix socket on the SSH host instead (e.g.
+                // /var/run/postgresql/.s.PGSQL.5432 or /var/run/mysqld/mysqld.sock).
+                'remote_host'   => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_HOST'),
+                'remote_port'   => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_PORT'),
+                'remote_socket' => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_SOCKET'),
+
+                // port: a 127.0.0.1 port, reachable by any local user.
+                // socket: a Unix socket in a 0700 directory, reachable by this
+                // user only. A socket cannot carry TLS, see docs/tools/ssh-tunnels.md.
+                'local'            => env('DB_CONSOLE_PRIMARY_SSH_LOCAL', 'port'),
+                'socket_directory' => env('DB_CONSOLE_PRIMARY_SSH_SOCKET_DIRECTORY'),
+
+                'connect_timeout' => 10,
+                'keepalive'       => 15,
+                'binary'          => env('DB_CONSOLE_PRIMARY_SSH_BINARY', 'ssh'),
+            ],
         ],
     ],
 

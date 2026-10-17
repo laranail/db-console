@@ -49,6 +49,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
     // Registry
     case UnknownServer = 'server.unknown';
     case ServerMisconfigured = 'server.misconfigured';
+    case TunnelFailed = 'server.tunnel_failed';
 
     /**
      * The HTTP status the REST API returns for this failure. Validation and
@@ -67,6 +68,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
             self::PrivilegeForbidden,
             self::UnsupportedOperation => 422,
             self::ServerUnreachable,
+            self::TunnelFailed,
             self::AuthenticationFailed,
             self::InsufficientPrivilege,
             self::GrantNotApplied,

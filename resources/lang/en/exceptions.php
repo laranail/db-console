@@ -32,6 +32,7 @@ return [
         'insufficient_privilege' => 'The admin account is missing a privilege needed for :operation.',
         'unknown'                => "No server named ':server' is registered.",
         'misconfigured'          => "Server ':server' is misconfigured: :problem.",
+        'tunnel_failed'          => "The SSH tunnel to server ':server' could not be opened: :reason.",
     ],
 
     'operation' => [
