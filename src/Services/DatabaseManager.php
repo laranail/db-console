@@ -7,19 +7,28 @@ namespace Simtabi\Laranail\DBConsole\Services;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourceKind;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
+use Simtabi\Laranail\DBConsole\Engines\SessionEndingEngine;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
+use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
+use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
@@ -40,23 +49,25 @@ final readonly class DatabaseManager
         private DBConsoleLogger $log,
         private BackupService $backups,
         private ScopedConnections $scoped,
+        private RoleMembership $membership,
+        private ExistingResourceGuard $guard,
     ) {}
 
-    public function create(string $server, DbName $db, Charset $charset): OperationResult
+    /**
+     * Create a database. One that is already there is handled by the
+     * existing-resource policy ($onExisting, else the server's, else the
+     * global `databases.on_existing`, default refuse): refused with
+     * DatabaseAlreadyExists (HTTP 409), or adopted as it is. A database has
+     * no password, so adopt_and_apply adopts.
+     */
+    public function create(string $server, DbName $db, Charset $charset, ?ExistingResourcePolicy $onExisting = null): OperationResult
     {
         $this->authorizer->authorize(ConsolePermission::DatabaseCreate, "server:{$server}");
 
         [$engine, $connection] = $this->registry->resolve($server);
 
-        // Idempotency: an already-existing database is a handled outcome, not
-        // a raw driver error.
         if ($this->exists($server, $db)) {
-            return OperationResult::succeeded(
-                OperationType::DatabaseCreate,
-                $server,
-                ['database' => $db->value],
-                alreadyExisted: true,
-            );
+            return $this->adopt($server, $db, $onExisting);
         }
 
         try {
@@ -72,7 +83,7 @@ final readonly class DatabaseManager
         $this->log->success(OperationType::DatabaseCreate->value, $server, ['target' => $db->value]);
         $this->events->dispatch(new DatabaseCreated($server, ['target' => $db->value]));
 
-        return OperationResult::succeeded(OperationType::DatabaseCreate, $server, ['database' => $db->value]);
+        return OperationResult::succeeded(OperationType::DatabaseCreate, $server, ['database' => $db->value, 'adopted' => false]);
     }
 
     public function drop(string $server, DbName $db): OperationResult
@@ -80,6 +91,17 @@ final readonly class DatabaseManager
         $this->authorizer->authorize(ConsolePermission::DatabaseDrop, "server:{$server}");
 
         [$engine, $connection] = $this->registry->resolve($server);
+
+        // Whose sessions the forced drop has to end, refused up front when the
+        // admin cannot end them, before the backup or anything else runs.
+        $sessionRoles = [];
+        if ($engine instanceof SessionEndingEngine && $engine instanceof OwnershipReleasingEngine) {
+            try {
+                $sessionRoles = $this->sessionRolesToTake($engine, $connection, $db);
+            } catch (DBConsoleException $e) {
+                $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
+            }
+        }
 
         // Backup before drop: snapshot a non-empty database first so an
         // accidental drop is recoverable (section 7). Disabled/absent → a
@@ -106,11 +128,20 @@ final readonly class DatabaseManager
             }
         }
 
+        $context = ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value];
+        $drop = static function () use ($connection, $engine, $db, $context): null {
+            $connection->run($engine->dropDatabase($db), $context);
+
+            return null;
+        };
+
         try {
-            $connection->run(
-                $engine->dropDatabase($db),
-                ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value],
-            );
+            if ($sessionRoles !== [] && $engine instanceof OwnershipReleasingEngine) {
+                // Membership lets WITH (FORCE) end those roles' sessions.
+                $this->membership->actingAs($engine, $connection, $sessionRoles, $context, $drop);
+            } else {
+                $drop();
+            }
         } catch (DBConsoleException $e) {
             $this->fail(OperationType::DatabaseDrop, $server, $db->value, $e);
         }
@@ -158,8 +189,8 @@ final readonly class DatabaseManager
     {
         [$engine, $connection] = $this->registry->resolve($server);
 
-        // Postgres keeps its catalog per database, so the count has to be read
-        // inside the target database rather than from the admin connection.
+        // The engine knows where its catalog lives: Postgres reads it inside the
+        // target database, the MySQL family from information_schema anywhere.
         if ($engine instanceof EmptinessProbingEngine) {
             $count = 0;
             foreach ($engine->countUserObjects($db) as $statement) {
@@ -169,22 +200,9 @@ final readonly class DatabaseManager
             return $count === 0;
         }
 
-        // MySQL/MariaDB expose a reliable per-database table count from the
-        // admin connection (information_schema.table_schema == the database).
-        // For every other engine — where "empty" cannot be checked without
-        // switching databases — report NON-empty conservatively, so backups
-        // always run and a rollback never drops.
-        if (! $engine->type()->isMysqlFamily()) {
-            return false;
-        }
-
-        $count = $connection->scalar(
-            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?',
-            [$db->value],
-            ['operation' => 'database.view'],
-        );
-
-        return (int) $count === 0;
+        // Every other engine cannot say: report NON-empty conservatively, so
+        // backups always run and a rollback never drops.
+        return false;
     }
 
     /**
@@ -207,6 +225,77 @@ final readonly class DatabaseManager
             ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value, 'rollback' => true],
         );
         $this->catalog->forgetDatabase($server, $db);
+    }
+
+    /**
+     * Postgres returns booleans; other drivers return 1/0 or 't'/'f'.
+     */
+    private function truthy(mixed $value): bool
+    {
+        return in_array($value, [true, 1, '1', 't', 'true'], true);
+    }
+
+    /**
+     * The roles whose sessions on $db the admin has to take membership in to
+     * end them. Throws when a session belongs to a superuser, or to a role the
+     * admin can neither end nor take.
+     *
+     * @return list<Username>
+     */
+    private function sessionRolesToTake(SessionEndingEngine $engine, AdminConnection $connection, DbName $db): array
+    {
+        $toTake = [];
+        $blocking = [];
+
+        foreach ($engine->sessionRoles($db) as $statement) {
+            foreach ($connection->selectStatement($statement, ['operation' => 'database.view']) as $row) {
+                $name = (string) $row['rolname'];
+                if ($this->truthy($row['held'])) {
+                    continue;
+                }
+
+                if ($this->truthy($row['superuser']) || ! $this->truthy($row['can_admin'])) {
+                    $blocking[] = $name;
+
+                    continue;
+                }
+
+                try {
+                    $toTake[] = new Username($name);
+                } catch (InvalidIdentifier) {
+                    $blocking[] = $name;
+                }
+            }
+        }
+
+        if ($blocking !== []) {
+            throw InsufficientPrivilege::forOperation(
+                "dropping database '{$db->value}': it has sessions held by '" . implode("', '", $blocking)
+                . "', which the admin cannot end",
+            );
+        }
+
+        return $toTake;
+    }
+
+    /**
+     * The database is already there: refuse it, or record it as managed as it
+     * is. Its charset is not recorded, because db-console did not choose it.
+     */
+    private function adopt(string $server, DbName $db, ?ExistingResourcePolicy $onExisting): OperationResult
+    {
+        $this->guard->admit(ExistingResourceKind::Database, $server, $db->value, $onExisting);
+
+        $this->catalog->recordDatabase($server, $db, '', null);
+        $this->log->success(OperationType::DatabaseAdopted->value, $server, ['target' => $db->value]);
+        $this->events->dispatch(new DatabaseAdopted($server, ['target' => $db->value]));
+
+        return OperationResult::succeeded(
+            OperationType::DatabaseCreate,
+            $server,
+            ['database' => $db->value, 'adopted' => true],
+            alreadyExisted: true,
+        );
     }
 
     private function fail(OperationType $operation, string $server, string $target, DBConsoleException $e): never

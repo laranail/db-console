@@ -6,6 +6,7 @@ namespace Simtabi\Laranail\DBConsole\Doctor;
 
 use Illuminate\Database\Connection;
 use Illuminate\Contracts\Events\Dispatcher;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Events\SuspiciousActivity;
@@ -16,11 +17,11 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 
 /**
  * Probes the deployment for security and health problems (scenario A). For
- * each registered server: reachability, TLS posture, the real capability set,
- * and — the doctrine-not-option check — whether the admin account is
- * root-like, in which case doctor FAILS with the exact minimal-grant fix so
+ * each registered server: its SSH tunnel (when it has one), reachability, TLS
+ * posture, the real capability set, and — the doctrine-not-option check —
+ * whether the admin account is root-like, in which case doctor FAILS with the exact minimal-grant fix so
  * setup won't quietly proceed insecure. Also reports the secret driver and
- * catalog encryption mode.
+ * catalog encryption mode, and operator assurance.
  */
 final readonly class DoctorService
 {
@@ -31,6 +32,9 @@ final readonly class DoctorService
         private SqlCipherManager $sqlcipher,
         private Dispatcher $events,
         private PostgresAdminCheck $postgresAdmin,
+        private HostingCheck $hosting,
+        private OperatorSecurityCheck $operatorSecurity,
+        private TunnelCheck $tunnel,
     ) {}
 
     /**
@@ -47,7 +51,7 @@ final readonly class DoctorService
         $findings[] = $this->checkSecretDriver();
         $findings[] = $this->checkCatalogEncryption();
 
-        return $findings;
+        return [...$findings, ...$this->operatorSecurity->findings()];
     }
 
     /**
@@ -55,7 +59,12 @@ final readonly class DoctorService
      */
     public function checkServer(string $server): array
     {
-        $findings = [];
+        // The tunnel first: when it cannot open, that is the finding, not a
+        // vaguer "unreachable" from the round trip that follows.
+        $findings = $this->tunnel->findings($server);
+        if (array_any($findings, static fn (DoctorFinding $finding): bool => $finding->isError())) {
+            return $findings;
+        }
 
         try {
             $this->registry->ensureReachable($server);
@@ -73,9 +82,9 @@ final readonly class DoctorService
             $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': " . $this->tls->status($server)->value . '.');
         }
 
-        $findings = [...$findings, ...$this->checkAdminPrivileges($server)];
+        $findings = [...$findings, ...$this->checkAdminPrivileges($server), ...$this->checkHosting($server)];
 
-        $capabilities = $this->registry->engine($server)->capabilities();
+        $capabilities = $this->registry->capabilities($server);
         $findings[] = DoctorFinding::ok(
             "server:{$server}:capabilities",
             "Capabilities on '{$server}': " . $this->summariseCapabilities($capabilities->toArray()),
@@ -157,6 +166,74 @@ final readonly class DoctorService
         $port = $underlying instanceof Connection ? $underlying->getConfig('port') : null;
 
         return $this->postgresAdmin->findings($server, $profile, is_numeric($port) ? (int) $port : null);
+    }
+
+    /**
+     * Judge the server against its hosting, from what the admin can see.
+     *
+     * @return list<DoctorFinding>
+     */
+    private function checkHosting(string $server): array
+    {
+        $definition = $this->registry->definition($server);
+        $connection = $this->registry->connection($server);
+        $underlying = $connection->underlying();
+        $host = $underlying instanceof Connection ? $underlying->getConfig('host') : null;
+        $host = is_array($host) ? reset($host) : $host;
+
+        return $this->hosting->findings(
+            $server,
+            $definition->hosting,
+            $definition->engine,
+            is_string($host) ? $host : null,
+            $this->probeHosting($server, $definition->engine),
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function probeHosting(string $server, EngineType $engine): array
+    {
+        $connection = $this->registry->connection($server);
+        $context = ['operation' => 'server.view'];
+        $probe = [];
+
+        if ($engine->isMysqlFamily()) {
+            try {
+                $connection->select('SELECT 1 FROM mysql.user LIMIT 1', $context);
+                $probe['mysql_user_readable'] = true;
+            } catch (DBConsoleException) {
+                $probe['mysql_user_readable'] = false;
+            }
+
+            try {
+                // SHOW VARIABLES answers on MySQL and MariaDB alike; a
+                // variable the server lacks is simply not returned.
+                foreach ($connection->select("SHOW VARIABLES WHERE Variable_name IN ('sql_require_primary_key', 'gtid_mode')", $context) as $row) {
+                    $values = array_values($row);
+                    $probe[strtolower((string) ($values[0] ?? ''))] = strtoupper((string) ($values[1] ?? ''));
+                }
+            } catch (DBConsoleException) {
+                // Reported as unknown, not as a failure.
+            }
+        }
+
+        if ($engine === EngineType::Pgsql) {
+            try {
+                $row = $connection->select(
+                    "SELECT (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) OR pg_has_role(current_user, 'pg_signal_backend', 'MEMBER') AS can_signal",
+                    $context,
+                )[0] ?? [];
+                $value = array_values($row)[0] ?? null;
+                // pdo_pgsql returns a bool; other drivers spell it 't'/'f'.
+                $probe['can_signal_backends'] = is_bool($value) ? $value : (is_scalar($value) ? in_array(strtolower((string) $value), ['t', 'true', '1'], true) : null);
+            } catch (DBConsoleException) {
+                // Reported as unknown.
+            }
+        }
+
+        return $probe;
     }
 
     private function looksRootLike(string $upperGrants): bool

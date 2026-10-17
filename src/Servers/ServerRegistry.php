@@ -5,12 +5,22 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Servers;
 
 use Throwable;
+use LogicException;
+use InvalidArgumentException;
 use Illuminate\Database\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
+use Simtabi\Laranail\DBConsole\Tunnels\LocalEnd;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Tunnels\SshSettings;
 use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Domain\HostingProfile;
 use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
+use Simtabi\Laranail\DBConsole\Tunnels\TunnelManager;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
+use Simtabi\Laranail\DBConsole\Tunnels\TunnelledConnection;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
 use Simtabi\Laranail\DBConsole\Encryption\TlsConnectionOptions;
@@ -33,11 +43,22 @@ final class ServerRegistry
     /** @var array<string, ServerDefinition>|null */
     private ?array $catalogServers = null;
 
+    /**
+     * A tunnelled connection's config as it was before the tunnel rewrote it,
+     * by connection name: restored when the tunnel closes, and the source of
+     * the remote target when it reopens, so a reopen never targets the dead
+     * tunnel's own local end.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $untunnelled = [];
+
     public function __construct(
         private readonly Config $config,
         private readonly DatabaseManager $db,
         private readonly EngineFactory $engines,
         private readonly TlsConnectionOptions $tls,
+        private readonly TunnelManager $tunnels,
     ) {}
 
     /**
@@ -101,9 +122,11 @@ final class ServerRegistry
      */
     public function resolve(string $server): array
     {
-        if (isset($this->resolved[$server])) {
+        if (isset($this->resolved[$server]) && ! $this->tunnelDied($server)) {
             return $this->resolved[$server];
         }
+
+        unset($this->resolved[$server]);
 
         $definition = $this->definition($server);
         $engine = $this->engines->make($definition->engine);
@@ -117,11 +140,52 @@ final class ServerRegistry
             );
         }
 
+        // Reopening after a tunnel died: start again from the config the
+        // tunnel rewrote, not from the dead tunnel's local end.
+        if (isset($this->untunnelled[$definition->connection])) {
+            $connectionConfig = $this->untunnelled[$definition->connection];
+            $this->config->set("database.connections.{$definition->connection}", $connectionConfig);
+        }
+
         $this->applyTls($definition, $connectionConfig);
+
+        if ($definition->ssh instanceof SshSettings) {
+            $this->applyTunnel($definition, $definition->ssh);
+        }
 
         $connection = new AdminConnection($server, $this->db->connection($definition->connection));
 
         return $this->resolved[$server] = [$engine, $connection];
+    }
+
+    /**
+     * What the server's hosting means for its engine.
+     */
+    public function hosting(string $server): HostingProfile
+    {
+        $definition = $this->definition($server);
+
+        return $definition->hosting->profile($definition->engine);
+    }
+
+    /**
+     * The engine's capabilities with the server's hosting merged in. Prefer
+     * this to engine()->capabilities(), which knows nothing of where the
+     * server runs.
+     */
+    public function capabilities(string $server): Capabilities
+    {
+        return $this->engine($server)->capabilities()->withHosting($this->hosting($server));
+    }
+
+    /**
+     * The host a new account on this server gets when none is given: the
+     * hosting's (`%` on a managed MySQL), else `accounts.default_host`.
+     */
+    public function defaultAccountHost(string $server): string
+    {
+        return $this->hosting($server)->defaultAccountHost
+            ?? (string) $this->config->get('laranail.db-console.accounts.default_host', 'localhost');
     }
 
     public function engine(string $server): Engine
@@ -149,6 +213,49 @@ final class ServerRegistry
         } catch (Throwable $e) {
             throw ServerUnreachable::forServer($server, $e);
         }
+    }
+
+    /**
+     * Where a tunnelled server's SSH host connects onward to, or null for a
+     * server without a tunnel. Worked out from the connection as configured,
+     * not as the tunnel rewrote it, so it answers the same before and after.
+     */
+    public function tunnelTarget(string $server): ?Endpoint
+    {
+        $definition = $this->definition($server);
+        if (! $definition->ssh instanceof SshSettings) {
+            return null;
+        }
+
+        /** @var array<string, mixed> $config */
+        $config = $this->untunnelled[$definition->connection]
+            ?? (array) $this->config->get("database.connections.{$definition->connection}", []);
+        $driver = is_string($config['driver'] ?? null) ? $config['driver'] : null;
+
+        try {
+            $origin = TunnelledConnection::origin($config);
+
+            return $definition->ssh->remote($origin['host'], $origin['port'], TunnelledConnection::defaultPort($driver));
+        } catch (InvalidArgumentException $e) {
+            throw ServerMisconfigured::named($server, $e->getMessage());
+        }
+    }
+
+    /**
+     * Stop every tunnel this process opened and put each tunnelled admin
+     * connection back as it was. Runs when the application terminates.
+     */
+    public function closeTunnels(): void
+    {
+        $this->tunnels->closeAll();
+
+        foreach ($this->untunnelled as $connection => $config) {
+            $this->config->set("database.connections.{$connection}", $config);
+            $this->purge($connection);
+        }
+
+        $this->untunnelled = [];
+        $this->resolved = [];
     }
 
     /**
@@ -181,9 +288,66 @@ final class ServerRegistry
         }
 
         $this->config->set("database.connections.{$definition->connection}", $withTls);
+        $this->purge($definition->connection);
+    }
 
-        if (array_key_exists($definition->connection, $this->db->getConnections())) {
-            $this->db->purge($definition->connection);
+    /**
+     * Open the server's tunnel and point its admin connection at the local
+     * end. Everything reading that connection's config (scoped connections,
+     * backups) then goes through the tunnel too.
+     *
+     * TLS was applied first and still travels end to end: through a TCP
+     * forward the session is TLS from PHP to the database. A Unix socket
+     * cannot carry TLS, so a socket local end forwarding to a database
+     * across a network, with TLS required, is refused rather than silently
+     * dropping TLS on the SSH-host-to-database leg.
+     */
+    private function applyTunnel(ServerDefinition $definition, SshSettings $ssh): void
+    {
+        $key = "database.connections.{$definition->connection}";
+
+        /** @var array<string, mixed> $config TLS already applied */
+        $config = (array) $this->config->get($key, []);
+        $driver = is_string($config['driver'] ?? null) ? $config['driver'] : null;
+
+        $remote = $this->tunnelTarget($definition->name) ?? throw new LogicException('unreachable: the server has an ssh block');
+
+        if ($ssh->local === LocalEnd::Socket && $definition->tlsEnabled() && ! $remote->isLocalToItsHost()) {
+            throw ServerMisconfigured::named(
+                $definition->name,
+                'a Unix socket cannot carry TLS, so ssh.local=socket would leave the hop from the SSH host to '
+                    . "{$remote->describe()} in plaintext while tls.enabled is true; use ssh.local=port, or forward to ssh.remote_socket",
+            );
+        }
+
+        $tunnel = $this->tunnels->open($definition, $remote, $driver);
+
+        try {
+            $rewritten = TunnelledConnection::rewrite($config, $tunnel->local(), $remote);
+        } catch (InvalidArgumentException $e) {
+            $this->tunnels->close($definition->name);
+
+            throw ServerMisconfigured::named($definition->name, $e->getMessage());
+        }
+
+        $this->untunnelled[$definition->connection] = $config;
+        $this->config->set($key, $rewritten);
+        $this->purge($definition->connection);
+    }
+
+    /**
+     * Whether a cached resolution's tunnel has died since, in which case the
+     * cached connection points at a local end nothing listens on any more.
+     */
+    private function tunnelDied(string $server): bool
+    {
+        return $this->definition($server)->tunnelled() && ! $this->tunnels->isAlive($server);
+    }
+
+    private function purge(string $connection): void
+    {
+        if (array_key_exists($connection, $this->db->getConnections())) {
+            $this->db->purge($connection);
         }
     }
 
@@ -215,6 +379,26 @@ final class ServerRegistry
         /** @var array<string, mixed> $atRest */
         $atRest = (array) ($raw['at_rest'] ?? []);
 
+        // Absent means self-hosted, so an existing config is unchanged. An
+        // unknown value fails rather than quietly becoming self-hosted, which
+        // would expose the provider's accounts and dump instead of using PITR.
+        $hostingValue = (string) ($raw['hosting'] ?? Hosting::SelfHosted->value);
+        $hosting = Hosting::tryFrom($hostingValue) ?? throw ServerMisconfigured::named(
+            $server,
+            "invalid hosting '{$hostingValue}'; expected one of: " . implode(', ', Hosting::values()),
+        );
+
+        /** @var array<string, mixed> $sshBlock */
+        $sshBlock = (array) ($raw['ssh'] ?? []);
+        $ssh = null;
+        if ((bool) ($sshBlock['enabled'] ?? false)) {
+            try {
+                $ssh = SshSettings::fromArray($sshBlock);
+            } catch (InvalidArgumentException $e) {
+                throw ServerMisconfigured::named($server, $e->getMessage());
+            }
+        }
+
         return new ServerDefinition(
             name: $server,
             engine: $engine,
@@ -228,6 +412,8 @@ final class ServerRegistry
             ],
             showAtRestStatus: (bool) ($atRest['show_status'] ?? true),
             editable: false,
+            hosting: $hosting,
+            ssh: $ssh,
         );
     }
 

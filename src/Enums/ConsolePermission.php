@@ -57,6 +57,9 @@ enum ConsolePermission: string implements Enumerator, Translatable
     #[Label('Edit account configuration')]
     case AccountEdit = 'account.edit';
 
+    #[Label('Adopt existing accounts and databases')]
+    case ResourceAdopt = 'resource.adopt';
+
     #[Label('Grant privileges')]
     case GrantCreate = 'grant.create';
 
@@ -115,6 +118,24 @@ enum ConsolePermission: string implements Enumerator, Translatable
     public function ability(): string
     {
         return self::ABILITY_PREFIX . $this->value;
+    }
+
+    /**
+     * Whether this permission only reads. The default assurance policy
+     * (security.assurance.second_factor = writes) asks a second factor for
+     * every permission that is not one of these.
+     */
+    public function isRead(): bool
+    {
+        return match ($this) {
+            self::Access,
+            self::DashboardView,
+            self::AuditView,
+            self::ServerView,
+            self::DatabaseView,
+            self::AccountView => true,
+            default           => false,
+        };
     }
 
     /**

@@ -12,16 +12,24 @@ use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Models\DbAccount;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
+use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Exceptions\GrantNotApplied;
+use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
+use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
+use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 
 /*
  * Against a real PostgreSQL 18: the `live-pgsql` job in
@@ -414,7 +422,8 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     expect($grants)->toContain("database {$db} {$db} CONNECT")
         ->toContain("table {$db} public.reference_data SELECT")
         ->toContain("table {$db} public.reference_data INSERT")
-        ->toContain("default privileges {$db} tables in schema public SELECT");
+        // Database-wide since grants stopped setting defaults per schema.
+        ->toContain("default privileges {$db} tables SELECT");
 
     // From PG15 schema public belongs to the database owner, the admin, so
     // the schema grant lands. Before it the schema is the bootstrap
@@ -516,4 +525,264 @@ it('passes the restricted admin in the doctor and fails a superuser', function (
     ]);
 
     expect($findings('live_pgsql_super')['server:live_pgsql_super:admin'])->toBe(Severity::Error);
+});
+
+it('grants on schemas other than public, including ones created after the grant', function (): void {
+    $db = liveName('multi');
+    $reader = liveName('reader');
+    $this->cleanup = [['role', $reader], ['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+    livePgAs($db)->statement('CREATE SCHEMA reporting');
+    livePgAs($db)->statement('CREATE TABLE reporting.daily (n int)');
+    livePgAs($db)->insert('INSERT INTO reporting.daily (n) VALUES (1)');
+    livePgClose($db);
+
+    app(AccountManager::class)->create('live_pgsql', new Username($reader), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    app(PrivilegeManager::class)->grant('live_pgsql', new Username($reader), new Host('%'), new DbName($db), PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly));
+
+    // A schema and a table the admin creates after the grant: covered by the
+    // database-wide defaults, schemas included.
+    livePgAs($db)->statement('CREATE SCHEMA billing');
+    livePgAs($db)->statement('CREATE TABLE billing.invoices (n int)');
+    livePgAs($db)->insert('INSERT INTO billing.invoices (n) VALUES (2)');
+    livePgClose($db);
+
+    $as = livePgAs($db, $reader);
+    expect((int) $as->scalar('SELECT n FROM reporting.daily'))->toBe(1)
+        ->and((int) $as->scalar('SELECT n FROM billing.invoices'))->toBe(2);
+    livePgClose($db, $reader);
+});
+
+it('lets a reader see the tables a writer creates later, whichever was granted first', function (): void {
+    $db = liveName('shared');
+    $writer = liveName('writer');
+    $early = liveName('early');
+    $late = liveName('late');
+    $this->cleanup = [['role', $early], ['role', $late], ['role', $writer], ['database', $db]];
+    $accounts = app(AccountManager::class);
+    $privileges = app(PrivilegeManager::class);
+    $read = PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly);
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+
+    // A reader granted before any writer exists.
+    $accounts->create('live_pgsql', new Username($early), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($early), new Host('%'), new DbName($db), $read);
+
+    // The application's own role, which runs the migrations.
+    $accounts->create('live_pgsql', new Username($writer), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($writer), new Host('%'), new DbName($db), PrivilegeSet::fromPreset(PrivilegePreset::AppStandard));
+    livePgAs($db, $writer)->statement('CREATE TABLE orders (n int)');
+    livePgAs($db, $writer)->insert('INSERT INTO orders (n) VALUES (3)');
+    livePgClose($db, $writer);
+
+    // A reader granted after the writer has created tables.
+    $accounts->create('live_pgsql', new Username($late), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($late), new Host('%'), new DbName($db), $read);
+
+    // The next migration.
+    livePgAs($db, $writer)->statement('CREATE TABLE invoices (n int)');
+    livePgAs($db, $writer)->insert('INSERT INTO invoices (n) VALUES (4)');
+    livePgClose($db, $writer);
+
+    foreach ([$early, $late] as $reader) {
+        $as = livePgAs($db, $reader);
+        expect((int) $as->scalar('SELECT n FROM orders'))->toBe(3, "{$reader} reads orders")
+            ->and((int) $as->scalar('SELECT n FROM invoices'))->toBe(4, "{$reader} reads invoices");
+        livePgClose($db, $reader);
+    }
+
+    // The grants acted as the writer and gave the membership back.
+    expect(livePgScalar("SELECT pg_has_role(?, 'USAGE')", [$writer]))->toBeFalse();
+});
+
+// WITH (FORCE) ends only sessions the admin may end. An application role's
+// session used to make the drop fail: a CREATEROLE admin on PG16+ does not
+// inherit the roles it creates, so it could not terminate them.
+it('ends an application role\'s sessions to drop its database, and gives the membership back', function (): void {
+    $db = liveName('busyapp');
+    $role = liveName('app');
+    $this->cleanup = [['role', $role], ['database', $db]];
+
+    app(ProvisioningWizard::class)->provision('live_pgsql', new DbName($db), new Charset('utf8'), new Username($role), new Host('%'), PrivilegeSet::fromPreset(PrivilegePreset::ReadWrite), new Password(LIVE_PG_PASSWORD));
+
+    $session = livePgAs($db, $role);
+    expect((int) $session->scalar('SELECT 1'))->toBe(1);
+
+    app(DatabaseManager::class)->drop('live_pgsql', new DbName($db));
+    livePgClose($db, $role);
+
+    expect((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(0)
+        ->and(livePgScalar("SELECT pg_has_role(?, 'USAGE')", [$role]))->toBeFalse();
+});
+
+it('refuses up front to drop a database a superuser has a session on', function (): void {
+    $db = liveName('superbusy');
+    $this->cleanup = [['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+    $super = livePgSuper($db);
+    expect((int) $super->scalar('SELECT 1'))->toBe(1);
+
+    try {
+        expect(fn () => app(DatabaseManager::class)->drop('live_pgsql', new DbName($db)))
+            ->toThrow(InsufficientPrivilege::class, livePg('SUPERUSER'));
+
+        expect((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(1);
+    } finally {
+        DB::purge('live_pg_super_' . $db);
+    }
+});
+
+it('warns that the restricted admin cannot force a drop, and passes a superuser', function (): void {
+    $findings = static function (string $server): array {
+        $out = [];
+        foreach (app(DoctorService::class)->checkServer($server) as $finding) {
+            $out[$finding->check] = $finding->severity;
+        }
+
+        return $out;
+    };
+
+    // CREATEDB CREATEROLE does not include pg_signal_backend, so ending
+    // another role's session before DROP ... WITH (FORCE) is refused.
+    expect($findings('live_pgsql'))->toMatchArray([
+        'server:live_pgsql:hosting'     => Severity::Info,
+        'server:live_pgsql:forced-drop' => Severity::Warning,
+    ]);
+
+    config()->set('database.connections.live_pgsql_super', livePgConnection('postgres', livePg('SUPERUSER'), livePg('SUPERUSER_PASSWORD')));
+    config()->set('laranail.db-console.servers.live_pgsql_super', [
+        'engine' => 'pgsql', 'connection' => 'live_pgsql_super', 'tls' => ['enabled' => false],
+    ]);
+
+    expect($findings('live_pgsql_super')['server:live_pgsql_super:forced-drop'])->toBe(Severity::Info);
+});
+/*
+ * Existing roles and databases (owner decision 2026-10-17): refused by
+ * default, adopted only on request, and given a new password only under
+ * adopt_and_apply. Whether a password "was applied" is answered by logging
+ * in with it, not by reading what db-console recorded.
+ */
+
+/**
+ * The password the account had before db-console saw it, generated once per
+ * run so no literal credential sits in the repository.
+ */
+function livePgTheirPassword(): string
+{
+    static $password = null;
+
+    return $password ??= Password::generate()->reveal();
+}
+
+/**
+ * An authenticated operator whose host reports a confirmation just now: what
+ * adopt_and_apply needs on top of its permissions.
+ */
+function livePgConfirmedOperator(): void
+{
+    $operator = new User;
+    $operator->id = 7;
+    test()->actingAs($operator);
+    app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
+}
+
+function livePgCanLogIn(string $role, string $password): bool
+{
+    $name = 'live_pg_login_' . $role . '_' . substr(hash('sha256', $password), 0, 8);
+    config()->set("database.connections.{$name}", livePgConnection('postgres', $role, $password));
+
+    try {
+        DB::connection($name)->select('SELECT 1');
+
+        return true;
+    } catch (Throwable) {
+        return false;
+    } finally {
+        DB::purge($name);
+    }
+}
+
+it('refuses a role it did not create, and the role keeps its own password', function (): void {
+    $role = liveName('theirs');
+    $this->cleanup = [['role', $role]];
+    livePgSuper('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . livePgTheirPassword() . "'");
+
+    expect(fn () => app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD)))
+        ->toThrow(AccountAlreadyExists::class);
+
+    expect(livePgCanLogIn($role, livePgTheirPassword()))->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(0);
+});
+
+it('adopts a role on request without touching its password', function (): void {
+    $role = liveName('adopted');
+    $this->cleanup = [['role', $role]];
+    livePgAs('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . livePgTheirPassword() . "'");
+
+    $result = app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(livePgCanLogIn($role, livePgTheirPassword()))->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeFalse()
+        ->and(DbAccount::query()->count())->toBe(1);
+});
+
+it('gives an adopted role the supplied password under adopt_and_apply', function (): void {
+    $role = liveName('applied');
+    $this->cleanup = [['role', $role]];
+    livePgAs('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . livePgTheirPassword() . "'");
+
+    livePgConfirmedOperator();
+    $result = app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD), ExistingResourcePolicy::AdoptAndApply);
+
+    expect($result->data['password_applied'])->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeTrue()
+        ->and(livePgCanLogIn($role, livePgTheirPassword()))->toBeFalse();
+});
+
+it('refuses an existing database, and adopts it on request', function (): void {
+    $db = liveName('existing');
+    $this->cleanup = [['database', $db]];
+    livePgAs('postgres')->statement("CREATE DATABASE \"{$db}\"");
+
+    expect(fn () => app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8')))
+        ->toThrow(DatabaseAlreadyExists::class);
+    expect(ManagedDatabase::query()->count())->toBe(0);
+
+    $result = app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'), ExistingResourcePolicy::Adopt);
+
+    expect($result->data['adopted'])->toBeTrue()
+        ->and(ManagedDatabase::query()->count())->toBe(1)
+        ->and((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(1);
+});
+
+it('re-runs the wizard without a password when the operator adopts, keeping the role\'s password', function (): void {
+    $db = liveName('rerun');
+    $role = liveName('rerun');
+    $this->cleanup = [['role', $role], ['database', $db]];
+    $provision = fn (?Password $password, ?ExistingResourcePolicy $policy) => app(ProvisioningWizard::class)->provision(
+        'live_pgsql',
+        new DbName($db),
+        new Charset('utf8'),
+        new Username($role),
+        new Host('%'),
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        $password,
+        $policy,
+    );
+
+    $provision(new Password(LIVE_PG_PASSWORD), null);
+
+    expect(fn () => $provision(null, null))->toThrow(DatabaseAlreadyExists::class);
+
+    $rerun = $provision(null, ExistingResourcePolicy::Adopt);
+
+    expect($rerun->data['adopted'])->toBeTrue()
+        ->and(livePgCanLogIn($role, LIVE_PG_PASSWORD))->toBeTrue();
+    livePgAs($db, $role)->statement('CREATE TABLE rerun_check (id integer)');
+    livePgClose($db, $role);
 });

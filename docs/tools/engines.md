@@ -22,6 +22,8 @@ Only `PostgresEngine` scopes statements, because Postgres schema grants, default
 
 ## MySQL and MariaDB
 
+A database is empty only when `information_schema` holds no table or view, routine, event or trigger for it (`EmptinessProbingEngine`).
+
 Both engines grant on `` `db`.* `` and scope accounts by host, `'user'@'host'`. A host change
 recreates the account at the new host from its stored authentication, read from `mysql.user` as a hex
 literal so the password is never known. MySQL takes the hash as `AS 0x...`, which a binary
@@ -80,6 +82,20 @@ Only a failure in step 4 after step 3 committed leaves a partial result: the rol
 The emptiness check before a drop or a wizard rollback counts relations inside the database itself.
 
 These paths are tested against PostgreSQL 14 to 18, and the next major's release candidate, by the `live-pgsql` CI job, as an admin with only `CREATEDB CREATEROLE`.
+
+
+### Schemas, owners and default privileges
+
+Grants cover every user schema the admin can grant on: `public`, and any schema whose owner's privileges the admin has. A schema a superuser owns is skipped. Default privileges are database-wide (`ALTER DEFAULT PRIVILEGES` without `IN SCHEMA`), plus `ON SCHEMAS`, so schemas and objects created later are covered.
+
+Two rules of Postgres shape the rest:
+
+- **Only an object's owner, or a role with the owner's privileges, may grant on it.** Before a grant or revoke, `RoleMembership` takes membership in the roles `OwnerDelegatingEngine::rolesToAssume()` lists (owners of schemas, tables, sequences and functions, and roles that can create objects), and gives it back afterwards. A role it cannot take is reported as `not_covered`.
+- **A default privilege belongs to the role that creates the object.** A grant sets defaults `FOR ROLE` each role that can create objects in the database, so a reader sees what the application's own role creates in a later migration. A writer granted after the readers inherits the admin's database-wide defaults, which list every role db-console granted there.
+
+### Dropping a database with sessions open
+
+`DROP DATABASE ... WITH (FORCE)` ends only the sessions the admin may end. `SessionEndingEngine::sessionRoles()` lists whose sessions they are. The drop takes membership in roles the admin can act as, so `FORCE` can end their sessions, and refuses with `InsufficientPrivilege` before anything runs when a superuser, or a role it cannot act as, holds one.
 
 ---
 

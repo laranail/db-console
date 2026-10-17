@@ -56,6 +56,63 @@ return [
                 // encrypted at rest. DBConsole never enables or manages it.
                 'show_status' => true,
             ],
+
+            // Where the server runs: self_hosted, digitalocean, rds,
+            // cloud_sql or generic (another managed provider). A managed
+            // hosting hides the provider's accounts, defaults new MySQL
+            // accounts to host '%', and treats the provider's point-in-time
+            // recovery as the backup (see backup.dump_on_managed).
+            'hosting' => env('DB_CONSOLE_PRIMARY_HOSTING', 'self_hosted'),
+
+            // Per-server overrides of accounts.on_existing and
+            // databases.on_existing. Unset falls back to the global value.
+            // 'accounts'  => ['on_existing' => 'refuse'],
+            // 'databases' => ['on_existing' => 'refuse'],
+
+            // Reach the admin connection through an SSH tunnel (a bastion, or
+            // the database host itself). The tunnel opens on first use, the
+            // admin connection is pointed at its local end, and it closes when
+            // the application terminates. TLS above still applies end to end.
+            'ssh' => [
+                'enabled' => (bool) env('DB_CONSOLE_PRIMARY_SSH', false),
+
+                // openssh (the ssh binary, default) or phpseclib (pure PHP,
+                // needs phpseclib/phpseclib ^4.0.1).
+                'driver' => env('DB_CONSOLE_PRIMARY_SSH_DRIVER', 'openssh'),
+
+                'host' => env('DB_CONSOLE_PRIMARY_SSH_HOST'),
+                'port' => (int) env('DB_CONSOLE_PRIMARY_SSH_PORT', 22),
+                'user' => env('DB_CONSOLE_PRIMARY_SSH_USER'),
+
+                // Required. The server's public host key line, e.g. the
+                // output of `ssh-keyscan -t ed25519 <host>` or the contents of
+                // /etc/ssh/ssh_host_ed25519_key.pub. Never trusted on first use.
+                'host_key' => env('DB_CONSOLE_PRIMARY_SSH_HOST_KEY'),
+
+                // Exactly one: a private key file, or a secrets-driver
+                // reference whose value is the key (written to a 0600 file in
+                // a 0700 directory for the life of the tunnel).
+                'key'        => env('DB_CONSOLE_PRIMARY_SSH_KEY'),
+                'key_secret' => env('DB_CONSOLE_PRIMARY_SSH_KEY_SECRET'),
+
+                // Where the SSH host connects onward to. Defaults to the admin
+                // connection's own host and port; remote_socket forwards to a
+                // Unix socket on the SSH host instead (e.g.
+                // /var/run/postgresql/.s.PGSQL.5432 or /var/run/mysqld/mysqld.sock).
+                'remote_host'   => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_HOST'),
+                'remote_port'   => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_PORT'),
+                'remote_socket' => env('DB_CONSOLE_PRIMARY_SSH_REMOTE_SOCKET'),
+
+                // port: a 127.0.0.1 port, reachable by any local user.
+                // socket: a Unix socket in a 0700 directory, reachable by this
+                // user only. A socket cannot carry TLS, see docs/tools/ssh-tunnels.md.
+                'local'            => env('DB_CONSOLE_PRIMARY_SSH_LOCAL', 'port'),
+                'socket_directory' => env('DB_CONSOLE_PRIMARY_SSH_SOCKET_DIRECTORY'),
+
+                'connect_timeout' => 10,
+                'keepalive'       => 15,
+                'binary'          => env('DB_CONSOLE_PRIMARY_SSH_BINARY', 'ssh'),
+            ],
         ],
     ],
 
@@ -67,6 +124,13 @@ return [
     'databases' => [
         'default_charset'   => 'utf8mb4',
         'default_collation' => 'utf8mb4_unicode_ci',
+
+        // A create that finds the database already there: refuse | adopt.
+        // refuse (default) changes nothing and notifies the security
+        // recipients. adopt records it as managed, and needs the
+        // resource.adopt permission (Owner only by default). Override per
+        // server with servers.<name>.databases.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_DATABASES_ON_EXISTING', 'refuse'),
     ],
 
     /*
@@ -77,6 +141,15 @@ return [
     'accounts' => [
         'default_host'        => 'localhost',
         'password_min_length' => 16,
+
+        // A create that finds the account already there:
+        // refuse | adopt | adopt_and_apply. refuse (default) changes nothing
+        // and notifies the security recipients. adopt records it as managed
+        // with its password untouched (needs resource.adopt). adopt_and_apply
+        // also replaces its password with the one supplied (needs
+        // account.rotate and step-up as well). Override per server with
+        // servers.<name>.accounts.on_existing, or per call.
+        'on_existing' => env('DB_CONSOLE_ACCOUNTS_ON_EXISTING', 'refuse'),
     ],
 
     /*
@@ -180,17 +253,62 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operator assurance — what an operation needs beyond its permission
+    |--------------------------------------------------------------------------
+    | db-console authenticates nobody. The host binds
+    | Contracts\OperatorAssurance to report whether an operator has a second
+    | factor and when they last confirmed who they are; db-console checks that
+    | against the rules below, on top of RBAC, for every authenticated operator
+    | (API, WebUI, and CLI runs that carry one). A shell run with no operator is
+    | governed by the host's gate: shell access is already the trust boundary.
+    */
+    'security' => [
+        'assurance' => [
+            // AssuranceEnforcement: off | report | require. Unset: require in
+            // production, report elsewhere. report audits what require would
+            // refuse, so it can be switched on safely.
+            'enforce' => env('DB_CONSOLE_ASSURANCE_ENFORCE'),
+
+            // Which permissions need a second factor: writes (every permission
+            // that is not a view) | all | none.
+            'second_factor' => env('DB_CONSOLE_ASSURANCE_SECOND_FACTOR', 'writes'),
+
+            // Which permissions need a confirmation within step_up.ttl.
+            'recent_confirmation' => [
+                'database.drop',
+                'account.drop',
+                'account.rotate',
+                'account.edit',     // changing an account's host
+                'secrets.manage',   // secrets rotation
+            ],
+        ],
+
+        'step_up' => [
+            // Seconds a confirmation reported by recentlyConfirmedAt() counts as
+            // recent: for assurance.recent_confirmation, and for applying a
+            // password to an adopted account (accounts.on_existing
+            // adopt_and_apply). With no OperatorAssurance bound, both are refused.
+            'ttl' => (int) env('DB_CONSOLE_STEP_UP_TTL', 300),
+        ],
+
+        // Minutes a laranail::db-console.security.recover bypass lasts.
+        'break_glass_minutes' => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | REST API — off by default (the highest-exposure surface)
     |--------------------------------------------------------------------------
     */
     'api' => [
-        'enabled'       => (bool) env('DB_CONSOLE_API', false),
-        'path'          => env('DB_CONSOLE_API_PATH', 'api/db-console'),
-        'auth'          => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
-        'allowed_ips'   => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
-        'rate_limit'    => env('DB_CONSOLE_API_RATE', '60,1'), // requests, per minutes
+        'enabled'     => (bool) env('DB_CONSOLE_API', false),
+        'path'        => env('DB_CONSOLE_API_PATH', 'api/db-console'),
+        'auth'        => env('DB_CONSOLE_API_AUTH', 'sanctum'), // ApiAuthGuard enum: sanctum | passport
+        'allowed_ips' => array_filter(explode(',', (string) env('DB_CONSOLE_API_ALLOWED_IPS', ''))),
+        'rate_limit'  => env('DB_CONSOLE_API_RATE', '60,1'), // 'requests,minutes' per caller; '' or 0 switches it off
+        // Refuse plain HTTP (loopback is always allowed).
         'require_https' => true,
-        // Destructive endpoints require a confirmation field in the body.
+        // Drop endpoints require {"confirm": "<name>"} in the body.
         'confirm_destructive' => true,
     ],
 
@@ -231,29 +349,70 @@ return [
         'abort_drop_on_failure' => (bool) env('DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE', true),
         'disk'                  => env('DB_CONSOLE_BACKUP_DISK', 'local'),
         'retention_days'        => 30,
+        // On a managed hosting the provider's point-in-time recovery is the
+        // backup, and the dump before a drop is skipped (the restore point is
+        // logged). Set true to dump there as well.
+        'dump_on_managed' => (bool) env('DB_CONSOLE_BACKUP_DUMP_ON_MANAGED', false),
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Notifications
     |--------------------------------------------------------------------------
-    | Recipients per NotificationCategory. Default: off for routine events,
-    | on for destructive and security events.
+    | Per NotificationCategory (routine, destructive, security): which
+    | channels it goes out on, and who receives it on each. A channel with no
+    | recipient is skipped, so nothing is delivered until an operator opts in.
+    | Default: mail only, off for routine events, on for destructive and
+    | security ones once DB_CONSOLE_ALERT_MAIL is set. Refused and adopted
+    | existing resources are security events.
     */
     'notifications' => [
+        // mail: the addresses per category.
         'recipients' => [
             'routine'     => [],
             'destructive' => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
             'security'    => array_filter(explode(',', (string) env('DB_CONSOLE_ALERT_MAIL', ''))),
         ],
+
+        // Channels per category: any of mail, slack, database.
+        'channels' => [
+            'routine'     => ['mail'],
+            'destructive' => ['mail'],
+            'security'    => ['mail'],
+        ],
+
+        // slack: needs laravel/slack-notification-channel. An incoming-webhook
+        // URL, or a channel name for a bot token (services.slack.notifications).
+        'slack' => [
+            'route' => env('DB_CONSOLE_SLACK_ROUTE'),
+        ],
+
+        // database: an in-app inbox. Ids of rbac.user_model users (the model
+        // uses Notifiable and the app has a notifications table).
+        'database' => [
+            'users' => array_filter(explode(',', (string) env('DB_CONSOLE_NOTIFY_USERS', ''))),
+        ],
+
+        // Hold routine notifications during a window, e.g.
+        // ['start' => '22:00', 'end' => '07:00', 'timezone' => 'Africa/Nairobi'].
+        // Held ones are queued until the window ends. Destructive and
+        // security notifications are never held.
         'quiet_hours' => null,
-        'queue'       => true,
+
+        // true: queue on the default queue. A string: that queue's name.
+        // false: send during the request.
+        'queue' => true,
     ],
 
     /*
     |--------------------------------------------------------------------------
     | Alerts — the high-severity channel
     |--------------------------------------------------------------------------
+    | Warning and Critical events (a refused or adopted existing resource, a
+    | failed rollback, suspicious activity) always go to the db-console log,
+    | to `webhook` when set, and as a notification on `channel` (mail, slack,
+    | database, or a comma-separated list) instead of their category's
+    | channels.
     */
     'alerts' => [
         'channel' => env('DB_CONSOLE_ALERT_CHANNEL', 'mail'),

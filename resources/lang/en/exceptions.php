@@ -16,6 +16,14 @@ return [
         'weak' => 'The password is too weak: :reason.',
     ],
 
+    'account' => [
+        'already_exists' => "The account ':target' already exists on server ':server', so nothing was changed. An operator allowed to adopt it can resubmit with on_existing set to adopt.",
+    ],
+
+    'database' => [
+        'already_exists' => "The database ':target' already exists on server ':server', so nothing was changed. An operator allowed to adopt it can resubmit with on_existing set to adopt.",
+    ],
+
     'privilege' => [
         'unknown'   => "The privilege ':privilege' is not on the allow-list.",
         'forbidden' => "The privilege ':privilege' is self-escalating or server-wide and can never be granted.",
@@ -32,6 +40,7 @@ return [
         'insufficient_privilege' => 'The admin account is missing a privilege needed for :operation.',
         'unknown'                => "No server named ':server' is registered.",
         'misconfigured'          => "Server ':server' is misconfigured: :problem.",
+        'tunnel_failed'          => "The SSH tunnel to server ':server' could not be opened: :reason.",
     ],
 
     'operation' => [
@@ -51,6 +60,21 @@ return [
     ],
 
     'not_authorized' => 'You are not authorized to perform :ability at :scope.',
+
+    'confirmation' => [
+        'required' => 'Confirm your identity first: :action needs a password, passkey or code confirmed within the last :seconds seconds.',
+    ],
+
+    'assurance_required' => 'You have access to :ability, but it needs more proof of who you are. :action',
+
+    'assurance' => [
+        'enrol'   => 'Enrol in two-factor authentication.',
+        'confirm' => 'Confirm your password (or passkey), then retry.',
+    ],
+
+    'security' => [
+        'owner_stranded' => 'Refused: :reason. Another global Owner with a second factor must exist first.',
+    ],
 
     'secret' => [
         'unavailable'          => 'A stored credential could not be resolved from the :driver secret backend.',

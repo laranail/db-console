@@ -9,7 +9,10 @@ use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
 use Simtabi\Laranail\DBConsole\Exceptions\BackupFailed;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\TunnelKeys;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeTunnelDriver;
+use Simtabi\Laranail\DBConsole\Tunnels\Drivers\OpenSshTunnelDriver;
 use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
@@ -158,4 +161,67 @@ it('prunes only this database\'s own snapshots older than retention_days', funct
         ->and(file_exists($foreign))->toBeTrue('a file this service did not name is never touched');
 
     array_map(@unlink(...), glob("{$dir}/*") ?: []);
+});
+
+it('leaves a managed server to the provider\'s point-in-time recovery and still drops', function (): void {
+    Event::fake([DatabaseDropped::class]);
+    $manager = useBackupManager(fails: false);
+    config()->set('laranail.db-console.servers.lite.hosting', 'generic');
+
+    expect(app(DbToolsBackupService::class)->snapshot('lite', new DbName('shop_prod')))->toBeNull()
+        ->and($manager->calls)->toBe([]);
+
+    app(DatabaseManager::class)->drop('lite', new DbName('shop_prod'));
+
+    expect($manager->calls)->toBe([]);
+    Event::assertDispatched(DatabaseDropped::class);
+});
+
+it('still dumps a managed server when dump_on_managed is switched on', function (): void {
+    $manager = useBackupManager(fails: false);
+    config()->set('laranail.db-console.servers.lite.hosting', 'generic');
+    config()->set('laranail.db-console.backup.dump_on_managed', true);
+
+    expect(app(DbToolsBackupService::class)->snapshot('lite', new DbName('shop_prod')))->not->toBeNull()
+        ->and($manager->calls)->toHaveCount(1);
+});
+
+// A backup reads the admin connection's config. Read before anything opened
+// the server's tunnel, that config still names the remote host, and the dump
+// would go straight to it, around the tunnel.
+it('dumps through the tunnel even when nothing has opened it yet', function (): void {
+    $manager = useBackupManager(fails: false);
+    app()->instance(
+        OpenSshTunnelDriver::class,
+        new FakeTunnelDriver,
+    );
+    config()->set('database.connections.tunnel_admin', [
+        'driver' => 'mysql', 'host' => 'db.internal', 'port' => 3306, 'database' => 'defaultdb', 'username' => 'admin',
+    ]);
+    config()->set('laranail.db-console.servers.behind-bastion', [
+        'engine' => 'mysql', 'connection' => 'tunnel_admin', 'tls' => ['enabled' => false],
+        'ssh'    => [
+            'enabled'  => true, 'host' => 'bastion.example.com', 'user' => 'tunnel', 'key' => __FILE__,
+            'host_key' => TunnelKeys::PINNED,
+        ],
+    ]);
+
+    app(DbToolsBackupService::class)->snapshot('behind-bastion', new DbName('shop_prod'));
+
+    expect($manager->calls[0]['config'])->toMatchArray(['host' => '127.0.0.1', 'port' => 40000, 'database' => 'shop_prod']);
+});
+
+// Laravel's key is unix_socket; db-tools' mysqldump reads socket.
+it('hands db-tools a MySQL socket under the key it reads', function (): void {
+    $manager = useBackupManager(fails: false);
+    config()->set('database.connections.socket_admin', [
+        'driver' => 'mysql', 'host' => 'localhost', 'unix_socket' => '/var/run/mysqld/mysqld.sock', 'database' => 'defaultdb',
+    ]);
+    config()->set('laranail.db-console.servers.on-box', [
+        'engine' => 'mysql', 'connection' => 'socket_admin', 'tls' => ['enabled' => false],
+    ]);
+
+    app(DbToolsBackupService::class)->snapshot('on-box', new DbName('shop_prod'));
+
+    expect($manager->calls[0]['config']['socket'] ?? null)->toBe('/var/run/mysqld/mysqld.sock');
 });

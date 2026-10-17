@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Simtabi\Laranail\DBConsole\Enums\Charset;
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Enums\Collation;
 use Simtabi\Laranail\DBConsole\Enums\Privilege;
@@ -42,7 +43,7 @@ function allDBConsoleEnums(): array
         ConsoleRole::class, ConsolePermission::class, ScopeType::class,
         ApiAuthGuard::class, WebhookEvent::class, OperationType::class,
         OperationOutcome::class, Severity::class, NotificationCategory::class,
-        ExceptionCode::class,
+        ExceptionCode::class, Hosting::class,
     ];
 }
 
@@ -68,7 +69,7 @@ it('ConsolePermission abilities carry the db-console gate prefix', function (): 
     expect(ConsolePermission::Access->ability())->toBe('laranail-db-console.access')
         ->and(ConsolePermission::DatabaseDrop->ability())->toBe('laranail-db-console.database.drop')
         ->and(ConsolePermission::DatabaseDrop->deprecatedAbility())->toBe('db-console.database.drop')
-        ->and(ConsolePermission::cases())->toHaveCount(21);
+        ->and(ConsolePermission::cases())->toHaveCount(22);
 });
 
 describe('shipped role composition (section 17 table)', function (): void {
@@ -160,5 +161,5 @@ it('ExceptionCode is closed and collision-free', function (): void {
     $values = ExceptionCode::values();
 
     expect($values)->toBe(array_unique($values))
-        ->and($values)->toHaveCount(19);
+        ->and($values)->toHaveCount(25);
 });

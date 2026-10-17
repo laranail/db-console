@@ -6,10 +6,13 @@ namespace Simtabi\Laranail\DBConsole\Console\Commands;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Simtabi\Laranail\DBConsole\Security\OwnerSafety;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
+use Simtabi\Laranail\DBConsole\Exceptions\OwnerWouldBeStranded;
 
 /**
- * Remove a role assignment.
+ * Remove a role assignment. Revoking global Owner is refused when it would
+ * leave no Owner, or no Owner with confirmed two-factor while enforcement is on.
  */
 final class RoleRevokeCommand extends DBConsoleCommand
 {
@@ -17,7 +20,7 @@ final class RoleRevokeCommand extends DBConsoleCommand
 
     protected $description = 'Remove a role assignment';
 
-    public function handle(RbacDriver $driver): int
+    public function handle(RbacDriver $driver, OwnerSafety $owners): int
     {
         $userId = $this->opt('user');
         $role = $this->opt('role');
@@ -32,6 +35,14 @@ final class RoleRevokeCommand extends DBConsoleCommand
         $user = $this->resolveUser($userId);
         if (! $user instanceof Authenticatable) {
             $this->failure("Could not resolve user '{$userId}'.");
+
+            return self::FAILURE;
+        }
+
+        try {
+            $owners->assertMayRevoke($user, $role, $scope);
+        } catch (OwnerWouldBeStranded $e) {
+            $this->failure($e->userMessage());
 
             return self::FAILURE;
         }

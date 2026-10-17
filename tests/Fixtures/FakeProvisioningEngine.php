@@ -1,0 +1,160 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
+
+use ReflectionProperty;
+use Illuminate\Support\Facades\DB;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Engines\Engine;
+use Simtabi\Laranail\DBConsole\Domain\Password;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+
+/**
+ * A provisioning server played by three SQLite tables, so the services' create
+ * paths (adopt, refuse, apply a password, roll back) run end to end without a
+ * real server. Accounts and databases are rows; a password is recorded as its
+ * SHA-256, so a test can tell whether one was applied without the value being
+ * stored anywhere.
+ *
+ * Identifiers are the package's own validated value objects, so interpolating
+ * them here is as safe as it is in the real engines.
+ */
+final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
+{
+    public bool $failGrants = false;
+
+    public static function install(string $server = 'fake', string $connection = 'fake_admin'): self
+    {
+        config()->set("database.connections.{$connection}", ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
+        config()->set("laranail.db-console.servers.{$server}", [
+            'engine' => 'pgsql', 'connection' => $connection, 'tls' => ['enabled' => false],
+        ]);
+
+        $db = DB::connection($connection);
+        $db->statement('CREATE TABLE fake_accounts (name TEXT, host TEXT, password_sha TEXT)');
+        $db->statement('CREATE TABLE fake_databases (name TEXT, objects INTEGER DEFAULT 0)');
+        $db->statement('CREATE TABLE fake_grants (name TEXT, host TEXT, db TEXT)');
+
+        $engine = new self;
+        $registry = app(ServerRegistry::class);
+        $resolved = new ReflectionProperty(ServerRegistry::class, 'resolved');
+        $resolved->setValue($registry, [
+            ...$resolved->getValue($registry),
+            $server => [$engine, new AdminConnection($server, $db)],
+        ]);
+
+        return $engine;
+    }
+
+    public static function addAccount(string $name, string $host = '%', string $password = 'theirs', string $connection = 'fake_admin'): void
+    {
+        DB::connection($connection)->insert('INSERT INTO fake_accounts VALUES (?, ?, ?)', [$name, $host, hash('sha256', $password)]);
+    }
+
+    public static function addDatabase(string $name, int $objects = 0, string $connection = 'fake_admin'): void
+    {
+        DB::connection($connection)->insert('INSERT INTO fake_databases VALUES (?, ?)', [$name, $objects]);
+    }
+
+    public static function passwordOf(string $name, string $connection = 'fake_admin'): ?string
+    {
+        $sha = DB::connection($connection)->scalar('SELECT password_sha FROM fake_accounts WHERE name = ?', [$name]);
+
+        return is_string($sha) ? $sha : null;
+    }
+
+    public static function count(string $table, string $name, string $connection = 'fake_admin'): int
+    {
+        return (int) DB::connection($connection)->scalar("SELECT COUNT(*) FROM {$table} WHERE name = ?", [$name]);
+    }
+
+    public function type(): EngineType
+    {
+        return EngineType::Pgsql;
+    }
+
+    public function capabilities(): Capabilities
+    {
+        return new Capabilities(true, true, false, false, true, new EncryptionCapabilities(false, false));
+    }
+
+    public function createDatabase(DbName $db, Charset $charset): StatementList
+    {
+        return new StatementList(Statement::plain("INSERT INTO fake_databases (name) VALUES ('{$db->value}')"));
+    }
+
+    public function dropDatabase(DbName $db): StatementList
+    {
+        return new StatementList(Statement::plain("DELETE FROM fake_databases WHERE name = '{$db->value}'"));
+    }
+
+    public function listDatabases(): StatementList
+    {
+        return new StatementList(Statement::plain('SELECT name FROM fake_databases'));
+    }
+
+    public function countUserObjects(DbName $db): StatementList
+    {
+        return new StatementList(Statement::plain("SELECT COALESCE(SUM(objects), 0) FROM fake_databases WHERE name = '{$db->value}'"));
+    }
+
+    public function createAccount(Username $u, Host $h, Password $p): StatementList
+    {
+        $sha = hash('sha256', $p->reveal());
+
+        return new StatementList(Statement::sensitive(
+            "INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '{$sha}')",
+            "INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '***')",
+        ));
+    }
+
+    public function dropAccount(Username $u, Host $h): StatementList
+    {
+        return new StatementList(Statement::plain("DELETE FROM fake_accounts WHERE name = '{$u->value}' AND host = '{$h->value}'"));
+    }
+
+    public function setPassword(Username $u, Host $h, Password $p): StatementList
+    {
+        $sha = hash('sha256', $p->reveal());
+
+        return new StatementList(Statement::sensitive(
+            "UPDATE fake_accounts SET password_sha = '{$sha}' WHERE name = '{$u->value}' AND host = '{$h->value}'",
+            "UPDATE fake_accounts SET password_sha = '***' WHERE name = '{$u->value}' AND host = '{$h->value}'",
+        ));
+    }
+
+    public function listAccounts(): StatementList
+    {
+        return new StatementList(Statement::plain('SELECT name, host FROM fake_accounts'));
+    }
+
+    public function grant(PrivilegeSet $s, DbName $db, Username $u, Host $h): StatementList
+    {
+        return new StatementList(Statement::plain($this->failGrants
+            ? 'INSERT INTO no_such_table VALUES (1)'
+            : "INSERT INTO fake_grants VALUES ('{$u->value}', '{$h->value}', '{$db->value}')"));
+    }
+
+    public function revoke(PrivilegeSet $s, DbName $db, Username $u, Host $h): StatementList
+    {
+        return new StatementList(Statement::plain("DELETE FROM fake_grants WHERE name = '{$u->value}' AND db = '{$db->value}'"));
+    }
+
+    public function showGrants(Username $u, Host $h): StatementList
+    {
+        return new StatementList(Statement::plain("SELECT db FROM fake_grants WHERE name = '{$u->value}'"));
+    }
+}

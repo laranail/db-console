@@ -31,6 +31,10 @@ use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
  * log-and-drop. Each snapshot gets its own timestamped file, named for the
  * format db-tools writes (`.dump` for PostgreSQL's custom format, `.sql`
  * otherwise), so a later restore picks the right tool.
+ *
+ * On a server whose hosting keeps point-in-time recovery (any managed
+ * provider) no dump is taken unless `backup.dump_on_managed` is on; the
+ * restore point is logged instead.
  */
 final readonly class DbToolsBackupService implements BackupService
 {
@@ -57,6 +61,31 @@ final readonly class DbToolsBackupService implements BackupService
         }
 
         $definition = $this->registry->definition($server);
+
+        // A managed provider's point-in-time recovery restores to any second
+        // of the retention window, which a dump cannot. The record of when
+        // the drop happened is what an operator needs to restore from it.
+        if ($definition->hosting->profile($definition->engine)->providerBackups
+            && ! (bool) $this->config->get('laranail.db-console.backup.dump_on_managed', false)) {
+            $this->log->write(
+                Severity::Notice,
+                'database.backup.provider',
+                [
+                    'server'        => $server,
+                    'target'        => $database->value,
+                    'hosting'       => $definition->hosting->value,
+                    'restore_point' => Carbon::now()->utc()->toIso8601String(),
+                ],
+            );
+
+            return null;
+        }
+
+        // Resolving opens the server's SSH tunnel, if it has one, and points
+        // the admin connection at it. Read before that, the config still
+        // names the remote host and the dump would go around the tunnel.
+        $this->registry->resolve($server);
+
         /** @var array<string, mixed> $adminConfig */
         $adminConfig = (array) $this->config->get("database.connections.{$definition->connection}", []);
 
@@ -67,6 +96,11 @@ final readonly class DbToolsBackupService implements BackupService
         // parseConfiguration() also removes the `url` key.
         $scopedConfig = new ConfigurationUrlParser()->parseConfiguration($adminConfig);
         $scopedConfig['database'] = $database->value;
+
+        // Laravel's MySQL socket key is unix_socket; db-tools reads socket.
+        if (is_string($scopedConfig['unix_socket'] ?? null) && $scopedConfig['unix_socket'] !== '') {
+            $scopedConfig['socket'] ??= $scopedConfig['unix_socket'];
+        }
 
         $scoped = "db_console_backup_{$server}";
         $this->config->set("database.connections.{$scoped}", $scopedConfig);

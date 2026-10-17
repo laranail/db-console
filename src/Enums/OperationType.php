@@ -35,6 +35,21 @@ enum OperationType: string implements Enumerator, Translatable
     #[Label('Change account host')]
     case AccountHostChanged = 'account.host_changed';
 
+    #[Label('Refuse an existing account')]
+    case AccountCreationRefused = 'account.creation_refused';
+
+    #[Label('Adopt an existing account')]
+    case AccountAdopted = 'account.adopted';
+
+    #[Label('Apply a password to an adopted account')]
+    case AccountPasswordApplied = 'account.password_applied';
+
+    #[Label('Refuse an existing database')]
+    case DatabaseCreationRefused = 'database.creation_refused';
+
+    #[Label('Adopt an existing database')]
+    case DatabaseAdopted = 'database.adopted';
+
     #[Label('Grant privileges')]
     case GrantCreate = 'grant.create';
 
@@ -55,6 +70,12 @@ enum OperationType: string implements Enumerator, Translatable
 
     #[Label('Rotate stored secrets')]
     case SecretsRotated = 'secrets.rotated';
+
+    #[Label('Assurance shortfall')]
+    case SecurityAssurance = 'security.assurance';
+
+    #[Label('Break-glass bypass')]
+    case SecurityBreakGlass = 'security.break_glass';
 
     /**
      * Whether this operation destroys data or access when it succeeds.
