@@ -40,7 +40,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, EXECUTE, CREAT
 
 1. Set `DB_CONSOLE_OWNER_USER_ID` before running `php artisan laranail::db-console.install` (see Install), so the installer can assign the bootstrap Owner.
 2. Add a dedicated admin connection named `db_console_admin` to `config/database.php`, using the minimal admin account above. The `primary` server in `config/db-console.php` uses it by default; `DB_CONSOLE_ENGINE` and `DB_CONSOLE_CONNECTION` override the engine and connection name.
-3. Check the server before provisioning anything. TLS is mandatory by default, and `doctor` fails on a root-like account:
+3. Check the server before provisioning anything. TLS is mandatory by default: set `DB_CONSOLE_PRIMARY_TLS_CA` to the server's CA certificate, because `doctor` measures the live session and fails a remote one that is plaintext. It also fails on a root-like account:
 
    ```bash
    php artisan laranail::db-console.doctor
