@@ -9,6 +9,7 @@ use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Enums\Collation;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Domain\Capabilities;
@@ -16,6 +17,7 @@ use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
 use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
 
 /**
  * PostgreSQL uses roles, not user@host accounts: a login is a ROLE WITH
@@ -28,7 +30,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, PasswordConstrainedEngine, SessionEndingEngine
+final readonly class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnerDelegatingEngine, OwnershipReleasingEngine, PasswordConstrainedEngine, ServerVersionAwareEngine, SessionEndingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -113,6 +115,11 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         'latin1'    => 'LATIN1',
     ];
 
+    /**
+     * @param int|null $serverVersion server_version_num when known; see ServerVersionAwareEngine
+     */
+    public function __construct(private ?int $serverVersion = null) {}
+
     public function type(): EngineType
     {
         return EngineType::Pgsql;
@@ -139,24 +146,40 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
     {
         $q = Quoter::for($this->type());
         $encoding = self::ENCODINGS[strtolower($charset->value)] ?? strtoupper($charset->value);
+        $locale = $this->locale($charset->collation);
 
-        if ($encoding === 'UTF8') {
+        if ($encoding === 'UTF8' && $locale === null) {
             return new StatementList(
                 Statement::plain('CREATE DATABASE ' . $q->identifier($db->value) . ' ENCODING ' . $q->literal($encoding)),
             );
         }
 
         // CREATE DATABASE copies template1, which is UTF8 on every image and
-        // managed service, and a copy keeps its template's encoding. Only
-        // template0 may be copied into another one, and the cluster's locale
-        // (en_US.utf8) is valid for UTF8 alone; C is valid for every encoding.
+        // managed service, and a copy keeps its template's encoding and
+        // locale. Only template0 may be copied into others, and the cluster's
+        // locale (en_US.utf8) is valid for UTF8 alone; C is valid for every
+        // encoding. C is a libc locale, so from 15 the database asks for libc:
+        // on an ICU cluster template0's provider is ICU, which has no SQL_ASCII.
+        $locale ??= 'C';
+
         return new StatementList(
             Statement::plain(
                 'CREATE DATABASE ' . $q->identifier($db->value)
                 . ' TEMPLATE template0 ENCODING ' . $q->literal($encoding)
-                . " LC_COLLATE 'C' LC_CTYPE 'C'",
+                . ' LC_COLLATE ' . $q->literal($locale) . ' LC_CTYPE ' . $q->literal($locale)
+                . ($this->serverVersion !== null && $this->serverVersion >= 150000 ? ' LOCALE_PROVIDER libc' : ''),
             ),
         );
+    }
+
+    public function serverVersion(): StatementList
+    {
+        return new StatementList(Statement::plain("SELECT current_setting('server_version_num')::int"));
+    }
+
+    public function forServerVersion(int $version): static
+    {
+        return new self($version);
     }
 
     public function dropDatabase(DbName $db): StatementList
@@ -637,6 +660,27 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         return "CASE WHEN a.grantee = 0 THEN 'PUBLIC'"
             . " WHEN a.grantee = r.oid THEN CASE WHEN a.grantee = {$owner} THEN 'owner' END"
             . ' ELSE pg_catalog.pg_get_userbyid(a.grantee)::text END';
+    }
+
+    /**
+     * The locale a collation asks for. Postgres collates by locale: C and
+     * POSIX exist on every server. The package's collation names are MySQL's
+     * (utf8mb4_unicode_ci is the default four call sites pass), which have no
+     * meaning here and leave the locale to the encoding. Anything else would
+     * be ignored, so it is refused.
+     */
+    private function locale(?string $collation): ?string
+    {
+        if ($collation === null || ($collation !== 'C' && Collation::tryFrom($collation) instanceof Collation)) {
+            return null;
+        }
+
+        $upper = strtoupper($collation);
+        if ($upper === 'C' || $upper === 'POSIX') {
+            return $upper;
+        }
+
+        throw UnsupportedOperation::forEngine($this->type()->value, "collation '{$collation}' (PostgreSQL takes C or POSIX here)");
     }
 
     /**

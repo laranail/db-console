@@ -38,6 +38,9 @@ enum Collation: string implements Enumerator, Translatable
     #[Label('binary')]
     case Binary = 'binary';
 
+    #[Label('C (byte order, PostgreSQL)')]
+    case C = 'C';
+
     /**
      * The collations that belong to a given charset choice.
      *
@@ -53,7 +56,10 @@ enum Collation: string implements Enumerator, Translatable
             Charset::Utf8mb3 => [self::Utf8mb3GeneralCi],
             Charset::Latin1  => [self::Latin1SwedishCi],
             Charset::Binary  => [self::Binary],
-            default          => [],
+            // SQL_ASCII is offered for PostgreSQL alone; UTF8 is shared with
+            // SQL Server and SQLite, which have no C collation.
+            Charset::SqlAscii => [self::C],
+            default           => [],
         };
     }
 }

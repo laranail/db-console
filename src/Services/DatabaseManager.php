@@ -29,6 +29,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\InvalidIdentifier;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
+use Simtabi\Laranail\DBConsole\Engines\ServerVersionAwareEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
@@ -72,6 +73,11 @@ final readonly class DatabaseManager
         }
 
         try {
+            // Postgres writes LOCALE_PROVIDER only where the server parses it.
+            if ($engine instanceof ServerVersionAwareEngine) {
+                $engine = $engine->forServerVersion($this->serverVersion($engine, $connection));
+            }
+
             $connection->run(
                 $engine->createDatabase($db, $charset),
                 ['operation' => OperationType::DatabaseCreate->value, 'target' => $db->value],
@@ -232,6 +238,17 @@ final readonly class DatabaseManager
             ['operation' => OperationType::DatabaseDrop->value, 'target' => $db->value, 'rollback' => true],
         );
         $this->catalog->forgetDatabase($server, $db);
+    }
+
+    private function serverVersion(ServerVersionAwareEngine $engine, AdminConnection $connection): int
+    {
+        $version = 0;
+        foreach ($engine->serverVersion() as $statement) {
+            $value = $connection->scalarStatement($statement, ['operation' => OperationType::DatabaseCreate->value]);
+            $version = is_numeric($value) ? (int) $value : 0;
+        }
+
+        return $version;
     }
 
     /**

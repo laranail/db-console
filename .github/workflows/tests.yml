@@ -57,6 +57,11 @@ jobs:
           - { postgres: '15', label: '15', next: false }
           - { postgres: '14', label: '14 (oldest supported)', next: false }
           - { postgres: '19rc1', label: '19 (next, release candidate)', next: true }
+          # A cluster whose default locale provider is ICU (initdb
+          # --locale-provider=icu, PG15+), as some managed services ship. Its
+          # template0 is ICU, which has no SQL_ASCII, so creating one in the C
+          # locale works only when the statement asks for libc.
+          - { postgres: '17', label: '17 · ICU cluster', next: false, initdb: '--locale-provider=icu --icu-locale=en-US' }
     # Reads the repository and nothing else; the token is used only to fetch
     # dependencies from public repositories.
     permissions:
@@ -67,6 +72,7 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: secret
+          POSTGRES_INITDB_ARGS: ${{ matrix.initdb || '' }}
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
