@@ -13,6 +13,7 @@ use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Engines\PostgresEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
+use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
@@ -136,6 +137,8 @@ it('finds the databases a role has objects or privileges in from the shared cata
 // The grants are the defect that mattered most: GRANT ... ON ALL TABLES IN
 // SCHEMA public runs against whatever database the connection is on, which
 // was the admin's, so the target database received nothing but CONNECT.
+// Every statement, CONNECT included, runs on one connection to the target so
+// the whole grant and its verification share a transaction.
 it('runs schema, table and default-privilege grants inside the target database', function () use ($engine): void {
     $sql = pgScoped($engine->grant(
         PrivilegeSet::fromPreset(PrivilegePreset::ReadWrite),
@@ -145,7 +148,7 @@ it('runs schema, table and default-privilege grants inside the target database',
     ));
 
     expect($sql)->toBe([
-        '[admin] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
+        '[analytics] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
         '[analytics] GRANT USAGE ON SCHEMA public TO "report_user"',
         '[analytics] GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "report_user"',
         '[analytics] GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO "report_user"',
@@ -170,7 +173,7 @@ it('puts each privilege on the object Postgres grants it on', function () use ($
     ));
 
     expect($sql)->toBe([
-        '[admin] GRANT CONNECT, TEMPORARY ON DATABASE "shop_prod" TO "app"',
+        '[shop_prod] GRANT CONNECT, TEMPORARY ON DATABASE "shop_prod" TO "app"',
         '[shop_prod] GRANT USAGE, CREATE ON SCHEMA public TO "app"',
         '[shop_prod] GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "app"',
         '[shop_prod] GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO "app"',
@@ -190,7 +193,7 @@ it('grants a read-only set nothing beyond SELECT', function () use ($engine): vo
     ));
 
     expect($sql)->toBe([
-        '[admin] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
+        '[analytics] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
         '[analytics] GRANT USAGE ON SCHEMA public TO "report_user"',
         '[analytics] GRANT SELECT ON ALL TABLES IN SCHEMA public TO "report_user"',
         '[analytics] GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO "report_user"',
@@ -206,7 +209,7 @@ it('revokes inside the target database, including the default privileges', funct
         new Username('app'),
         new Host('%'),
     )))->toBe([
-        '[admin] REVOKE TEMPORARY ON DATABASE "shop_prod" FROM "app"',
+        '[shop_prod] REVOKE TEMPORARY ON DATABASE "shop_prod" FROM "app"',
         '[shop_prod] REVOKE CREATE ON SCHEMA public FROM "app"',
         '[shop_prod] REVOKE SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM "app"',
         '[shop_prod] REVOKE SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public FROM "app"',
@@ -261,4 +264,73 @@ it('counts user objects inside the target database for the emptiness check', fun
         ->and($statements[0]->sql)->toContain('pg_class')
         ->and($statements[0]->sql)->toContain("'pg_catalog'")
         ->and($statements[0]->sql)->toContain("'information_schema'");
+});
+
+it('reads whether the admin already has the privileges of a role', function () use ($engine): void {
+    expect(pgScoped($engine->holdsPrivilegesOf(new Username('report_user'))))
+        ->toBe(["[admin] SELECT pg_has_role('report_user', 'USAGE')"]);
+});
+
+it('takes and gives back membership in a role on the admin connection', function () use ($engine): void {
+    expect(pgScoped($engine->takeMembership(new Username('report_user'))))->toBe(['[admin] GRANT "report_user" TO CURRENT_USER'])
+        ->and(pgScoped($engine->releaseMembership(new Username('report_user'))))->toBe(['[admin] REVOKE "report_user" FROM CURRENT_USER']);
+});
+
+// The drop is split where Postgres forces it: DROP ROLE checks the shared
+// dependency catalog, which a release still uncommitted in another database's
+// session holds on to, so the per-database releases commit first.
+it('splits the release by database from the drop on the admin connection', function () use ($engine): void {
+    expect(pgScoped($engine->releaseOwnershipIn(new Username('r'), [new DbName('a'), new DbName('b')])))->toBe([
+        '[a] REASSIGN OWNED BY "r" TO CURRENT_USER',
+        '[a] DROP OWNED BY "r"',
+        '[b] REASSIGN OWNED BY "r" TO CURRENT_USER',
+        '[b] DROP OWNED BY "r"',
+    ])->and(pgScoped($engine->dropReleasedAccount(new Username('r'), new Host('%'))))->toBe([
+        '[admin] REASSIGN OWNED BY "r" TO CURRENT_USER',
+        '[admin] DROP OWNED BY "r"',
+        '[admin] DROP ROLE "r"',
+    ]);
+});
+
+it('reports whether the admin can connect to each database a role depends on', function () use ($engine): void {
+    expect(pgSql($engine->dependentDatabases(new Username('report_user')))[0])
+        ->toContain("has_database_privilege(d.datname, 'CONNECT') AS can_connect");
+});
+
+// GRANT only warns when the admin lacks the grant option, and grants what it
+// can. The check reads the role's effective privileges instead of trusting it.
+it('checks every privilege a grant was meant to give, inside the target database', function () use ($engine): void {
+    expect($engine)->toBeInstanceOf(GrantVerifyingEngine::class);
+
+    $statements = $engine->missingGrants(
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        new DbName('shop_prod'),
+        new Username('app'),
+    )->all();
+
+    expect($statements)->toHaveCount(1)
+        ->and($statements[0]->database)->toBe('shop_prod');
+
+    $sql = $statements[0]->sql;
+    expect($sql)->toContain("has_database_privilege('app', 'shop_prod', p)")
+        ->and($sql)->toContain("ARRAY['CONNECT', 'TEMPORARY']")
+        ->and($sql)->toContain("has_schema_privilege('app', 'public', p)")
+        ->and($sql)->toContain("ARRAY['USAGE', 'CREATE']")
+        ->and($sql)->toContain("has_table_privilege('app', c.oid, p)")
+        ->and($sql)->toContain("ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']")
+        ->and($sql)->toContain("has_sequence_privilege('app', c.oid, p)")
+        ->and($sql)->toContain("has_function_privilege('app', f.oid, p)");
+});
+
+it('checks only what the set grants', function () use ($engine): void {
+    $sql = pgSql($engine->missingGrants(
+        PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly),
+        new DbName('analytics'),
+        new Username('report_user'),
+    ))[0];
+
+    expect($sql)->toContain("ARRAY['CONNECT']")
+        ->and($sql)->toContain("ARRAY['USAGE']")
+        ->and($sql)->not->toContain('has_function_privilege')
+        ->and($sql)->not->toContain("'CREATE'");
 });

@@ -38,6 +38,10 @@ return [
         'failed' => 'The operation failed at the server. Details are in the db-console log.',
     ],
 
+    'grant' => [
+        'not_applied' => "Nothing was granted to ':account' on ':database': the admin account could not grant :missing. The objects belong to another role; grant as their owner, or have the owner grant to the admin WITH GRANT OPTION.",
+    ],
+
     'rollback' => [
         'failed' => 'A rollback step (:step) failed — the server may be in a partial state and needs review.',
     ],

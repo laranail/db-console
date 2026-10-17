@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Servers;
 
+use Closure;
 use Throwable;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
@@ -44,6 +45,49 @@ final readonly class ScopedConnections
     }
 
     /**
+     * Run $work in a transaction on every connection it touches, the admin
+     * connection included, and commit them all when it returns; roll every
+     * one back when it throws. Requires transactional DDL (Postgres).
+     *
+     * Each connection commits on its own: this is not a two-phase commit, so
+     * a commit failing after another succeeded leaves the first committed.
+     * ScopedSession::commit() checkpoints within $work for work that must be
+     * visible to another session before it continues.
+     *
+     * @template T
+     *
+     * @param Closure(ScopedSession): T $work
+     * @param array<string, mixed> $context
+     *
+     * @return T
+     */
+    public function transaction(AdminConnection $admin, Closure $work, array $context = []): mixed
+    {
+        $opened = [];
+        $session = new ScopedSession(
+            // By reference: every statement must find the connections opened
+            // before it, or each would open (and leak) its own.
+            function (Statement $statement) use ($admin, &$opened): AdminConnection {
+                return $this->connectionFor($admin, $statement, $opened);
+            },
+            $context,
+        );
+
+        try {
+            $result = $work($session);
+            $session->commit();
+
+            return $result;
+        } catch (Throwable $e) {
+            $session->rollBack();
+
+            throw $e;
+        } finally {
+            $this->close($opened);
+        }
+    }
+
+    /**
      * A single scalar from a read statement, on the database it is scoped to.
      *
      * @param array<string, mixed> $context
@@ -73,6 +117,7 @@ final readonly class ScopedConnections
         $name = "db-console-scoped:{$admin->server}:{$database}";
 
         return $opened[$name] ??= $this->open($admin, $name, $database);
+
     }
 
     private function open(AdminConnection $admin, string $name, string $database): AdminConnection

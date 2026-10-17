@@ -23,6 +23,24 @@ trait MintsScopedStatements
         );
     }
 
+    public function targetOnly(): StatementList
+    {
+        return new StatementList(
+            Statement::plain('CREATE TABLE on_target (id INTEGER)')->inDatabase(new DbName('target_db')),
+        );
+    }
+
+    public function adminOnly(): StatementList
+    {
+        return new StatementList(Statement::plain('CREATE TABLE on_admin (id INTEGER)'));
+    }
+
+    public function tablesOnTarget(): Statement
+    {
+        return Statement::plain("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            ->inDatabase(new DbName('target_db'));
+    }
+
     public function countOnTarget(): Statement
     {
         return Statement::plain('SELECT COUNT(*) FROM t')->inDatabase(new DbName('target_db'));

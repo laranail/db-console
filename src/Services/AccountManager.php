@@ -6,7 +6,6 @@ namespace Simtabi\Laranail\DBConsole\Services;
 
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
@@ -20,7 +19,6 @@ use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Engines\HostScopingEngine;
 use Simtabi\Laranail\DBConsole\Events\AccountHostChanged;
-use Simtabi\Laranail\DBConsole\Servers\ScopedConnections;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Wizard\WizardStep;
@@ -47,7 +45,7 @@ final readonly class AccountManager
         private DBConsoleLogger $log,
         private WizardExecutor $executor,
         private PrivilegeManager $privileges,
-        private ScopedConnections $scoped,
+        private OwnershipReleasingDrop $releasingDrop,
     ) {}
 
     /**
@@ -108,9 +106,11 @@ final readonly class AccountManager
         $this->requireAccounts($engine->type()->value, $engine->capabilities()->canCreateAccount);
 
         try {
-            $this->scoped->run(
+            $this->dropAccount(
+                $engine,
                 $connection,
-                $this->dropStatements($engine, $connection, $user, $host),
+                $user,
+                $host,
                 ['operation' => OperationType::AccountDrop->value, 'target' => $this->label($user, $host)],
             );
         } catch (DBConsoleException $e) {
@@ -311,34 +311,32 @@ final readonly class AccountManager
             return;
         }
 
-        $this->scoped->run(
+        $this->dropAccount(
+            $engine,
             $connection,
-            $this->dropStatements($engine, $connection, $user, $host),
+            $user,
+            $host,
             ['operation' => OperationType::AccountDrop->value, 'target' => $this->label($user, $host), 'rollback' => true],
         );
         $this->catalog->forgetAccount($server, $user, $host);
     }
 
     /**
-     * The statements that drop an account. Where the engine cannot drop an
-     * account that still owns objects or holds privileges (Postgres), first
-     * read which databases it has anything in, so the engine can release
-     * them inside each one before the drop.
+     * Drop an account. Where the engine cannot drop one that still owns
+     * objects or holds privileges (Postgres), OwnershipReleasingDrop releases
+     * them first and undoes what it took when a step fails.
+     *
+     * @param array<string, mixed> $context
      */
-    private function dropStatements(Engine $engine, AdminConnection $connection, Username $user, Host $host): StatementList
+    private function dropAccount(Engine $engine, AdminConnection $connection, Username $user, Host $host, array $context): void
     {
-        if (! $engine instanceof OwnershipReleasingEngine) {
-            return $engine->dropAccount($user, $host);
+        if ($engine instanceof OwnershipReleasingEngine) {
+            $this->releasingDrop->drop($engine, $connection, $user, $host, $context);
+
+            return;
         }
 
-        $databases = [];
-        foreach ($engine->dependentDatabases($user) as $statement) {
-            foreach ($connection->select($statement->sql, ['operation' => 'account.view']) as $row) {
-                $databases[] = new DbName((string) reset($row));
-            }
-        }
-
-        return $engine->dropAccountReleasing($user, $host, $databases);
+        $connection->run($engine->dropAccount($user, $host), $context);
     }
 
     /**
