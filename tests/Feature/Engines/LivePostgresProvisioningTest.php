@@ -9,8 +9,10 @@ use Illuminate\Database\QueryException;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
@@ -394,4 +396,116 @@ it('rolls back a grant the admin could only partly give, and says what was missi
         expect(livePgSuper($foreign)->scalar("SELECT has_table_privilege(?, 'admin_owned', 'SELECT')", [$role]))->toBeTrue();
     }
     DB::purge('live_pg_super_' . $foreign);
+});
+
+it('shows the grants a role holds inside the database it was provisioned into', function (): void {
+    $db = liveName('shop');
+    $role = liveName('app');
+    $this->cleanup = [['role', $role], ['database', $db]];
+
+    app(ProvisioningWizard::class)->provision('live_pgsql', new DbName($db), new Charset('utf8'), new Username($role), new Host('%'), PrivilegeSet::fromPreset(PrivilegePreset::AppStandard), new Password(LIVE_PG_PASSWORD));
+    livePgAs($db)->statement('CREATE TABLE reference_data (code text PRIMARY KEY)');
+    livePgClose($db);
+
+    $grants = app(PrivilegeManager::class)->showGrants('live_pgsql', new Username($role), new Host('%'));
+
+    // Read on the admin's own database, as before, this list held nothing:
+    // every one of these grants lives in $db.
+    expect($grants)->toContain("database {$db} {$db} CONNECT")
+        ->toContain("schema {$db} public USAGE")
+        ->toContain("schema {$db} public CREATE")
+        ->toContain("table {$db} public.reference_data SELECT")
+        ->toContain("table {$db} public.reference_data INSERT")
+        ->toContain("default privileges {$db} tables in schema public SELECT");
+});
+
+it('says which databases it could not read a role\'s grants in', function (): void {
+    $locked = liveName('locked');
+    $role = liveName('app');
+    $this->cleanup = [['superuser-database', $locked], ['role', $role]];
+
+    app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $super = livePgSuper('postgres');
+    $super->statement("CREATE DATABASE \"{$locked}\"");
+    $super->statement("REVOKE CONNECT ON DATABASE \"{$locked}\" FROM PUBLIC");
+    livePgSuper($locked)->statement('CREATE TABLE secrets (n int)');
+    livePgSuper($locked)->statement("GRANT SELECT ON secrets TO \"{$role}\"");
+    DB::purge('live_pg_super_' . $locked);
+
+    expect(app(PrivilegeManager::class)->showGrants('live_pgsql', new Username($role), new Host('%')))
+        ->toContain("database {$locked} not readable: the admin may not connect to it");
+
+    livePgSuper($locked)->statement("REVOKE ALL ON secrets FROM \"{$role}\"");
+    DB::purge('live_pg_super_' . $locked);
+});
+
+it('creates a database in each encoding it offers, not only the template\'s', function (string $charset, string $encoding): void {
+    $db = liveName('enc');
+    $this->cleanup = [['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset($charset));
+
+    expect(livePgScalar('SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname = ?', [$db]))->toBe($encoding);
+})->with([
+    'utf8 (template1 unchanged)' => ['utf8', 'UTF8'],
+    'latin1'                     => ['latin1', 'LATIN1'],
+    'sql_ascii'                  => ['sql_ascii', 'SQL_ASCII'],
+]);
+
+it('stores the SCRAM verifier it sent, and the role logs in with the password behind it', function (): void {
+    $role = liveName('app');
+    $this->cleanup = [['role', $role]];
+    // Generated, so the rotation also covers every symbol Password::generate() uses.
+    $rotated = Password::generate();
+    $server = 'live_pgsql';
+
+    app(AccountManager::class)->create($server, new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $stored = livePgSuper('postgres')->scalar('SELECT rolpassword FROM pg_authid WHERE rolname = ?', [$role]);
+    expect($stored)->toStartWith('SCRAM-SHA-256$4096:');
+
+    app(AccountManager::class)->rotatePassword($server, new Username($role), new Host('%'), $rotated);
+    expect(livePgSuper('postgres')->scalar('SELECT rolpassword FROM pg_authid WHERE rolname = ?', [$role]))
+        ->toStartWith('SCRAM-SHA-256$4096:')->not->toBe($stored);
+
+    $login = function (string $password) use ($role): mixed {
+        $name = 'live_pg_login_' . bin2hex(random_bytes(3));
+        config()->set("database.connections.{$name}", livePgConnection('postgres', $role, $password));
+
+        try {
+            return DB::connection($name)->scalar('SELECT current_user');
+        } finally {
+            DB::purge($name);
+        }
+    };
+
+    // The wrong password is refused, so the server is checking passwords at
+    // all (a trust rule in pg_hba.conf would let anything in).
+    expect($login($rotated->reveal()))->toBe($role)
+        ->and(fn (): mixed => $login(LIVE_PG_PASSWORD))->toThrow(QueryException::class, 'password authentication failed');
+});
+
+it('passes the restricted admin in the doctor and fails a superuser', function (): void {
+    $findings = static function (string $server): array {
+        $out = [];
+        foreach (app(DoctorService::class)->checkServer($server) as $finding) {
+            $out[$finding->check] = $finding->severity;
+        }
+
+        return $out;
+    };
+
+    expect($findings('live_pgsql'))
+        ->toMatchArray([
+            'server:live_pgsql:admin'            => Severity::Info,
+            'server:live_pgsql:admin-privileges' => Severity::Info,
+            'server:live_pgsql:version'          => Severity::Info,
+        ])
+        ->not->toHaveKey('server:live_pgsql:pooler');
+
+    config()->set('database.connections.live_pgsql_super', livePgConnection('postgres', livePg('SUPERUSER'), livePg('SUPERUSER_PASSWORD')));
+    config()->set('laranail.db-console.servers.live_pgsql_super', [
+        'engine' => 'pgsql', 'connection' => 'live_pgsql_super', 'tls' => ['enabled' => false],
+    ]);
+
+    expect($findings('live_pgsql_super')['server:live_pgsql_super:admin'])->toBe(Severity::Error);
 });

@@ -17,6 +17,7 @@ use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
+use Simtabi\Laranail\DBConsole\Engines\DatabaseScopedGrantsEngine;
 
 function pgSql(iterable $list): array
 {
@@ -72,15 +73,13 @@ it('translates MySQL charset names into Postgres encodings', function (string $c
     'utf8mb4 (the package default)' => ['utf8mb4', 'UTF8'],
     'utf8mb3'                       => ['utf8mb3', 'UTF8'],
     'utf8'                          => ['utf8', 'UTF8'],
-    'ascii'                         => ['ascii', 'SQL_ASCII'],
-    'sql_ascii'                     => ['sql_ascii', 'SQL_ASCII'],
-    'latin1'                        => ['latin1', 'LATIN1'],
 ]);
+// ascii, sql_ascii and latin1 translate too, and need template0: see below.
 
 it('creates a role WITH LOGIN, redacting the password', function () use ($engine): void {
     $statements = $engine->createAccount(new Username('report_user'), new Host('%'), new Password('Xk9$mQ2vLpW7#nR4t!'))->all();
 
-    expect($statements[0]->sql)->toBe('CREATE ROLE "report_user" WITH LOGIN PASSWORD \'Xk9$mQ2vLpW7#nR4t!\'')
+    expect($statements[0]->sql)->toStartWith('CREATE ROLE "report_user" WITH LOGIN PASSWORD \'SCRAM-SHA-256$')
         ->and($statements[0]->redacted)->toBe('CREATE ROLE "report_user" WITH LOGIN PASSWORD \'[redacted]\'')
         ->and($statements[0]->redacted)->not->toContain('Xk9');
 });
@@ -333,4 +332,75 @@ it('checks only what the set grants', function () use ($engine): void {
         ->and($sql)->toContain("ARRAY['USAGE']")
         ->and($sql)->not->toContain('has_function_privilege')
         ->and($sql)->not->toContain("'CREATE'");
+});
+
+// information_schema.role_table_grants on the admin connection saw tables in
+// the admin's own database only, and no schema or database grants at all, so
+// a role provisioned into any other database showed no grants.
+it('lists database grants from the shared catalog and object grants inside each database', function () use ($engine): void {
+    $sql = pgScoped($engine->showGrantsIn(new Username('report_user'), [new DbName('analytics'), new DbName('shop')]));
+
+    expect($engine)->toBeInstanceOf(DatabaseScopedGrantsEngine::class)
+        ->and($sql)->toHaveCount(4)
+        ->and($sql[0])->toStartWith('[admin] ')->toContain('pg_catalog.pg_database')->toContain('aclexplode(d.datacl)')
+        ->and($sql[1])->toStartWith('[admin] ')
+        ->and($sql[2])->toStartWith('[analytics] ')
+        ->and($sql[3])->toStartWith('[shop] ');
+
+    foreach ([1, 2, 3] as $i) {
+        expect($sql[$i])
+            ->toContain('aclexplode(n.nspacl)')         // schemas
+            ->toContain('aclexplode(c.relacl)')         // tables, views, sequences
+            ->toContain('aclexplode(p.proacl)')         // functions
+            ->toContain('aclexplode(da.defaclacl)')     // default privileges
+            ->toContain("rolname = 'report_user'")
+            ->not->toContain('information_schema');
+    }
+});
+
+it('lists the grants on the admin connection alone when given no other databases', function () use ($engine): void {
+    $sql = pgScoped($engine->showGrants(new Username('report_user'), new Host('%')));
+
+    expect($sql)->toHaveCount(2)
+        ->and($sql[0])->toStartWith('[admin] ')->toContain('aclexplode(d.datacl)')
+        ->and($sql[1])->toStartWith('[admin] ')->toContain('aclexplode(c.relacl)');
+});
+
+it('finds the databases to read grants in the way a drop finds what to release', function () use ($engine): void {
+    expect(pgSql($engine->grantDatabases(new Username('report_user'))))
+        ->toBe(pgSql($engine->dependentDatabases(new Username('report_user'))));
+});
+
+// CREATE DATABASE copies template1, and only template0 may be copied with a
+// different encoding. With template1 in UTF8 (every image and managed
+// service), LATIN1 and SQL_ASCII failed outright. The C locale is valid for
+// every encoding, where the cluster's own (en_US.utf8) is not.
+it('creates a database in an encoding other than UTF8 from template0 with the C locale', function (string $charset, string $encoding) use ($engine): void {
+    expect(pgSql($engine->createDatabase(new DbName('legacy'), new Charset($charset))))
+        ->toBe(["CREATE DATABASE \"legacy\" TEMPLATE template0 ENCODING '{$encoding}' LC_COLLATE 'C' LC_CTYPE 'C'"]);
+})->with([
+    'latin1'    => ['latin1', 'LATIN1'],
+    'ascii'     => ['ascii', 'SQL_ASCII'],
+    'sql_ascii' => ['sql_ascii', 'SQL_ASCII'],
+    'win1252'   => ['win1252', 'WIN1252'],
+]);
+
+// CREATE ROLE ... PASSWORD 'plaintext' puts the password in the statement
+// text, which log_statement = 'ddl' and any failed statement
+// (log_min_error_statement) write to the server log. A SCRAM verifier is what
+// Postgres would store anyway, and the password cannot be recovered from it.
+it('sends a SCRAM-SHA-256 verifier, never the password, when creating or rotating a role', function () use ($engine): void {
+    $password = 'Xk9$mQ2vLpW7#nR4t!';
+    $create = $engine->createAccount(new Username('report_user'), new Host('%'), new Password($password))->all()[0];
+    $rotate = $engine->setPassword(new Username('report_user'), new Host('%'), new Password($password))->all()[0];
+
+    foreach ([[$create, 'CREATE ROLE "report_user" WITH LOGIN PASSWORD '], [$rotate, 'ALTER ROLE "report_user" WITH PASSWORD ']] as [$statement, $prefix]) {
+        expect($statement->sql)->toStartWith($prefix)
+            ->toMatch('/PASSWORD \'SCRAM-SHA-256\$4096:[A-Za-z0-9+\/=]{24}\$[A-Za-z0-9+\/=]{44}:[A-Za-z0-9+\/=]{44}\'$/')
+            ->not->toContain('Xk9')
+            ->and($statement->redacted)->toBe($prefix . "'[redacted]'");
+    }
+
+    // A fresh salt every time: two roles with one password store different verifiers.
+    expect($create->sql)->not->toBe($engine->createAccount(new Username('report_user'), new Host('%'), new Password($password))->all()[0]->sql);
 });
