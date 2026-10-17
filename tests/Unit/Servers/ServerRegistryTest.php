@@ -84,3 +84,39 @@ describe('multi-server isolation (section 5)', function (): void {
             ->toBe($reg->resolve('server-b')[1]->server);
     });
 });
+
+describe('TLS reaches the admin connection', function (): void {
+    it('writes the TLS block into the connection config before connecting', function (): void {
+        config()->set('database.connections.admin_pg', ['driver' => 'pgsql', 'host' => 'db.example.com', 'database' => 'defaultdb']);
+        config()->set('laranail.db-console.servers.managed', [
+            'engine' => 'pgsql', 'connection' => 'admin_pg',
+            'tls'    => ['enabled' => true, 'verify' => true, 'ca' => '/certs/do-ca.crt'],
+        ]);
+
+        registry()->resolve('managed');
+
+        expect(config('database.connections.admin_pg'))
+            ->toMatchArray(['sslmode' => 'verify-full', 'sslrootcert' => '/certs/do-ca.crt']);
+    });
+
+    it('purges a connection opened without TLS so the next use reconnects with it', function (): void {
+        config()->set('database.connections.admin_pg', ['driver' => 'pgsql', 'host' => 'db.example.com', 'database' => 'defaultdb']);
+        config()->set('laranail.db-console.servers.managed', [
+            'engine' => 'pgsql', 'connection' => 'admin_pg', 'tls' => ['enabled' => true, 'verify' => false],
+        ]);
+
+        $before = app('db')->connection('admin_pg');
+        $after = registry()->connection('managed')->underlying();
+
+        expect($after)->not->toBe($before)
+            ->and($after->getConfig('sslmode'))->toBe('require');
+    });
+
+    it('leaves the connection config alone when TLS is disabled', function (): void {
+        $before = config('database.connections.admin_a');
+
+        registry()->resolve('server-a');
+
+        expect(config('database.connections.admin_a'))->toBe($before);
+    });
+});
