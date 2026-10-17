@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Hosting
+
+Nothing changes unless a server sets `hosting`. Absent, it is `self_hosted`. Setting it to a managed
+provider changes three things on that server:
+
+- `AccountManager::list()` no longer returns the provider's accounts (`doadmin`, `rdsadmin`,
+  `cloudsql*`, ...) or the engine's (`mysql.*`, `mariadb.sys`, `pg_*`). `exists()` still sees them.
+- A new MySQL-family account created without a host gets `%`, not `accounts.default_host`.
+- Dropping a database takes no dump first; the provider's point-in-time recovery is the restore
+  path. Set `DB_CONSOLE_BACKUP_DUMP_ON_MANAGED=true` to keep dumping.
+
+An unrecognised `hosting` value now fails the server's resolution with the list of valid values.
+
 ### TLS is applied and measured
 
 The `tls` block on a server is now written into its admin connection, and

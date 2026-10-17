@@ -34,6 +34,22 @@ A key the block leaves null is not removed, so a CA set on the connection itself
 
 A server is local when every host it can reach is `localhost`, `127.0.0.1` or `::1`, including a host given only in `url` (`DATABASE_URL`) and the `read`/`write` hosts. Local servers are exempt from these findings.
 
+## Hosting
+
+`servers.{name}.hosting` says where the server runs: `self_hosted` (the default), `digitalocean`, `rds`, `cloud_sql`, or `generic` for another managed provider. An absent key is `self_hosted`, so an existing config behaves as before; an unknown value fails with the list of valid ones rather than falling back.
+
+`Hosting::profile(EngineType)` turns it into a `HostingProfile`:
+
+| | Self-hosted | Managed |
+|---|---|---|
+| Accounts listed | all | without the provider's (`doadmin`, `_dodb`; `rdsadmin`, `rds_*`; `cloudsql*`) and the engine's (`mysql.*`, `mariadb.sys`, `pg_*`) |
+| Host of a new MySQL account | `accounts.default_host` | `%` |
+| Backup before drop | a dump | none; the provider's point-in-time recovery is the restore path, unless `backup.dump_on_managed` is on |
+
+`ServerRegistry::capabilities($server)` returns the engine's capabilities with this profile merged in (`hosting`, `default_account_host`, `provider_backups` in `toArray()`); prefer it to `engine()->capabilities()`, which knows nothing of where the server runs. `ServerRegistry::defaultAccountHost($server)` is what `user:create` uses when no `--host` is given.
+
+`doctor` warns when a self-hosted server's host belongs to a provider it recognises (`*.ondigitalocean.com`, `*.rds.amazonaws.com`). The provider account lists come from each provider's documentation; only the engine's own accounts are checked against live servers in CI.
+
 ## Multi-server isolation
 
 An operation names its server; the registry resolves that server's engine and connection. An operation on one server can never touch another.

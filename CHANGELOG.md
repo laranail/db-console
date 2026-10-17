@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A hosting profile per server.** `servers.<name>.hosting` takes `self_hosted` (the default),
+  `digitalocean`, `rds`, `cloud_sql` or `generic`. A managed hosting:
+  - hides the provider's and the engine's own accounts from `AccountManager::list()`;
+  - defaults a new MySQL-family account's host to `%` (`ServerRegistry::defaultAccountHost()`, used
+    by `user:create`);
+  - treats the provider's point-in-time recovery as the backup before a drop (see Changed).
+
+  `ServerRegistry::capabilities()` merges the profile into the engine's `Capabilities`. An unknown
+  value fails instead of becoming self-hosted. New: `Enums\Hosting`, `Domain\HostingProfile`.
+- **Doctor checks what a managed server enforces** (`Doctor\HostingCheck`):
+  - a self-hosted server whose host is DigitalOcean's or RDS's;
+  - a MySQL admin that cannot read `mysql.user`;
+  - `sql_require_primary_key` and `gtid_mode`;
+  - a Postgres admin without `pg_signal_backend`, which a forced drop needs.
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -158,6 +172,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alias, and the middleware is `laranail-db-console.api-guard`.
 
 ### Changed
+
+- On a server with a managed hosting, the drop no longer dumps the database first. It logs
+  `database.backup.provider` with a `restore_point` timestamp to restore from instead.
+  `backup.dump_on_managed=true` (env `DB_CONSOLE_BACKUP_DUMP_ON_MANAGED`) keeps dumping.
+  Self-hosted servers, the default, are unaffected.
 
 - `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
 - The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
