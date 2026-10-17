@@ -412,11 +412,19 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     // Read on the admin's own database, as before, this list held nothing:
     // every one of these grants lives in $db.
     expect($grants)->toContain("database {$db} {$db} CONNECT")
-        ->toContain("schema {$db} public USAGE")
-        ->toContain("schema {$db} public CREATE")
         ->toContain("table {$db} public.reference_data SELECT")
         ->toContain("table {$db} public.reference_data INSERT")
         ->toContain("default privileges {$db} tables in schema public SELECT");
+
+    // From PG15 schema public belongs to the database owner, the admin, so
+    // the schema grant lands. Before it the schema is the bootstrap
+    // superuser's: the grant gives nothing and the role holds USAGE and
+    // CREATE through PUBLIC, which no ACL entry names.
+    if (livePgVersion() >= 150000) {
+        expect($grants)->toContain("schema {$db} public USAGE")->toContain("schema {$db} public CREATE");
+    } else {
+        expect(array_filter($grants, static fn (string $line): bool => str_starts_with($line, 'schema ')))->toBe([]);
+    }
 });
 
 it('says which databases it could not read a role\'s grants in', function (): void {
