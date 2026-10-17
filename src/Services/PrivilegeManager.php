@@ -25,8 +25,10 @@ use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\BatchResult;
+use Simtabi\Laranail\DBConsole\Engines\OwnerDelegatingEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Engines\DatabaseScopedGrantsEngine;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
@@ -47,6 +49,7 @@ final readonly class PrivilegeManager
         private Catalog $catalog,
         private DBConsoleLogger $log,
         private ScopedConnections $scoped,
+        private RoleMembership $membership,
     ) {}
 
     public function grant(string $server, Username $user, Host $host, DbName $db, PrivilegeSet $set): OperationResult
@@ -59,7 +62,21 @@ final readonly class PrivilegeManager
         try {
             $context = ['operation' => OperationType::GrantCreate->value, 'target' => $target];
 
-            if ($engine instanceof GrantVerifyingEngine) {
+            if ($engine instanceof GrantVerifyingEngine && $engine instanceof OwnerDelegatingEngine && $engine instanceof OwnershipReleasingEngine) {
+                $notCovered = $this->membership->actingFor(
+                    $engine,
+                    $connection,
+                    $set,
+                    $db,
+                    $user,
+                    $context,
+                    function (array $notCovered) use ($engine, $connection, $set, $db, $user, $host, $context): array {
+                        $this->grantVerified($engine, $connection, $set, $db, $user, $host, $context);
+
+                        return $notCovered;
+                    },
+                );
+            } elseif ($engine instanceof GrantVerifyingEngine) {
                 $this->grantVerified($engine, $connection, $set, $db, $user, $host, $context);
             } else {
                 $this->scoped->run($connection, $engine->grant($set, $db, $user, $host), $context);
@@ -79,12 +96,15 @@ final readonly class PrivilegeManager
             'preset' => $set->preset->value,
         ]));
 
-        return OperationResult::succeeded(OperationType::GrantCreate, $server, [
+        return OperationResult::succeeded(OperationType::GrantCreate, $server, array_filter([
             'username' => $user->value,
             'host'     => $host->value,
             'database' => $db->value,
             'preset'   => $set->preset->value,
-        ]);
+            // Roles the admin could not act as: their objects, and what they
+            // create later, are not covered by this grant.
+            'not_covered' => implode(', ', $notCovered ?? []),
+        ], static fn (string $value): bool => $value !== ''));
     }
 
     public function revoke(string $server, Username $user, Host $host, DbName $db, PrivilegeSet $set): OperationResult
@@ -99,10 +119,20 @@ final readonly class PrivilegeManager
 
             // Postgres revokes run inside the target database (see Statement),
             // all or nothing where DDL is transactional.
-            if ($engine instanceof GrantVerifyingEngine) {
+            $revoke = function () use ($engine, $connection, $set, $db, $user, $host, $context): void {
                 $this->scoped->transaction($connection, function (ScopedSession $session) use ($engine, $set, $db, $user, $host): void {
                     $session->run($engine->revoke($set, $db, $user, $host));
                 }, $context);
+            };
+
+            if ($engine instanceof GrantVerifyingEngine && $engine instanceof OwnerDelegatingEngine && $engine instanceof OwnershipReleasingEngine) {
+                $this->membership->actingFor($engine, $connection, $set, $db, $user, $context, static function () use ($revoke): null {
+                    $revoke();
+
+                    return null;
+                });
+            } elseif ($engine instanceof GrantVerifyingEngine) {
+                $revoke();
             } else {
                 $this->scoped->run($connection, $engine->revoke($set, $db, $user, $host), $context);
             }

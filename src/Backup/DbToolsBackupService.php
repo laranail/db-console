@@ -31,6 +31,10 @@ use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
  * log-and-drop. Each snapshot gets its own timestamped file, named for the
  * format db-tools writes (`.dump` for PostgreSQL's custom format, `.sql`
  * otherwise), so a later restore picks the right tool.
+ *
+ * On a server whose hosting keeps point-in-time recovery (any managed
+ * provider) no dump is taken unless `backup.dump_on_managed` is on; the
+ * restore point is logged instead.
  */
 final readonly class DbToolsBackupService implements BackupService
 {
@@ -57,6 +61,25 @@ final readonly class DbToolsBackupService implements BackupService
         }
 
         $definition = $this->registry->definition($server);
+
+        // A managed provider's point-in-time recovery restores to any second
+        // of the retention window, which a dump cannot. The record of when
+        // the drop happened is what an operator needs to restore from it.
+        if ($definition->hosting->profile($definition->engine)->providerBackups
+            && ! (bool) $this->config->get('laranail.db-console.backup.dump_on_managed', false)) {
+            $this->log->write(
+                Severity::Notice,
+                'database.backup.provider',
+                [
+                    'server'        => $server,
+                    'target'        => $database->value,
+                    'hosting'       => $definition->hosting->value,
+                    'restore_point' => Carbon::now()->utc()->toIso8601String(),
+                ],
+            );
+
+            return null;
+        }
 
         // Resolving opens the server's SSH tunnel, if it has one, and points
         // the admin connection at it. Read before that, the config still

@@ -8,12 +8,15 @@ use Throwable;
 use LogicException;
 use InvalidArgumentException;
 use Illuminate\Database\DatabaseManager;
+use Simtabi\Laranail\DBConsole\Enums\Hosting;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
 use Simtabi\Laranail\DBConsole\Tunnels\LocalEnd;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
 use Simtabi\Laranail\DBConsole\Tunnels\SshSettings;
 use Illuminate\Contracts\Config\Repository as Config;
+use Simtabi\Laranail\DBConsole\Domain\HostingProfile;
 use Simtabi\Laranail\DBConsole\Engines\EngineFactory;
 use Simtabi\Laranail\DBConsole\Tunnels\TunnelManager;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
@@ -153,6 +156,36 @@ final class ServerRegistry
         $connection = new AdminConnection($server, $this->db->connection($definition->connection));
 
         return $this->resolved[$server] = [$engine, $connection];
+    }
+
+    /**
+     * What the server's hosting means for its engine.
+     */
+    public function hosting(string $server): HostingProfile
+    {
+        $definition = $this->definition($server);
+
+        return $definition->hosting->profile($definition->engine);
+    }
+
+    /**
+     * The engine's capabilities with the server's hosting merged in. Prefer
+     * this to engine()->capabilities(), which knows nothing of where the
+     * server runs.
+     */
+    public function capabilities(string $server): Capabilities
+    {
+        return $this->engine($server)->capabilities()->withHosting($this->hosting($server));
+    }
+
+    /**
+     * The host a new account on this server gets when none is given: the
+     * hosting's (`%` on a managed MySQL), else `accounts.default_host`.
+     */
+    public function defaultAccountHost(string $server): string
+    {
+        return $this->hosting($server)->defaultAccountHost
+            ?? (string) $this->config->get('laranail.db-console.accounts.default_host', 'localhost');
     }
 
     public function engine(string $server): Engine
@@ -346,6 +379,15 @@ final class ServerRegistry
         /** @var array<string, mixed> $atRest */
         $atRest = (array) ($raw['at_rest'] ?? []);
 
+        // Absent means self-hosted, so an existing config is unchanged. An
+        // unknown value fails rather than quietly becoming self-hosted, which
+        // would expose the provider's accounts and dump instead of using PITR.
+        $hostingValue = (string) ($raw['hosting'] ?? Hosting::SelfHosted->value);
+        $hosting = Hosting::tryFrom($hostingValue) ?? throw ServerMisconfigured::named(
+            $server,
+            "invalid hosting '{$hostingValue}'; expected one of: " . implode(', ', Hosting::values()),
+        );
+
         /** @var array<string, mixed> $sshBlock */
         $sshBlock = (array) ($raw['ssh'] ?? []);
         $ssh = null;
@@ -370,6 +412,7 @@ final class ServerRegistry
             ],
             showAtRestStatus: (bool) ($atRest['show_status'] ?? true),
             editable: false,
+            hosting: $hosting,
             ssh: $ssh,
         );
     }

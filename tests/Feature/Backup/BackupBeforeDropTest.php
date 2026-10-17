@@ -163,6 +163,29 @@ it('prunes only this database\'s own snapshots older than retention_days', funct
     array_map(@unlink(...), glob("{$dir}/*") ?: []);
 });
 
+it('leaves a managed server to the provider\'s point-in-time recovery and still drops', function (): void {
+    Event::fake([DatabaseDropped::class]);
+    $manager = useBackupManager(fails: false);
+    config()->set('laranail.db-console.servers.lite.hosting', 'generic');
+
+    expect(app(DbToolsBackupService::class)->snapshot('lite', new DbName('shop_prod')))->toBeNull()
+        ->and($manager->calls)->toBe([]);
+
+    app(DatabaseManager::class)->drop('lite', new DbName('shop_prod'));
+
+    expect($manager->calls)->toBe([]);
+    Event::assertDispatched(DatabaseDropped::class);
+});
+
+it('still dumps a managed server when dump_on_managed is switched on', function (): void {
+    $manager = useBackupManager(fails: false);
+    config()->set('laranail.db-console.servers.lite.hosting', 'generic');
+    config()->set('laranail.db-console.backup.dump_on_managed', true);
+
+    expect(app(DbToolsBackupService::class)->snapshot('lite', new DbName('shop_prod')))->not->toBeNull()
+        ->and($manager->calls)->toHaveCount(1);
+});
+
 // A backup reads the admin connection's config. Read before anything opened
 // the server's tunnel, that config still names the remote host, and the dump
 // would go straight to it, around the tunnel.

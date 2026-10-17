@@ -23,6 +23,10 @@ enum ExceptionCode: string implements Enumerator, Translatable
     case PrivilegeUnknown = 'privilege.unknown';
     case PrivilegeForbidden = 'privilege.forbidden';
 
+    // Existing resources (owner decision 2026-10-17: refuse and report)
+    case AccountAlreadyExists = 'account.already_exists';
+    case DatabaseAlreadyExists = 'database.already_exists';
+
     // Engine
     case UnsupportedOperation = 'engine.unsupported_operation';
     case StatementBuildFailure = 'engine.statement_build_failure';
@@ -40,6 +44,9 @@ enum ExceptionCode: string implements Enumerator, Translatable
 
     // Authorization
     case NotAuthorized = 'not_authorized';
+    case ConfirmationRequired = 'confirmation.required';
+    case AssuranceRequired = 'assurance_required';
+    case OwnerWouldBeStranded = 'security.owner_stranded';
 
     // Secrets
     case SecretUnavailable = 'secret.unavailable';
@@ -53,15 +60,22 @@ enum ExceptionCode: string implements Enumerator, Translatable
 
     /**
      * The HTTP status the REST API returns for this failure. Validation and
-     * input problems are 422; authorization is 403; missing servers are 404;
+     * input problems are 422; authorization is 403; missing servers are 404; an existing
+     * account or database the policy refused is 409 (the caller may resubmit with
+     * on_existing);
      * upstream/server failures are 502; everything else is a 500. The API maps
      * the exception to this so callers get a meaningful code, never a raw 500.
      */
     public function httpStatus(): int
     {
         return match ($this) {
-            self::NotAuthorized => 403,
-            self::UnknownServer => 404,
+            self::NotAuthorized,
+            self::ConfirmationRequired,
+            self::AssuranceRequired => 403,
+            self::UnknownServer     => 404,
+            self::AccountAlreadyExists,
+            self::DatabaseAlreadyExists,
+            self::OwnerWouldBeStranded => 409,
             self::IdentifierInvalid,
             self::PasswordWeak,
             self::PrivilegeUnknown,

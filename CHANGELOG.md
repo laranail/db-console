@@ -9,6 +9,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A hosting profile per server.** `servers.<name>.hosting` takes `self_hosted` (the default),
+  `digitalocean`, `rds`, `cloud_sql` or `generic`. A managed hosting:
+  - hides the provider's and the engine's own accounts from `AccountManager::list()`;
+  - defaults a new MySQL-family account's host to `%` (`ServerRegistry::defaultAccountHost()`, used
+    by `user:create`);
+  - treats the provider's point-in-time recovery as the backup before a drop (see Changed).
+
+  `ServerRegistry::capabilities()` merges the profile into the engine's `Capabilities`. An unknown
+  value fails instead of becoming self-hosted. New: `Enums\Hosting`, `Domain\HostingProfile`.
+- **Doctor checks what a managed server enforces** (`Doctor\HostingCheck`):
+  - a self-hosted server whose host is DigitalOcean's or RDS's;
+  - a MySQL admin that cannot read `mysql.user`;
+  - `sql_require_primary_key` and `gtid_mode`;
+  - a Postgres admin without `pg_signal_backend`, which a forced drop needs.
+- **Existing accounts and databases are refused and reported unless an operator adopts them**
+  (owner decision 2026-10-17). `AccountManager::create()` and `DatabaseManager::create()` used to
+  adopt a resource that was already there without saying so, and dropped the account's supplied
+  password. Both now go through `Services\ExistingResourceGuard` and an `ExistingResourcePolicy`
+  (`refuse`, `adopt`, `adopt_and_apply`) resolved per call (a new optional last parameter), then
+  `servers.<name>.accounts|databases.on_existing`, then `accounts.on_existing` /
+  `databases.on_existing`, defaulting to `refuse`. A configured value that is not a policy refuses.
+  - `refuse` throws `AccountAlreadyExists` / `DatabaseAlreadyExists` (HTTP 409, codes
+    `account.already_exists` / `database.already_exists`) naming the options the caller may
+    resubmit with, and dispatches `AccountCreationRefused` / `DatabaseCreationRefused`.
+  - `adopt` needs the new **`resource.adopt`** permission (Owner only by default), records the
+    resource in the catalog with its password untouched, and dispatches `AccountAdopted` /
+    `DatabaseAdopted` (Warning, so they alert).
+  - `adopt_and_apply` also needs `account.rotate` and an identity confirmation within
+    `security.step_up.ttl` seconds (default 300), read from the new `Contracts\OperatorAssurance`
+    that the host binds (`hasSecondFactor()`, `recentlyConfirmedAt()`). Authentication stays with
+    the host. Until it binds one, `NullOperatorAssurance` reports none, so `adopt_and_apply` is
+    refused with `ConfirmationRequired` (HTTP 403, `confirmation.required`). It dispatches
+    `AccountPasswordApplied`. For a database it adopts.
+  - Results carry `adopted` and `password_applied`. All five events are Security-category
+    notifications (`ExistingResourceNotification`) and webhook events.
+- **`ProvisioningWizard::provision()` takes `$onExisting`.** Without a password it never replaces an
+  adopted account's credential. With one, it checks `account.rotate` and the confirmation when it adopts the
+  account, before the grant, and applies the password as its last step, so an earlier failure leaves
+  the credential as it was.
+- **`--on-existing`** on `user:create`, `db:create` and `wizard`. Interactive and unset, they ask
+  what should happen to a resource that is already there, naming each option's risk, defaulting to
+  the configured policy. **`on_existing`** on the API's create endpoints; adopted resources answer
+  200, new ones 201.
+- **Slack and database notification channels** alongside mail, chosen per category by
+  `notifications.channels`; Slack goes to `notifications.slack.route` (suggests
+  `laravel/slack-notification-channel`), the in-app inbox to `notifications.database.users`.
+- **`api.rate_limit` is applied** as the `laranail-db-console.api` named limiter, keyed on the API
+  caller (`'requests,minutes'`; empty or `0` switches it off).
+- `Http\Api\ApiSettings`, the API's settings read from the documented keys.
+- **Operator assurance, answered by the host.** `Contracts\OperatorAssurance`
+  (`hasSecondFactor()`, `recentlyConfirmedAt()`) is how the host's authentication tells db-console
+  what it knows about an operator; db-console verifies no codes and owns no enrolment.
+  `Security\NullOperatorAssurance` is the default binding, and
+  `Security\SessionConfirmationAssurance` reads Laravel's `auth.password_confirmed_at` for hosts
+  that want a starting point.
+- **Assurance is enforced on top of RBAC** at `Services\Access\Authorizer`, the single
+  authorization entry point, so the API, the WebUI and CLI runs that carry an operator are all
+  covered. By default writes need a second factor, and dropping a database or an account,
+  rotating a password, changing an account's host and rotating secrets also need a confirmation
+  within `security.step_up.ttl` (300 s). Refusals are `AssuranceRequired` (HTTP 403,
+  `assurance_required`, with a `missing` list) and are audited as `AssuranceShortfall`.
+- `security.assurance.enforce`: `off`, `report` or `require`. Unset, it is `require` in
+  production and `report` elsewhere. `report` audits each shortfall and alerts once a day per
+  operator.
+- **Break-glass**: `laranail::db-console.security.recover <user>`, shell only, lifts db-console's
+  assurance requirements for 15 minutes and raises a critical `BreakGlassIssued` alert.
+- **The last Owner cannot be stranded**: `role:revoke` refuses to take global Owner from the last
+  holder, or (with enforcement on) the last one with a second factor, and
+  `Security\OwnerSafety::assertMayLoseSecondFactor()` lets the host refuse the same before it
+  disables one (`OwnerWouldBeStranded`, HTTP 409).
+- `doctor` reports `security:assurance` (an error when off in production),
+  `security:assurance-binding` (no host binding) and `security:owners`.
+- `ConsolePermission::isRead()`, the `security.assurance` and `security.break_glass` operation
+  types, and the `security_bypasses` catalog table.
+- See [Operator assurance](docs/tools/operator-assurance.md) and
+  [Implement OperatorAssurance](docs/recipes/implement-operator-assurance.md).
 - **SSH tunnels to database servers** (Phase D4). A server's `ssh` block routes its admin
   connection through a tunnel, behind the `Tunnels\Contracts\TunnelDriver` contract with two
   drivers chosen per server: `openssh` (the default; `ssh -N -L` with `BatchMode`,
@@ -35,6 +111,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inside the tunnel, `doctor`, and an unrelated host key that must be refused.
 - `phpseclib/phpseclib` `^4.0.1` as a suggestion, for the phpseclib driver.
 
+- **The `live-tls` job runs servers that enforce TLS**, as DigitalOcean's managed MySQL and
+  PostgreSQL do, so doctor's TLS findings are proven against a server that refuses plaintext and
+  not only one that offers TLS. MySQL 8.4 runs with `--require-secure-transport=ON` and PostgreSQL
+  18 with `ssl=on` and a `pg_hba` that rejects every `hostnossl` line, both serving a certificate
+  from a CA generated in the job, both reached as restricted admins (the minimal MySQL grant, a
+  `CREATEDB CREATEROLE NOSUPERUSER` role) through a host name doctor does not exempt as local. The
+  `live-tls` group asserts that a plaintext session is refused and is a TLS error, that
+  `verify=false` is an Unverified warning, and that the CA with `verify=true` is green. On
+  PostgreSQL, `tls.enabled=false` is still encrypted, because libpq's default `sslmode=prefer`
+  takes the TLS the server offers, and doctor warns that nothing requires it; a plaintext session
+  there needs `sslmode=disable`. A plaintext
+  MySQL and PostgreSQL run beside them, and pointing `tls.enabled=true` at either turns doctor red.
+  Every refusal is paired with a connection the same server accepts, so a server that is down fails
+  the group instead of passing it. `LiveTlsWorkflowTest` pins each copy of the minimal grant in the
+  workflow to `Doctor\MinimalAdminGrant`.
 - **A live provisioning job against MySQL 8.4 and 9 and MariaDB 11.4 and latest** (`live-mysql` in
   `tests.yml`). 8.4 is the only MySQL DigitalOcean offers. It runs the `live-mysql` group as an
   admin holding exactly the grant doctor recommends, never root, with `sql_require_primary_key=ON`
@@ -71,8 +162,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pooler port (6432, 6543, 25061).
 - `Engines\DatabaseScopedGrantsEngine`, `Engines\ScramSha256` and `ScopedConnections::select()`,
   which reads rows from each statement's own database.
+- **`ConsolePermission::fromAbility()`** reads a gate ability or stored permission name in either
+  form, and **`deprecatedAbility()`** names the pre-0.1 ability. Both RBAC drivers read stored names
+  through `fromAbility()`.
+- **`tests/Feature/NamingConventionTest.php`** reads the live gate, Artisan and middleware
+  registries through package-tools' `AssertsRegisteredNames`, and checks every deprecated alias
+  answers as its replacement and announces itself once.
+
+- **`assertNoNullOnlyOptionGuards()` is enforced over `src/`.**
+
+### Changed
+
+- `laranail/db-tools` (dev, suggested) is required at `^0.1.6`, whose backups honour `url`, pass TLS
+  to the dump client and take a consistent dump on managed servers.
+- The `live-mysql` job runs MySQL with GTID on, as DigitalOcean does, installs each family's own dump
+  client, and drops a non-empty database with backups on as the recommended admin, then restores the
+  dump.
+- On a server with a managed hosting, the drop no longer dumps the database first. It logs
+  `database.backup.provider` with a `restore_point` timestamp to restore from instead.
+  `backup.dump_on_managed=true` (env `DB_CONSOLE_BACKUP_DUMP_ON_MANAGED`) keeps dumping.
+  Self-hosted servers, the default, are unaffected.
+- **Creating an account or database that already exists now fails with a 409** instead of
+  succeeding with `alreadyExisted`. See UPGRADING.
+- **`resource.adopt` is the 22nd console permission.** Owner holds it; Admin, Operator, ReadOnly and
+  Auditor do not.
+- **Notifications are queued** (`notifications.queue`, default `true`): `DBConsoleNotification` now
+  implements `ShouldQueue`. Set `notifications.queue` to `false` to send in the request.
+- **A Warning or Critical event's notification goes out on `alerts.channel`** (default `mail`, as
+  before) rather than its category's channels.
+- `DBConsoleNotification::toArray()` adds `severity` and `subject`.
+- `DbConsoleCatalog::recordDatabase()` with an empty charset leaves a recorded charset alone. An
+  adopted database is recorded without one, since db-console did not choose it.
+
+- **The API guard makes its configured guard the request's default** (`Auth::shouldUse()`), so the
+  gate, the audit actor and the assurance check resolve the API caller rather than the default
+  web guard's user.
+- `Authorizer`, `SecretRotator`, `ApiGuard` and `DoctorService` take new constructor arguments
+  (`AssuranceEnforcer`, `Authorizer`, `AuthFactory`, `OperatorSecurityCheck`), resolved from the
+  container.
+- `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
+- The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
+  its own `--server` resolution and `ServerAddCommand`'s `--host`/`--port` handling were the same
+  normalisation written out by hand and now use the accessors.
+
+- **`DbCreateCommand` no longer declares a private `stringOption()`.** It was the trait's method
+  reimplemented, and once the base applied the trait PHP refused the class outright -- a private
+  method cannot narrow a protected one. Removing it is behaviour-preserving: both return `''` for
+  a non-string value.
+
+- **The gate abilities and the install command are vendor-scoped.** The 21 abilities are
+  `laranail-db-console.<permission>` (was `db-console.<permission>`), and the install command is
+  `laranail::db-console.install` (was `db-console:install`). Both lived in flat, host-owned
+  registries, where a sibling package or the application claiming the same key silently replaces
+  it. `ConsolePermission::ability()` returns the scoped name, so the audit trail records it as the
+  target of a denied action, and `install` seeds permission rows under it. Rows stored before the
+  rename keep their names and still resolve. Requires `laranail/package-tools ^0.1.3`.
+
+### Deprecated
+
+- **Config keys `api.guard` and `api.prefix`.** Read only when `api.auth` / `api.path` is unset,
+  with one `E_USER_DEPRECATED` notice each. Removed no earlier than the next minor after 0.1.
+
+- **Gate abilities `db-console.<permission>` (21).** Each is still defined and asks the gate for its
+  `laranail-db-console.*` ability, so a host's definition or before/after callback for the scoped
+  name governs the old one too. The first check of each raises one `E_USER_DEPRECATED` notice.
+- **Command `db-console:install`.** Still registered, hidden; it prints one line naming
+  `laranail::db-console.install`, then runs it and returns its exit code.
+
+Both are removed no earlier than the next minor after 0.1.
 
 ### Fixed
+
+- **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
+  It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already
+  did; the two share the check.
+- **A MySQL database holding only a routine, an event or a trigger read as empty**, so a wizard
+  rollback dropped it with them. The MySQL family now implements `EmptinessProbingEngine` and counts
+  `TABLES`, `ROUTINES`, `EVENTS` and `TRIGGERS`.
+- **Postgres grants covered schema `public` only.** Grants, revokes and the privilege check now
+  cover every user schema the admin can grant on, and default privileges are database-wide (no
+  `IN SCHEMA`) with `ON SCHEMAS`, so schemas and objects created later are covered. Revokes also
+  clear the per-schema defaults earlier releases set. A schema owned by a superuser is skipped.
+- **A Postgres reader missed tables other roles created later.** A default privilege belongs to the
+  role that creates the object. A grant now sets defaults `FOR ROLE` each role that can create
+  objects in the database. A writer granted after the readers inherits the admin's database-wide
+  defaults, which list every role db-console granted there.
+- **Granting on objects another role owns failed or did nothing.** `RoleMembership` takes membership
+  in the roles `OwnerDelegatingEngine::rolesToAssume()` lists for the duration of the grant or
+  revoke, and gives it back afterwards. A role the admin cannot take is reported in the result
+  (`not_covered`) and logged.
+- **A Postgres database with an application role's session open could not be dropped.**
+  `WITH (FORCE)` ends only sessions the admin may end, and a CREATEROLE admin on PG16+ does not
+  inherit the roles it creates. The drop now reads whose sessions they are (`SessionEndingEngine`),
+  takes membership so `FORCE` can end them, and refuses up front, before the backup runs, when a
+  superuser or a role the admin cannot act as holds one.
+- **The REST API could not serve an authenticated request.** `ApiGuard` bound a user resolver that
+  called itself, so every authenticated request recursed until the stack ran out. It also never made
+  the API guard the default, so the services' Gate saw a sanctum caller as nobody. It now binds the
+  user it resolved and calls `shouldUse()`, as Laravel's `Authenticate` middleware does.
+- **`api.auth` and `api.path` were ignored.** The code read `api.guard` and `api.prefix`, which the
+  config file never defined, so `DB_CONSOLE_API_AUTH` and `DB_CONSOLE_API_PATH` did nothing.
+- **`api.require_https`, `api.confirm_destructive`, `notifications.queue`,
+  `notifications.quiet_hours` and `alerts.channel` were configured and never read.** All five are
+  read now; the API defaults are unchanged.
 
 - **A PostgreSQL server connected over its Unix socket** (`host` a directory) was classed as
   remote, so `doctor` reported "TLS configured but plaintext" for a connection that never leaves
@@ -81,9 +273,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connected by host and port instead. The backup connection now carries both keys.
 - **Backup before drop resolves the server first**, so a server's SSH tunnel is open and its
   admin connection points at it before the dump reads that connection.
-- **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
-  It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already
-  did; the two share the check.
 - **A failed backup-before-drop still dropped the database.** `DbToolsBackupService` logged the
   failure and returned, so the drop it was meant to make recoverable ran anyway. It now throws the new
   `BackupFailed` (code `backup.failed`), the drop does not run, and the failure is audited like any
@@ -192,47 +381,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`docs/tools/commands.md` documented a `db-console:<command>` alias for every command, and
   `docs/tools/api.md` named the API middleware `db-console.api-guard`.** No command declares an
   alias, and the middleware is `laranail-db-console.api-guard`.
-
-### Changed
-
-- `laravel/framework ^13.0` is now declared in `require`. `src/` uses `Dispatchable`, `FormRequest` from `Illuminate\Foundation`, which no `illuminate/*` component ships, so the dependency only arrived through the host application.
-- The base `DBConsoleCommand` applies `laranail/package-tools`' `Commands\Concerns\ReadsOptions`;
-  its own `--server` resolution and `ServerAddCommand`'s `--host`/`--port` handling were the same
-  normalisation written out by hand and now use the accessors.
-
-- **`DbCreateCommand` no longer declares a private `stringOption()`.** It was the trait's method
-  reimplemented, and once the base applied the trait PHP refused the class outright -- a private
-  method cannot narrow a protected one. Removing it is behaviour-preserving: both return `''` for
-  a non-string value.
-
-- **The gate abilities and the install command are vendor-scoped.** The 21 abilities are
-  `laranail-db-console.<permission>` (was `db-console.<permission>`), and the install command is
-  `laranail::db-console.install` (was `db-console:install`). Both lived in flat, host-owned
-  registries, where a sibling package or the application claiming the same key silently replaces
-  it. `ConsolePermission::ability()` returns the scoped name, so the audit trail records it as the
-  target of a denied action, and `install` seeds permission rows under it. Rows stored before the
-  rename keep their names and still resolve. Requires `laranail/package-tools ^0.1.3`.
-
-### Added
-
-- **`ConsolePermission::fromAbility()`** reads a gate ability or stored permission name in either
-  form, and **`deprecatedAbility()`** names the pre-0.1 ability. Both RBAC drivers read stored names
-  through `fromAbility()`.
-- **`tests/Feature/NamingConventionTest.php`** reads the live gate, Artisan and middleware
-  registries through package-tools' `AssertsRegisteredNames`, and checks every deprecated alias
-  answers as its replacement and announces itself once.
-
-- **`assertNoNullOnlyOptionGuards()` is enforced over `src/`.**
-
-### Deprecated
-
-- **Gate abilities `db-console.<permission>` (21).** Each is still defined and asks the gate for its
-  `laranail-db-console.*` ability, so a host's definition or before/after callback for the scoped
-  name governs the old one too. The first check of each raises one `E_USER_DEPRECATED` notice.
-- **Command `db-console:install`.** Still registered, hidden; it prints one line naming
-  `laranail::db-console.install`, then runs it and returns its exit code.
-
-Both are removed no earlier than the next minor after 0.1.
 
 ## [0.1.0] - 2026-07-11
 

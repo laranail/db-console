@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AuditController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\GrantController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\ServerController;
@@ -12,12 +14,13 @@ use Simtabi\Laranail\DBConsole\Http\Api\Controllers\DatabaseController;
 
 /*
  * DBConsole REST API. Loaded only when laranail.db-console.api.enabled is
- * true (hasRoutesWhen). Every route is behind the laranail-db-console.api-guard
- * middleware (HTTPS + auth guard + IP allow-list); authorization itself
- * happens inside the services (same Gate as the CLI/UI).
+ * true (hasRoutesWhen), under api.path. Every route is behind the
+ * laranail-db-console.api-guard middleware (HTTPS + IP allow-list + auth
+ * guard) and the api.rate_limit limiter; authorization itself happens inside
+ * the services (same Gate as the CLI/UI).
  */
-Route::prefix((string) config('laranail.db-console.api.prefix', 'api/db-console'))
-    ->middleware(['laranail-db-console.api-guard'])
+Route::prefix(app(ApiSettings::class)->path())
+    ->middleware(['laranail-db-console.api-guard', ThrottleRequests::using(ApiSettings::RATE_LIMITER)])
     ->group(function (): void {
         Route::get('servers', [ServerController::class, 'index']);
 

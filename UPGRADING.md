@@ -2,6 +2,109 @@
 
 ## Unreleased
 
+### Postgres grants: every schema, other roles' future objects
+
+- **Grants now reach every user schema**, not only `public`. A role granted on a database whose
+  application keeps tables in another schema gets them now; one that relied on not seeing them does
+  not stay that way.
+- **Default privileges are database-wide.** New grants set them without `IN SCHEMA`; revokes clear
+  both the new and the old per-schema entries.
+- **During a grant, revoke or drop the admin briefly holds membership in the roles it acts as** and
+  gives it back afterwards. A role it cannot take (no ADMIN OPTION) is listed in the result's
+  `not_covered` instead of failing the grant.
+- **`DatabaseManager::drop()` refuses with `InsufficientPrivilege`** when a superuser, or a role the
+  admin cannot act as, has a session on the database. Before, the forced drop failed after the
+  backup had run.
+- **New last constructor arguments**, resolved from the container as before: `DatabaseManager` and
+  `PrivilegeManager` take a `RoleMembership`.
+- **Require `laranail/db-tools ^0.1.6`** for backups on managed servers.
+
+### Hosting
+
+Nothing changes unless a server sets `hosting`. Absent, it is `self_hosted`. Setting it to a managed
+provider changes three things on that server:
+
+- `AccountManager::list()` no longer returns the provider's accounts (`doadmin`, `rdsadmin`,
+  `cloudsql*`, ...) or the engine's (`mysql.*`, `mariadb.sys`, `pg_*`). `exists()` still sees them.
+- A new MySQL-family account created without a host gets `%`, not `accounts.default_host`.
+- Dropping a database takes no dump first; the provider's point-in-time recovery is the restore
+  path. Set `DB_CONSOLE_BACKUP_DUMP_ON_MANAGED=true` to keep dumping.
+
+An unrecognised `hosting` value now fails the server's resolution with the list of valid values.
+### Existing accounts and databases are refused
+
+Creating an account or database that is already on the server used to succeed quietly with
+`alreadyExisted: true`, and an account kept its old password whatever you passed. It now **fails
+with `AccountAlreadyExists` / `DatabaseAlreadyExists`** (HTTP 409), changes nothing, and notifies
+the security recipients.
+
+- **To keep adopting**, pass `ExistingResourcePolicy::Adopt` as the new last argument of
+  `AccountManager::create()`, `DatabaseManager::create()` or `ProvisioningWizard::provision()`,
+  `--on-existing=adopt` on the CLI, `"on_existing": "adopt"` to the API, or set
+  `DB_CONSOLE_ACCOUNTS_ON_EXISTING` / `DB_CONSOLE_DATABASES_ON_EXISTING` (globally, or per server
+  under `servers.<name>.accounts|databases.on_existing`).
+- **Adopting needs the new `resource.adopt` permission**, which only Owner holds by default. An
+  install seeded before this release has no `resource.adopt` row, so even Owner is refused until you
+  re-run `php artisan laranail::db-console.install` (its role seeding is idempotent; it re-syncs
+  the shipped roles' permissions, so a change you made to a shipped role is reset). Grant it to a
+  custom role with `role:create`.
+- **A wizard re-run without a password** is the common case: it now needs `adopt` and
+  `resource.adopt`. It never replaces the account's password.
+- **`adopt_and_apply`** replaces an adopted account's password with the one supplied, and needs
+  `account.rotate` too, plus an identity confirmation within `security.step_up.ttl` seconds that
+  your application reports by binding `Contracts\OperatorAssurance`. Without a binding it is
+  refused. Anything logging in with the old password stops working.
+- A CLI run that is interactive and finds the resource asks what to do. Scripts should pass
+  `--no-interaction` (the configured policy applies) or `--on-existing`.
+
+### Notifications are queued and can use Slack or an inbox
+
+- `notifications.queue` was always `true` and never read; notifications were sent in the request.
+  **They are now queued**, so a queue worker must run for them to go out. Set
+  `notifications.queue` to `false` to keep sending in the request, or to a queue name.
+- `notifications.quiet_hours` is read: routine notifications are held until the window ends.
+- `alerts.channel` is read: Warning and Critical events go out on it rather than on their
+  category's channels. The default, `mail`, is what they used before.
+- New: `notifications.channels`, `notifications.slack.route` (install
+  `laravel/slack-notification-channel`) and `notifications.database.users`.
+
+### The REST API reads the keys its config documents
+
+- The API now authenticates with **`api.auth`** and mounts under **`api.path`**. Until now it read
+  `api.guard` and `api.prefix`, which the shipped config never defined, so `sanctum` and
+  `api/db-console` always applied. If you set `DB_CONSOLE_API_AUTH` or `DB_CONSOLE_API_PATH`, they
+  take effect now.
+- If your published config has `api.guard` or `api.prefix` and no `api.auth` / `api.path`, those
+  are still honoured, with a deprecation notice. Rename them. If it has both, the documented key
+  wins.
+- **`api.rate_limit` is enforced** (default `60,1`: 60 requests a minute per caller). Set it to `''`
+  to switch it off.
+- `api.require_https` and `api.confirm_destructive` are read; both default to `true`, as the API
+  behaved before.
+### Operator assurance is required in production
+
+**In production, db-console now refuses writes from an operator without a second factor, and the
+dangerous operations without a recent confirmation**, as your application reports them through
+`Contracts\OperatorAssurance`. Until you bind one, `NullOperatorAssurance` reports none, so those
+operations are refused. Before deploying:
+
+1. Bind your implementation (see the *Implement OperatorAssurance* recipe; Fortify and
+   laranail/authkit both work with a few lines in your application).
+2. Run `doctor`: `security:assurance-binding` names your class, and `security:owners` warns when
+   no global Owner has a second factor.
+3. To stage it, set `DB_CONSOLE_ASSURANCE_ENFORCE=report` first: nothing is refused, and each
+   shortfall is audited and alerted. Switch to `require` when they stop.
+4. `DB_CONSOLE_ASSURANCE_ENFORCE=off` restores the old behaviour; `doctor` errors on that in
+   production.
+
+An API client that is refused gets 403 with `"code": "assurance_required"` and a `missing` list.
+`secrets:rotate` run by an authenticated operator needs the same assurance; from the shell with no
+operator it runs as before. Run the migrations: `security_bypasses` is new.
+
+### Revoking the last Owner is refused
+
+`role:revoke --role=owner --scope=global` fails for the last global Owner, and, while enforcement
+is on, for the last one with a second factor. Assign another Owner first.
 ### SSH tunnels
 
 Nothing changes unless a server's `ssh.enabled` is set. Two things to know when it is:
