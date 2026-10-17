@@ -43,9 +43,21 @@ Revoking removes the Postgres privilege a set maps to, even when another abstrac
 
 Charset names from MySQL are mapped to encodings: `utf8mb4` and `utf8mb3` to `UTF8`, `ascii` to `SQL_ASCII`. The collation is not used.
 
-`DROP DATABASE` runs `WITH (FORCE)`, which ends the sessions the admin may terminate. Dropping a role first takes membership in it, then runs `REASSIGN OWNED BY ... TO CURRENT_USER` and `DROP OWNED BY ...` in every database the role has objects or privileges in, read from `pg_shdepend`. The emptiness check before a drop or a wizard rollback counts relations inside the database itself.
+A grant runs in one transaction on the target database, followed by a check of the role's effective privileges (`has_*_privilege`). Postgres answers a `GRANT` the admin holds no grant option for with a warning, grants what it can and succeeds; the check catches that, rolls the whole grant back and throws `GrantNotApplied` naming each missing privilege. It counts privileges held through PUBLIC or ownership, so on PostgreSQL 14 and earlier, where PUBLIC holds `CREATE` on schema `public`, a role always has it.
 
-These paths are tested against PostgreSQL 18 by the `live-pgsql` CI job, as an admin with only `CREATEDB CREATEROLE`.
+`DROP DATABASE` runs `WITH (FORCE)`, which ends the sessions the admin may terminate. `OwnershipReleasingDrop` drops a role in five steps:
+
+1. Read the databases the role has objects or privileges in from `pg_shdepend`, and refuse with `InsufficientPrivilege` before changing anything if the admin cannot connect to one.
+2. Take membership in the role (`GRANT role TO CURRENT_USER`), unless the admin already has its privileges. `REASSIGN OWNED` and `DROP OWNED` need them, and on PostgreSQL 16 and later a `CREATEROLE` admin does not inherit the roles it creates.
+3. `REASSIGN OWNED BY ... TO CURRENT_USER` and `DROP OWNED BY ...` inside each of those databases, one transaction each, committed together.
+4. The same on the admin's own database, then `DROP ROLE`, in one transaction. It cannot share step 3's transactions: `DROP ROLE` sees dependencies another session has not committed.
+5. On a failure in step 3 or 4, give the membership back; if that fails too, throw `RollbackFailed`.
+
+Only a failure in step 4 after step 3 committed leaves a partial result: the role's objects in the other databases then belong to the admin.
+
+The emptiness check before a drop or a wizard rollback counts relations inside the database itself.
+
+These paths are tested against PostgreSQL 14 to 18, and the next major's release candidate, by the `live-pgsql` CI job, as an admin with only `CREATEDB CREATEROLE`.
 
 ---
 

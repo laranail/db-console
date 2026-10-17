@@ -36,6 +36,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
     case OperationFailed = 'operation.failed';
     case RollbackFailed = 'rollback.failed';
     case BackupFailed = 'backup.failed';
+    case GrantNotApplied = 'grant.not_applied';
 
     // Authorization
     case NotAuthorized = 'not_authorized';
@@ -68,6 +69,7 @@ enum ExceptionCode: string implements Enumerator, Translatable
             self::ServerUnreachable,
             self::AuthenticationFailed,
             self::InsufficientPrivilege,
+            self::GrantNotApplied,
             self::OperationFailed => 502,
             default               => 500,
         };

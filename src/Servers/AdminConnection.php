@@ -75,6 +75,48 @@ final readonly class AdminConnection
     }
 
     /**
+     * Rows from a read statement an engine produced, on this connection.
+     * Same scope rule as runStatement().
+     *
+     * @param array<string, mixed> $context
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function selectStatement(Statement $statement, array $context = []): array
+    {
+        $this->assertRunsHere($statement);
+
+        return $this->select($statement->sql, $context);
+    }
+
+    /**
+     * Open a transaction. Only meaningful on an engine with transactional
+     * DDL (Postgres): MySQL commits implicitly on every DDL statement.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function beginTransaction(array $context = []): void
+    {
+        $this->translated(fn () => $this->connection->beginTransaction(), $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function commit(array $context = []): void
+    {
+        $this->translated(fn () => $this->connection->commit(), $context);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function rollBack(array $context = []): void
+    {
+        $this->translated(fn () => $this->connection->rollBack(), $context);
+    }
+
+    /**
      * The database this connection is on.
      */
     public function database(): string
@@ -133,6 +175,18 @@ final readonly class AdminConnection
     public function underlying(): ConnectionInterface
     {
         return $this->connection;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function translated(callable $operation, array $context): void
+    {
+        try {
+            $operation();
+        } catch (Throwable $e) {
+            throw ExceptionTranslator::from($e, [...$context, 'server' => $this->server]);
+        }
     }
 
     private function assertRunsHere(Statement $statement): void
