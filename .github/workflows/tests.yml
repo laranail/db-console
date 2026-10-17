@@ -203,14 +203,24 @@ jobs:
             # <<< minimal-admin
             if [ "${{ matrix.engine }}" = mysql ]; then
               echo "SET PERSIST sql_require_primary_key = ON;"
-              # GTID on, as on DigitalOcean: mysqldump then needs --set-gtid-purged=OFF
-              # or RELOAD/FLUSH_TABLES, which the minimal admin does not hold.
-              echo "SET PERSIST enforce_gtid_consistency = ON;"
-              echo "SET PERSIST gtid_mode = OFF_PERMISSIVE;"
-              echo "SET PERSIST gtid_mode = ON_PERMISSIVE;"
-              echo "SET PERSIST gtid_mode = ON;"
             fi
           } | docker exec -i "${{ job.services.database.id }}" ${{ matrix.client }} -uroot -psecret
+      # GTID on, as on DigitalOcean: mysqldump then needs --set-gtid-purged=OFF
+      # or RELOAD/FLUSH_TABLES, which the minimal admin does not hold. MySQL
+      # changes gtid_mode one step at a time, from wherever the image starts.
+      - name: Turn GTID on (MySQL)
+        if: matrix.engine == 'mysql'
+        run: |
+          sql() { docker exec -i "${{ job.services.database.id }}" mysql -N -uroot -psecret -e "$1"; }
+          sql "SET PERSIST enforce_gtid_consistency = ON"
+          steps="OFF OFF_PERMISSIVE ON_PERMISSIVE ON"
+          current=$(sql "SELECT @@GLOBAL.gtid_mode")
+          past=no
+          for mode in $steps; do
+            if [ "$past" = yes ]; then sql "SET PERSIST gtid_mode = $mode"; fi
+            if [ "$mode" = "$current" ]; then past=yes; fi
+          done
+          sql "SELECT @@GLOBAL.gtid_mode, @@GLOBAL.enforce_gtid_consistency"
       # Backup-before-drop shells out to the dump client, so each leg needs the
       # client of its own family: the runner's MySQL client, or MariaDB's.
       - name: Install the dump client

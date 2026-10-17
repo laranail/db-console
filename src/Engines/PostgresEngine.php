@@ -84,7 +84,7 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
      * CREATEROLE admin may grant any non-superuser role without ADMIN OPTION;
      * from 16 it needs ADMIN OPTION, which it holds on the roles it created.
      */
-    private const string CAN_ADMIN = "(NOT r.rolsuper AND (pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')"
+    private const string CAN_ADMIN = "(NOT r.rolsuper AND r.rolname !~ '^pg_' AND (pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')"
         . " OR (current_setting('server_version_num')::int < 160000"
         . ' AND (SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = current_user))))';
 
@@ -426,7 +426,7 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
             Statement::plain(
                 "SELECT r.rolname, pg_has_role(r.oid, 'USAGE') AS held, " . self::CAN_ADMIN . ' AS can_admin'
                 . ' FROM pg_catalog.pg_roles r'
-                . " WHERE NOT r.rolsuper AND r.rolname <> current_user AND {$who}"
+                . " WHERE NOT r.rolsuper AND r.rolname !~ '^pg_' AND r.rolname <> current_user AND {$who}"
                 . ' ORDER BY r.rolname',
             )->inDatabase($db),
         );
@@ -618,7 +618,7 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
 
         return 'DO $writers$ DECLARE w name; BEGIN FOR w IN SELECT r.rolname FROM pg_catalog.pg_roles r'
             . ' WHERE r.rolname NOT IN (current_user, ' . Quoter::for($this->type())->literal($grantee->value) . ')'
-            . " AND NOT r.rolsuper AND pg_has_role(r.oid, 'USAGE')"
+            . " AND NOT r.rolsuper AND r.rolname !~ '^pg_' AND pg_has_role(r.oid, 'USAGE')"
             . ' AND (EXISTS (SELECT 1 FROM pg_catalog.pg_namespace n WHERE ' . self::USER_SCHEMA
             . ' AND (n.nspowner = r.oid OR EXISTS (SELECT 1 FROM aclexplode(n.nspacl) a'
             . " WHERE a.grantee = r.oid AND a.privilege_type = 'CREATE')))"

@@ -215,7 +215,8 @@ it('covers what other roles create later, through their own default privileges',
         ->and($sql)->toContain('NOT r.rolsuper')
         ->and($sql)->toContain('aclexplode(n.nspacl)')
         ->and($sql)->toContain("a.privilege_type = 'CREATE'")
-        ->and($sql)->toContain('c.relowner = r.oid');
+        ->and($sql)->toContain('c.relowner = r.oid')
+        ->and($sql)->toContain("r.rolname !~ '^pg_'");
 });
 
 // The other direction: a writer granted after the readers. The admin's own
@@ -333,6 +334,10 @@ it('lists the roles a grant has to act as, inside the target database', function
         ->and($sql)->toContain("pg_has_role(r.oid, 'USAGE') AS held")
         ->and($sql)->toContain("pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')")
         ->and($sql)->toContain('NOT r.rolsuper')
+        // PG15+ public belongs to pg_database_owner, a predefined role that
+        // cannot have explicit members: before PG16 a CREATEROLE admin looked
+        // able to take it, and the GRANT failed.
+        ->and($sql)->toContain("r.rolname !~ '^pg_'")
         ->and($sql)->not->toContain("r.rolname = 'report_user'")
         // a writer's own default privileges are set FOR ROLE it, which needs it
         ->and($writer)->toContain("r.rolname = 'app'");
