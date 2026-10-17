@@ -5,7 +5,9 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Storage;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
@@ -16,12 +18,15 @@ use Simtabi\Laranail\DBConsole\Enums\Privilege;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
+use Simtabi\Laranail\DBConsole\Events\DatabaseBackedUp;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DbTools\Providers\DbToolsServiceProvider;
+use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
 
 /*
  * Against a real MySQL or MariaDB: the `live-mysql` job in
@@ -365,6 +370,29 @@ it('reports emptiness from the admin connection, so a rollback drops only what i
         ->and(liveMyDatabaseCount($used))->toBe(1);
 });
 
+// Before it counted only information_schema.TABLES, so a database holding a
+// stored procedure or an event alone read as empty, and a wizard rollback
+// dropped it along with them.
+it('does not call a database empty when it holds only a routine or an event', function (): void {
+    $routine = liveMyName('routine');
+    $event = liveMyName('event');
+    $this->cleanup = [['database', $routine, null], ['database', $event, null]];
+    $databases = app(DatabaseManager::class);
+
+    $databases->create('live_mysql', new DbName($routine), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    $databases->create('live_mysql', new DbName($event), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    liveMyAs($routine)->unprepared('CREATE PROCEDURE ping() SELECT 1');
+    liveMyAs($event)->unprepared('CREATE EVENT tick ON SCHEDULE EVERY 1 DAY DISABLE DO SELECT 1');
+    liveMyClose($routine);
+    liveMyClose($event);
+
+    expect($databases->isEmpty('live_mysql', new DbName($routine)))->toBeFalse()
+        ->and($databases->isEmpty('live_mysql', new DbName($event)))->toBeFalse();
+
+    $databases->rollbackCreatedDatabase('live_mysql', new DbName($routine));
+    expect(liveMyDatabaseCount($routine))->toBe(1);
+});
+
 it('rolls the wizard back without dropping an account it did not create', function (): void {
     $db = liveMyName('rolled');
     $user = liveMyName('existing');
@@ -414,4 +442,49 @@ it('rolls the wizard back without dropping a database it did not create', functi
 
     expect(liveMyDatabaseCount($db))->toBe(1)
         ->and(liveMyAccountCount($user))->toBe(0);
+});
+
+// Backup-before-drop runs mysqldump as the recommended admin, never root, on
+// a server set up like a managed one (GTID on, primary keys required). It was
+// never exercised against a real server, so whether that admin's privileges
+// were enough was a guess.
+it('backs up a database before dropping it, as the recommended admin, and the dump restores', function (): void {
+    $db = liveMyName('backed');
+    $restored = liveMyName('restored');
+    $this->cleanup = [['database', $db, null], ['database', $restored, null]];
+    config()->set('laranail.db-console.backup.enabled', true);
+    config()->set('laranail.db-console.backup.before_drop', true);
+    // An application discovers db-tools' provider; Testbench registers only
+    // the ones TestCase names.
+    $this->app->register(DbToolsServiceProvider::class);
+    Event::fake([DatabaseBackedUp::class]);
+
+    $databases = app(DatabaseManager::class);
+    $databases->create('live_mysql', new DbName($db), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    liveMyAs($db)->statement('CREATE TABLE ledger (id int NOT NULL PRIMARY KEY, amount int NOT NULL)');
+    liveMyAs($db)->insert('INSERT INTO ledger (id, amount) VALUES (1, 42)');
+    liveMyClose($db);
+
+    $databases->drop('live_mysql', new DbName($db));
+
+    $path = null;
+    Event::assertDispatched(DatabaseBackedUp::class, function (DatabaseBackedUp $event) use (&$path): bool {
+        $path = $event->context['path'] ?? null;
+
+        return is_string($path);
+    });
+    expect(liveMyDatabaseCount($db))->toBe(0);
+
+    $file = Storage::disk(config('laranail.db-console.backup.disk', 'local'))->path((string) $path);
+    expect(is_file($file))->toBeTrue("the backup should exist at {$file}")
+        ->and((string) file_get_contents($file))->toContain('CREATE TABLE `ledger`')
+        ->and((string) file_get_contents($file))->toContain('42');
+
+    // The dump restores, through db-tools, as the same admin.
+    $databases->create('live_mysql', new DbName($restored), new Charset('utf8mb4', 'utf8mb4_unicode_ci'));
+    config()->set('database.connections.live_mysql_restore', liveMyConnection($restored, liveMy('ADMIN_USER'), liveMy('ADMIN_PASSWORD')));
+    app(BackupManagerInterface::class)->restore($file, 'live_mysql_restore');
+
+    expect((int) liveMyAs($restored)->scalar('SELECT amount FROM ledger WHERE id = 1'))->toBe(42);
+    liveMyClose($restored);
 });

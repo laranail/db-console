@@ -414,7 +414,8 @@ it('shows the grants a role holds inside the database it was provisioned into', 
     expect($grants)->toContain("database {$db} {$db} CONNECT")
         ->toContain("table {$db} public.reference_data SELECT")
         ->toContain("table {$db} public.reference_data INSERT")
-        ->toContain("default privileges {$db} tables in schema public SELECT");
+        // Database-wide since grants stopped setting defaults per schema.
+        ->toContain("default privileges {$db} tables SELECT");
 
     // From PG15 schema public belongs to the database owner, the admin, so
     // the schema grant lands. Before it the schema is the bootstrap
@@ -516,4 +517,112 @@ it('passes the restricted admin in the doctor and fails a superuser', function (
     ]);
 
     expect($findings('live_pgsql_super')['server:live_pgsql_super:admin'])->toBe(Severity::Error);
+});
+
+it('grants on schemas other than public, including ones created after the grant', function (): void {
+    $db = liveName('multi');
+    $reader = liveName('reader');
+    $this->cleanup = [['role', $reader], ['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+    livePgAs($db)->statement('CREATE SCHEMA reporting');
+    livePgAs($db)->statement('CREATE TABLE reporting.daily (n int)');
+    livePgAs($db)->insert('INSERT INTO reporting.daily (n) VALUES (1)');
+    livePgClose($db);
+
+    app(AccountManager::class)->create('live_pgsql', new Username($reader), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    app(PrivilegeManager::class)->grant('live_pgsql', new Username($reader), new Host('%'), new DbName($db), PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly));
+
+    // A schema and a table the admin creates after the grant: covered by the
+    // database-wide defaults, schemas included.
+    livePgAs($db)->statement('CREATE SCHEMA billing');
+    livePgAs($db)->statement('CREATE TABLE billing.invoices (n int)');
+    livePgAs($db)->insert('INSERT INTO billing.invoices (n) VALUES (2)');
+    livePgClose($db);
+
+    $as = livePgAs($db, $reader);
+    expect((int) $as->scalar('SELECT n FROM reporting.daily'))->toBe(1)
+        ->and((int) $as->scalar('SELECT n FROM billing.invoices'))->toBe(2);
+    livePgClose($db, $reader);
+});
+
+it('lets a reader see the tables a writer creates later, whichever was granted first', function (): void {
+    $db = liveName('shared');
+    $writer = liveName('writer');
+    $early = liveName('early');
+    $late = liveName('late');
+    $this->cleanup = [['role', $early], ['role', $late], ['role', $writer], ['database', $db]];
+    $accounts = app(AccountManager::class);
+    $privileges = app(PrivilegeManager::class);
+    $read = PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly);
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+
+    // A reader granted before any writer exists.
+    $accounts->create('live_pgsql', new Username($early), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($early), new Host('%'), new DbName($db), $read);
+
+    // The application's own role, which runs the migrations.
+    $accounts->create('live_pgsql', new Username($writer), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($writer), new Host('%'), new DbName($db), PrivilegeSet::fromPreset(PrivilegePreset::AppStandard));
+    livePgAs($db, $writer)->statement('CREATE TABLE orders (n int)');
+    livePgAs($db, $writer)->insert('INSERT INTO orders (n) VALUES (3)');
+    livePgClose($db, $writer);
+
+    // A reader granted after the writer has created tables.
+    $accounts->create('live_pgsql', new Username($late), new Host('%'), new Password(LIVE_PG_PASSWORD));
+    $privileges->grant('live_pgsql', new Username($late), new Host('%'), new DbName($db), $read);
+
+    // The next migration.
+    livePgAs($db, $writer)->statement('CREATE TABLE invoices (n int)');
+    livePgAs($db, $writer)->insert('INSERT INTO invoices (n) VALUES (4)');
+    livePgClose($db, $writer);
+
+    foreach ([$early, $late] as $reader) {
+        $as = livePgAs($db, $reader);
+        expect((int) $as->scalar('SELECT n FROM orders'))->toBe(3, "{$reader} reads orders")
+            ->and((int) $as->scalar('SELECT n FROM invoices'))->toBe(4, "{$reader} reads invoices");
+        livePgClose($db, $reader);
+    }
+
+    // The grants acted as the writer and gave the membership back.
+    expect(livePgScalar("SELECT pg_has_role(?, 'USAGE')", [$writer]))->toBeFalse();
+});
+
+// WITH (FORCE) ends only sessions the admin may end. An application role's
+// session used to make the drop fail: a CREATEROLE admin on PG16+ does not
+// inherit the roles it creates, so it could not terminate them.
+it('ends an application role\'s sessions to drop its database, and gives the membership back', function (): void {
+    $db = liveName('busyapp');
+    $role = liveName('app');
+    $this->cleanup = [['role', $role], ['database', $db]];
+
+    app(ProvisioningWizard::class)->provision('live_pgsql', new DbName($db), new Charset('utf8'), new Username($role), new Host('%'), PrivilegeSet::fromPreset(PrivilegePreset::ReadWrite), new Password(LIVE_PG_PASSWORD));
+
+    $session = livePgAs($db, $role);
+    expect((int) $session->scalar('SELECT 1'))->toBe(1);
+
+    app(DatabaseManager::class)->drop('live_pgsql', new DbName($db));
+    livePgClose($db, $role);
+
+    expect((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(0)
+        ->and(livePgScalar("SELECT pg_has_role(?, 'USAGE')", [$role]))->toBeFalse();
+});
+
+it('refuses up front to drop a database a superuser has a session on', function (): void {
+    $db = liveName('superbusy');
+    $this->cleanup = [['database', $db]];
+
+    app(DatabaseManager::class)->create('live_pgsql', new DbName($db), new Charset('utf8'));
+    $super = livePgSuper($db);
+    expect((int) $super->scalar('SELECT 1'))->toBe(1);
+
+    try {
+        expect(fn () => app(DatabaseManager::class)->drop('live_pgsql', new DbName($db)))
+            ->toThrow(InsufficientPrivilege::class, livePg('SUPERUSER'));
+
+        expect((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$db]))->toBe(1);
+    } finally {
+        DB::purge('live_pg_super_' . $db);
+    }
 });

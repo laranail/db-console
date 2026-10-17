@@ -201,8 +201,36 @@ jobs:
             echo "GRANT CREATE USER ON *.* TO 'db_console_admin'@'%';"
             echo "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES, CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, EVENT, TRIGGER ON *.* TO 'db_console_admin'@'%' WITH GRANT OPTION;"
             # <<< minimal-admin
-            if [ "${{ matrix.engine }}" = mysql ]; then echo "SET PERSIST sql_require_primary_key = ON;"; fi
+            if [ "${{ matrix.engine }}" = mysql ]; then
+              echo "SET PERSIST sql_require_primary_key = ON;"
+            fi
           } | docker exec -i "${{ job.services.database.id }}" ${{ matrix.client }} -uroot -psecret
+      # GTID on, as on DigitalOcean: mysqldump then needs --set-gtid-purged=OFF
+      # or RELOAD/FLUSH_TABLES, which the minimal admin does not hold. MySQL
+      # changes gtid_mode one step at a time, from wherever the image starts.
+      - name: Turn GTID on (MySQL)
+        if: matrix.engine == 'mysql'
+        run: |
+          sql() { docker exec -i "${{ job.services.database.id }}" mysql -N -uroot -psecret -e "$1"; }
+          sql "SET PERSIST enforce_gtid_consistency = ON"
+          steps="OFF OFF_PERMISSIVE ON_PERMISSIVE ON"
+          current=$(sql "SELECT @@GLOBAL.gtid_mode")
+          past=no
+          for mode in $steps; do
+            if [ "$past" = yes ]; then sql "SET PERSIST gtid_mode = $mode"; fi
+            if [ "$mode" = "$current" ]; then past=yes; fi
+          done
+          sql "SELECT @@GLOBAL.gtid_mode, @@GLOBAL.enforce_gtid_consistency"
+      # Backup-before-drop shells out to the dump client, so each leg needs the
+      # client of its own family: the runner's MySQL client, or MariaDB's.
+      - name: Install the dump client
+        run: |
+          if [ "${{ matrix.engine }}" = mariadb ]; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq mariadb-client
+            mariadb-dump --version
+          else
+            mysqldump --version
+          fi
       - name: Live provisioning
         env:
           DB_CONSOLE_LIVE_MYSQL_ENGINE: ${{ matrix.engine }}

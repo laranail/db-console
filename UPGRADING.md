@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Postgres grants: every schema, other roles' future objects
+
+- **Grants now reach every user schema**, not only `public`. A role granted on a database whose
+  application keeps tables in another schema gets them now; one that relied on not seeing them does
+  not stay that way.
+- **Default privileges are database-wide.** New grants set them without `IN SCHEMA`; revokes clear
+  both the new and the old per-schema entries.
+- **During a grant, revoke or drop the admin briefly holds membership in the roles it acts as** and
+  gives it back afterwards. A role it cannot take (no ADMIN OPTION) is listed in the result's
+  `not_covered` instead of failing the grant.
+- **`DatabaseManager::drop()` refuses with `InsufficientPrivilege`** when a superuser, or a role the
+  admin cannot act as, has a session on the database. Before, the forced drop failed after the
+  backup had run.
+- **New last constructor arguments**, resolved from the container as before: `DatabaseManager` and
+  `PrivilegeManager` take a `RoleMembership`.
+- **Require `laranail/db-tools ^0.1.6`** for backups on managed servers.
+
+
 ### TLS is applied and measured
 
 The `tls` block on a server is now written into its admin connection, and

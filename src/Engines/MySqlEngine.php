@@ -26,7 +26,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * MySQL scopes accounts by host: 'user'@'host' is the account identity, so
  * every account operation takes both a Username and a Host.
  */
-class MySqlEngine implements Engine, HostScopingEngine
+class MySqlEngine implements EmptinessProbingEngine, Engine, HostScopingEngine
 {
     /**
      * Abstract Privilege → MySQL privilege keyword. Translation lives in one
@@ -235,6 +235,30 @@ class MySqlEngine implements Engine, HostScopingEngine
         }
 
         return $match[1];
+    }
+
+    /**
+     * Every kind of object a database can hold, from information_schema,
+     * which the admin reads from any database: tables and views (TABLES),
+     * stored procedures and functions, events and triggers. Counting TABLES
+     * alone read a database holding only a routine or an event as empty.
+     */
+    public function countUserObjects(DbName $db): StatementList
+    {
+        $schema = Quoter::for($this->type())->literal($db->value);
+        $counts = [
+            'TABLES'   => 'TABLE_SCHEMA',
+            'ROUTINES' => 'ROUTINE_SCHEMA',
+            'EVENTS'   => 'EVENT_SCHEMA',
+            'TRIGGERS' => 'TRIGGER_SCHEMA',
+        ];
+
+        $parts = [];
+        foreach ($counts as $table => $column) {
+            $parts[] = "(SELECT COUNT(*) FROM information_schema.{$table} WHERE {$column} = {$schema})";
+        }
+
+        return new StatementList(Statement::plain('SELECT ' . implode(' + ', $parts)));
     }
 
     /**

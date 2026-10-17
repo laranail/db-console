@@ -12,8 +12,10 @@ use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Engines\PostgresEngine;
+use Simtabi\Laranail\DBConsole\Engines\SessionEndingEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownPrivilege;
 use Simtabi\Laranail\DBConsole\Engines\GrantVerifyingEngine;
+use Simtabi\Laranail\DBConsole\Engines\OwnerDelegatingEngine;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
@@ -138,25 +140,106 @@ it('finds the databases a role has objects or privileges in from the shared cata
 // was the admin's, so the target database received nothing but CONNECT.
 // Every statement, CONNECT included, runs on one connection to the target so
 // the whole grant and its verification share a transaction.
-it('runs schema, table and default-privilege grants inside the target database', function () use ($engine): void {
-    $sql = pgScoped($engine->grant(
+/**
+ * The statements of a list as one string, for asserting on clauses inside
+ * the DO blocks a grant now emits.
+ */
+function pgAll(iterable $list): string
+{
+    return implode("\n", pgSql($list));
+}
+
+it('runs every statement of a grant inside the target database', function () use ($engine): void {
+    $statements = $engine->grant(
+        PrivilegeSet::fromPreset(PrivilegePreset::ReadWrite),
+        new DbName('analytics'),
+        new Username('report_user'),
+        new Host('%'),
+    )->all();
+
+    foreach ($statements as $statement) {
+        expect($statement->database)->toBe('analytics');
+    }
+
+    expect($statements[0]->sql)->toBe('GRANT CONNECT ON DATABASE "analytics" TO "report_user"')
+        ->and(pgAll($statements))->not->toContain('SUPERUSER')
+        ->and(pgAll($statements))->not->toContain('*.*');
+});
+
+// Every user schema the admin can grant on, not only public: an app that keeps
+// its tables in `reporting` or `billing` got nothing before.
+it('grants on every user schema the admin can grant on, not only public', function () use ($engine): void {
+    $sql = pgAll($engine->grant(
         PrivilegeSet::fromPreset(PrivilegePreset::ReadWrite),
         new DbName('analytics'),
         new Username('report_user'),
         new Host('%'),
     ));
 
-    expect($sql)->toBe([
-        '[analytics] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
-        '[analytics] GRANT USAGE ON SCHEMA public TO "report_user"',
-        '[analytics] GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "report_user"',
-        '[analytics] GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO "report_user"',
-        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "report_user"',
-        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, USAGE ON SEQUENCES TO "report_user"',
-    ]);
+    expect($sql)->toContain("n.nspname !~ '^pg_' AND n.nspname <> 'information_schema'")
+        ->and($sql)->toContain("(n.nspname = 'public' OR pg_has_role(n.nspowner, 'USAGE'))")
+        ->and($sql)->toContain("EXECUTE format('GRANT USAGE ON SCHEMA %I TO \"report_user\"', s)")
+        ->and($sql)->toContain("EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO \"report_user\"', s)")
+        ->and($sql)->toContain("EXECUTE format('GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA %I TO \"report_user\"', s)")
+        ->and($sql)->not->toContain('IN SCHEMA public');
+});
 
-    expect(implode(' ', $sql))->not->toContain('SUPERUSER')
-        ->and(implode(' ', $sql))->not->toContain('*.*');
+// Database-wide defaults (no IN SCHEMA) cover schemas created later too, and
+// ON SCHEMAS gives the role USAGE on them.
+it('sets database-wide default privileges, including on schemas created later', function () use ($engine): void {
+    $sql = pgSql($engine->grant(
+        PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly),
+        new DbName('analytics'),
+        new Username('report_user'),
+        new Host('%'),
+    ));
+
+    expect($sql)->toContain('ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO "report_user"')
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES GRANT SELECT ON SEQUENCES TO "report_user"')
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO "report_user"');
+});
+
+// A default privilege belongs to the role that creates the object. Tables the
+// application's own role creates in a later migration were invisible to a
+// reader granted through db-console.
+it('covers what other roles create later, through their own default privileges', function () use ($engine): void {
+    $sql = pgAll($engine->grant(
+        PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly),
+        new DbName('analytics'),
+        new Username('report_user'),
+        new Host('%'),
+    ));
+
+    expect($sql)->toContain("EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I GRANT SELECT ON TABLES TO \"report_user\"', w)")
+        ->and($sql)->toContain("r.rolname NOT IN (current_user, 'report_user')")
+        ->and($sql)->toContain('NOT r.rolsuper')
+        ->and($sql)->toContain('aclexplode(n.nspacl)')
+        ->and($sql)->toContain("a.privilege_type = 'CREATE'")
+        ->and($sql)->toContain('c.relowner = r.oid')
+        ->and($sql)->toContain("r.rolname !~ '^pg_'");
+});
+
+// The other direction: a writer granted after the readers. The admin's own
+// database-wide defaults list every role db-console granted here, so the new
+// writer's future objects get the same.
+it('gives a new writer\'s future objects to the roles already granted here', function () use ($engine): void {
+    $writer = pgAll($engine->grant(
+        PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
+        new DbName('shop_prod'),
+        new Username('app'),
+        new Host('%'),
+    ));
+    $reader = pgAll($engine->grant(
+        PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly),
+        new DbName('shop_prod'),
+        new Username('report_user'),
+        new Host('%'),
+    ));
+
+    expect($writer)->toContain('pg_catalog.pg_default_acl')
+        ->and($writer)->toContain('acl.defaclnamespace = 0')
+        ->and($writer)->toContain("EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE \"app\" GRANT %s ON %s TO %s'")
+        ->and($reader)->not->toContain('pg_catalog.pg_default_acl');
 });
 
 // PG15 revoked CREATE on schema public from PUBLIC, so an app role that runs
@@ -164,73 +247,100 @@ it('runs schema, table and default-privilege grants inside the target database',
 // privilege, EXECUTE a function one, TEMPORARY a database one: none of them
 // may appear in a table grant, where Postgres rejects them.
 it('puts each privilege on the object Postgres grants it on', function () use ($engine): void {
-    $sql = pgScoped($engine->grant(
+    $sql = pgAll($engine->grant(
         PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
         new DbName('shop_prod'),
         new Username('app'),
         new Host('%'),
     ));
 
-    expect($sql)->toBe([
-        '[shop_prod] GRANT CONNECT, TEMPORARY ON DATABASE "shop_prod" TO "app"',
-        '[shop_prod] GRANT USAGE, CREATE ON SCHEMA public TO "app"',
-        '[shop_prod] GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "app"',
-        '[shop_prod] GRANT SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public TO "app"',
-        '[shop_prod] GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, USAGE ON SEQUENCES TO "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO "app"',
-    ]);
+    expect($sql)->toContain('GRANT CONNECT, TEMPORARY ON DATABASE "shop_prod" TO "app"')
+        ->and($sql)->toContain("EXECUTE format('GRANT USAGE, CREATE ON SCHEMA %I TO \"app\"', s)")
+        ->and($sql)->toContain("EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I TO \"app\"', s)")
+        ->and($sql)->toContain("EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA %I TO \"app\"', s)")
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO "app"')
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES GRANT USAGE, CREATE ON SCHEMAS TO "app"')
+        ->and($sql)->not->toMatch("/GRANT [^']*(CREATE|EXECUTE|TEMPORARY)[^']* ON ALL TABLES/");
 });
 
 it('grants a read-only set nothing beyond SELECT', function () use ($engine): void {
-    $sql = pgScoped($engine->grant(
+    $sql = pgAll($engine->grant(
         PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly),
         new DbName('analytics'),
         new Username('report_user'),
         new Host('%'),
     ));
 
-    expect($sql)->toBe([
-        '[analytics] GRANT CONNECT ON DATABASE "analytics" TO "report_user"',
-        '[analytics] GRANT USAGE ON SCHEMA public TO "report_user"',
-        '[analytics] GRANT SELECT ON ALL TABLES IN SCHEMA public TO "report_user"',
-        '[analytics] GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO "report_user"',
-        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO "report_user"',
-        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON SEQUENCES TO "report_user"',
-    ]);
+    expect($sql)->not->toMatch('/\b(INSERT|UPDATE|DELETE|TRUNCATE|TEMPORARY)\b|GRANT EXECUTE/')
+        ->and($sql)->not->toContain('USAGE, CREATE');
 });
 
-it('revokes inside the target database, including the default privileges', function () use ($engine): void {
-    expect(pgScoped($engine->revoke(
+it('revokes inside the target database, on every schema, including default privileges', function () use ($engine): void {
+    $statements = $engine->revoke(
         PrivilegeSet::fromPreset(PrivilegePreset::AppStandard),
         new DbName('shop_prod'),
         new Username('app'),
         new Host('%'),
-    )))->toBe([
-        '[shop_prod] REVOKE TEMPORARY ON DATABASE "shop_prod" FROM "app"',
-        '[shop_prod] REVOKE CREATE ON SCHEMA public FROM "app"',
-        '[shop_prod] REVOKE SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM "app"',
-        '[shop_prod] REVOKE SELECT, USAGE ON ALL SEQUENCES IN SCHEMA public FROM "app"',
-        '[shop_prod] REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT, USAGE ON SEQUENCES FROM "app"',
-        '[shop_prod] ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM "app"',
-    ]);
+    )->all();
+
+    foreach ($statements as $statement) {
+        expect($statement->database)->toBe('shop_prod');
+    }
+
+    $sql = pgAll($statements);
+    expect($sql)->toContain('REVOKE TEMPORARY ON DATABASE "shop_prod" FROM "app"')
+        ->and($sql)->toContain("EXECUTE format('REVOKE CREATE ON SCHEMA %I FROM \"app\"', s)")
+        ->and($sql)->toContain("EXECUTE format('REVOKE SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA %I FROM \"app\"', s)")
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM "app"')
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES REVOKE CREATE ON SCHEMAS FROM "app"')
+        // grants made before this release were per schema; clean those too
+        ->and($sql)->toContain("EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA %I REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM \"app\"', s)")
+        ->and($sql)->toContain("EXECUTE format('ALTER DEFAULT PRIVILEGES FOR ROLE %I REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM \"app\"', w)")
+        // CONNECT and schema USAGE stay: every set implies them
+        ->and($sql)->not->toContain('REVOKE CONNECT')
+        ->and($sql)->not->toContain('REVOKE USAGE ON SCHEMA');
 });
 
 // Fail closed: Postgres implements show_view as SELECT, so revoking show_view
 // has to remove SELECT, or the role keeps read access it was meant to lose.
 it('revokes the shared Postgres privilege when any privilege mapped to it is revoked', function () use ($engine): void {
-    expect(pgScoped($engine->revoke(
+    $sql = pgAll($engine->revoke(
         PrivilegeSet::custom(['show_view']),
         new DbName('analytics'),
         new Username('report_user'),
         new Host('%'),
-    )))->toBe([
-        '[analytics] REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM "report_user"',
-        '[analytics] ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT ON TABLES FROM "report_user"',
-    ]);
+    ));
+
+    expect($sql)->toContain("EXECUTE format('REVOKE SELECT ON ALL TABLES IN SCHEMA %I FROM \"report_user\"', s)")
+        ->and($sql)->toContain('ALTER DEFAULT PRIVILEGES REVOKE SELECT ON TABLES FROM "report_user"');
+});
+
+// Granting on an object another role owns needs that role's privileges. The
+// read lists the owners (and the roles that can create objects) the admin
+// would have to assume, whether it already holds them, and whether it can.
+it('lists the roles a grant has to act as, inside the target database', function () use ($engine): void {
+    expect($engine)->toBeInstanceOf(OwnerDelegatingEngine::class);
+
+    $reader = $engine->rolesToAssume(PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly), new DbName('shop_prod'), new Username('report_user'))->all();
+    $writer = pgSql($engine->rolesToAssume(PrivilegeSet::fromPreset(PrivilegePreset::AppStandard), new DbName('shop_prod'), new Username('app')))[0];
+
+    expect($reader)->toHaveCount(1)
+        ->and($reader[0]->database)->toBe('shop_prod');
+
+    $sql = $reader[0]->sql;
+    expect($sql)->toContain('n.nspowner = r.oid')
+        ->and($sql)->toContain('c.relowner = r.oid')
+        ->and($sql)->toContain('f.proowner = r.oid')
+        ->and($sql)->toContain("pg_has_role(r.oid, 'USAGE') AS held")
+        ->and($sql)->toContain("pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')")
+        ->and($sql)->toContain('NOT r.rolsuper')
+        // PG15+ public belongs to pg_database_owner, a predefined role that
+        // cannot have explicit members: before PG16 a CREATEROLE admin looked
+        // able to take it, and the GRANT failed.
+        ->and($sql)->toContain("r.rolname !~ '^pg_'")
+        ->and($sql)->not->toContain("r.rolname = 'report_user'")
+        // a writer's own default privileges are set FOR ROLE it, which needs it
+        ->and($writer)->toContain("r.rolname = 'app'");
 });
 
 it('classifies every allow-listed privilege, so every preset builds', function () use ($engine): void {
@@ -313,7 +423,8 @@ it('checks every privilege a grant was meant to give, inside the target database
     $sql = $statements[0]->sql;
     expect($sql)->toContain("has_database_privilege('app', 'shop_prod', p)")
         ->and($sql)->toContain("ARRAY['CONNECT', 'TEMPORARY']")
-        ->and($sql)->toContain("has_schema_privilege('app', 'public', p)")
+        ->and($sql)->toContain("has_schema_privilege('app', n.nspname, p)")
+        ->and($sql)->toContain("(n.nspname = 'public' OR pg_has_role(n.nspowner, 'USAGE'))")
         ->and($sql)->toContain("ARRAY['USAGE', 'CREATE']")
         ->and($sql)->toContain("has_table_privilege('app', c.oid, p)")
         ->and($sql)->toContain("ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']")
@@ -403,4 +514,22 @@ it('sends a SCRAM-SHA-256 verifier, never the password, when creating or rotatin
 
     // A fresh salt every time: two roles with one password store different verifiers.
     expect($create->sql)->not->toBe($engine->createAccount(new Username('report_user'), new Host('%'), new Password($password))->all()[0]->sql);
+});
+
+// DROP DATABASE ... WITH (FORCE) ends only the sessions the admin may end and
+// fails if any remain, so the drop first finds out whose sessions they are.
+it('reads which roles hold sessions on a database, and whether the admin can end them', function () use ($engine): void {
+    expect($engine)->toBeInstanceOf(SessionEndingEngine::class);
+
+    $statements = $engine->sessionRoles(new DbName('shop_prod'))->all();
+
+    expect($statements)->toHaveCount(1)
+        ->and($statements[0]->database)->toBeNull();   // pg_stat_activity is cluster-wide
+
+    $sql = $statements[0]->sql;
+    expect($sql)->toContain('pg_catalog.pg_stat_activity')
+        ->and($sql)->toContain("a.datname = 'shop_prod'")
+        ->and($sql)->toContain('a.pid <> pg_backend_pid()')
+        ->and($sql)->toContain("pg_has_role('pg_signal_backend', 'USAGE')")
+        ->and($sql)->toContain('r.rolsuper AS superuser');
 });
