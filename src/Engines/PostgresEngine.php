@@ -28,7 +28,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * on the database the session is connected to, so those statements are
  * scoped to the target database (Statement::inDatabase) and run there.
  */
-final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
+final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrantsEngine, EmptinessProbingEngine, Engine, GrantVerifyingEngine, OwnershipReleasingEngine
 {
     /**
      * Where each abstract privilege is granted in Postgres, by object kind.
@@ -397,6 +397,17 @@ final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbi
                 . " AND n.nspname NOT IN ('pg_catalog', 'information_schema')"
                 . " AND n.nspname NOT LIKE 'pg\\_%'",
             )->inDatabase($db),
+        );
+    }
+
+    public function adminProfile(): StatementList
+    {
+        return new StatementList(
+            Statement::plain(
+                'SELECT rolsuper AS is_superuser, rolcreatedb AS can_create_db, rolcreaterole AS can_create_role,'
+                . " current_setting('server_version_num')::int AS server_version_num"
+                . ' FROM pg_catalog.pg_roles WHERE rolname = current_user',
+            ),
         );
     }
 
