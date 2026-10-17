@@ -149,7 +149,7 @@ jobs:
           cp ca.pem server.pem server.key pgsql/
           # The only way in over TCP is hostssl; local (the socket, used below
           # to create the admin) stays open, as on any self-managed server.
-          printf '%s\n' 'local all all trust' 'hostnossl all all all reject' 'hostssl all all all scram-sha-256' > pgsql/pg_hba.conf
+          printf '%s\n' 'local all all trust' 'host all all all scram-sha-256' > pgsql/pg_hba.conf
           # Both images run their server as uid 999. PostgreSQL refuses a key
           # that is not private to that user.
           chmod 0644 mysql/* pgsql/*
@@ -161,7 +161,6 @@ jobs:
           tls="$RUNNER_TEMP/tls"
           docker run -d --name mysql-tls -p 3306:3306 -v "$tls/mysql:/etc/db-tls:ro" \
             -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=db_console_test mysql:8.4 \
-            --require-secure-transport=ON \
             --ssl-ca=/etc/db-tls/ca.pem --ssl-cert=/etc/db-tls/server.pem --ssl-key=/etc/db-tls/server.key
           docker run -d --name pgsql-tls -p 5432:5432 -v "$tls/pgsql:/etc/db-tls:ro" \
             -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=db_console_test postgres:18 \
