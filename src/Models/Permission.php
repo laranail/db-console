@@ -6,8 +6,8 @@ namespace Simtabi\Laranail\DBConsole\Models;
 
 /**
  * A console ability string (laranail-db-console.database.create, ...), seeded from the
- * fixed ConsolePermission set (builtin driver only). Rows seeded before 0.1 carry the
- * bare db-console.* form and still resolve through ConsolePermission::fromAbility().
+ * fixed ConsolePermission set (builtin driver only). Rows seeded before 0.1 under the bare
+ * db-console.* form are renamed by the 0001_01_01_001100 migration.
  *
  * @property string $name
  */

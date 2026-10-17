@@ -26,15 +26,15 @@ Gate::allows('laranail-db-console.database.drop', 'server:prod-mysql');
 
 `ConsolePermission::DatabaseView->ability()` returns the same string, and is the spelling to prefer in PHP.
 
-### Deprecated `db-console.*` abilities
+### The bare `db-console.*` abilities are gone
 
-The 21 abilities that existed then were named `db-console.<permission>` until 0.1. Each is still defined, as a deprecated alias that asks the gate for its scoped ability, so a host's own `Gate::define()` or before/after callback for `laranail-db-console.*` governs the old name too. The first check of each old name raises one `E_USER_DEPRECATED` notice naming its replacement. They are removed no earlier than the next minor after 0.1; rename them in host policies, `@can` directives and middleware.
+The abilities were named `db-console.<permission>` until 0.1, and kept as aliases of the scoped names through 0.1.1. They are no longer defined, so a host policy, `@can` directive or `can:` middleware still naming one is simply denied. Rename it to `laranail-db-console.<permission>`.
 
-Permission rows stored before the rename keep their `db-console.*` names. Both drivers read either form, so a custom role saved before 0.1 keeps its permissions, and `install` seeds the scoped names alongside them.
+Permission rows stored under the old names are renamed by a catalog migration (`0001_01_01_001100`), for the builtin driver and for Spatie's tables. Where install had already seeded the scoped row beside an old one, the old row's roles move to it, so a custom role saved before 0.1 keeps every permission it had.
 
 ## Shipped roles
 
-Owner, Admin, Operator, ReadOnly, Auditor are seeded on install; Owner composes to every permission. **`resource.adopt`**, taking over an account or database db-console did not create, is held by Owner alone: Admin has everything else except secrets and settings management. An install seeded before `resource.adopt` existed gains it on Owner when `install` is re-run. See [Adopt an existing account or database](../recipes/adopt-existing-resources.md). Assign with `role:assign --user --role --scope`; inspect with `access:show` and dry-run with `access:check`.
+Owner, Admin, Operator, ReadOnly, Auditor are seeded on install; Owner composes to every permission. **`resource.adopt`**, taking over an account or database db-console did not create, is held by Owner alone: Admin has everything else except secrets and settings management. An install seeded before `resource.adopt` existed gains it on the shipped Owner when `php artisan migrate` runs the same migration; no other role changes. See [Adopt an existing account or database](../recipes/adopt-existing-resources.md). Assign with `role:assign --user --role --scope`; inspect with `access:show` and dry-run with `access:check`.
 
 ---
 

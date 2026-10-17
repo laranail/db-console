@@ -9,11 +9,9 @@ use Illuminate\Contracts\Config\Repository as Config;
 /**
  * The REST API's settings, read from the keys config/db-console.php documents.
  *
- * Until 0.1 the code read `api.guard` and `api.prefix` while the config file
- * defined `api.auth` and `api.path`, so the documented keys did nothing. The
- * documented keys are read now; the old ones are still honoured when the
- * documented key is absent, with a deprecation notice, and are removed no
- * earlier than the next minor after 0.1.
+ * Until 0.1.1 `api.guard` and `api.prefix` were honoured as fallbacks for
+ * `api.auth` and `api.path`. They are no longer read; doctor reports a config
+ * that still sets them (`api:legacy-keys`), so the rename is not silent.
  */
 final readonly class ApiSettings
 {
@@ -26,7 +24,7 @@ final readonly class ApiSettings
      */
     public function guard(): string
     {
-        return $this->documentedOrDeprecated('auth', 'guard', 'sanctum');
+        return $this->string('auth', 'sanctum');
     }
 
     /**
@@ -34,7 +32,7 @@ final readonly class ApiSettings
      */
     public function path(): string
     {
-        return trim($this->documentedOrDeprecated('path', 'prefix', 'api/db-console'), '/');
+        return trim($this->string('path', 'api/db-console'), '/');
     }
 
     public function requiresHttps(): bool
@@ -90,20 +88,10 @@ final readonly class ApiSettings
         return $requests > 0 ? [$requests, $minutes] : null;
     }
 
-    private function documentedOrDeprecated(string $key, string $deprecated, string $default): string
+    private function string(string $key, string $default): string
     {
         $value = $this->config->get("laranail.db-console.api.{$key}");
-        if (is_string($value) && $value !== '') {
-            return $value;
-        }
 
-        $old = $this->config->get("laranail.db-console.api.{$deprecated}");
-        if (is_string($old) && $old !== '') {
-            DeprecatedConfigKeys::announce("api.{$deprecated}", "api.{$key}");
-
-            return $old;
-        }
-
-        return $default;
+        return is_string($value) && $value !== '' ? $value : $default;
     }
 }

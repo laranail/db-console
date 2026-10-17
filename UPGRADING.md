@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Deprecated names removed
+
+Each of these had a replacement since 0.1 or 0.1.1 and announced itself when used. They are gone:
+
+| Removed | Use instead | What happens if you still use it |
+|---|---|---|
+| Gate abilities `db-console.<permission>` (22) | `laranail-db-console.<permission>` | The gate denies it, as for any undefined ability. Search host policies, `@can`, `can:` middleware and `Gate::allows()` calls. |
+| Command `db-console:install` | `laranail::db-console.install` | "Command not found". |
+| Config keys `api.guard`, `api.prefix` | `api.auth`, `api.path` | Ignored; `doctor` fails with `config:legacy-api-keys`. |
+| `Exceptions\ConfirmationRequired`, code `confirmation.required` | `Exceptions\AssuranceRequired`, code `assurance_required` | Nothing has thrown it since #49. A `catch` naming it never matches, so catch `AssuranceRequired` (or `AuthorizationException`). |
+| `ConsolePermission::deprecatedAbility()`, `DEPRECATED_ABILITY_PREFIX`, `Authorization\DeprecatedAbilities`, `Http\Api\DeprecatedConfigKeys` | — | Removed with the aliases they served. |
+
+**Run `php artisan migrate`.** The new catalog migration renames permission rows stored under the
+old `db-console.*` names, so custom roles keep their permissions, and gives the shipped Owner the
+`resource.adopt` permission an install seeded before 0.1.1 lacks, without re-syncing any role.
+`ConsolePermission::fromAbility()` no longer reads the old names, so until the migration runs, a
+role holding only old-named rows grants nothing.
+
+### Creates that lose a race
+
+A create that fails because another process created the same account or database in between is
+now handled by the existing-resource policy (409 by default), instead of failing with the driver's
+error.
+
+## 0.1.1
+
 ### Postgres grants: every schema, other roles' future objects
 
 - **Grants now reach every user schema**, not only `public`. A role granted on a database whose

@@ -36,6 +36,13 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
 {
     public bool $failGrants = false;
 
+    /**
+     * Another process creates the account or database between db-console's
+     * existence check and its create: the create's first statement plays the
+     * other process, its second fails as the duplicate would.
+     */
+    public bool $raceOnCreate = false;
+
     public static function install(string $server = 'fake', string $connection = 'fake_admin'): self
     {
         config()->set("database.connections.{$connection}", ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '']);
@@ -93,7 +100,11 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
 
     public function createDatabase(DbName $db, Charset $charset): StatementList
     {
-        return new StatementList(Statement::plain("INSERT INTO fake_databases (name) VALUES ('{$db->value}')"));
+        $insert = Statement::plain("INSERT INTO fake_databases (name) VALUES ('{$db->value}')");
+
+        return $this->raceOnCreate
+            ? new StatementList($insert, Statement::plain('INSERT INTO no_such_table VALUES (1)'))
+            : new StatementList($insert);
     }
 
     public function dropDatabase(DbName $db): StatementList
@@ -114,6 +125,16 @@ final class FakeProvisioningEngine implements Engine, EmptinessProbingEngine
     public function createAccount(Username $u, Host $h, Password $p): StatementList
     {
         $sha = hash('sha256', $p->reveal());
+
+        if ($this->raceOnCreate) {
+            // The other process's account, with its own password.
+            $theirs = hash('sha256', 'theirs');
+
+            return new StatementList(
+                Statement::plain("INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '{$theirs}')"),
+                Statement::plain('INSERT INTO no_such_table VALUES (1)'),
+            );
+        }
 
         return new StatementList(Statement::sensitive(
             "INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '{$sha}')",

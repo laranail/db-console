@@ -151,8 +151,8 @@ final class SpatieRbacDriver implements RbacDriver
     }
 
     /**
-     * A stored permission name in either form: `laranail-db-console.x`, or the pre-0.1
-     * `db-console.x` a role saved before the rename still carries.
+     * A stored permission name (`laranail-db-console.x`). Names saved before 0.1 are renamed
+     * by the 0001_01_01_001100 migration.
      */
     private function permissionFromAbility(string $ability): ?ConsolePermission
     {

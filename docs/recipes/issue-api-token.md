@@ -4,7 +4,7 @@ Mint a Sanctum token whose abilities never exceed the operator's own.
 
 ## Steps
 
-Enable the API (`api.enabled`, `api.guard`), then:
+Enable the API (`api.enabled`, `api.auth`), then:
 
 ```bash
 php artisan laranail::db-console.token:issue --user=42 --name=ci \\

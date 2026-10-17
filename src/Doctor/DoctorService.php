@@ -35,6 +35,7 @@ final readonly class DoctorService
         private HostingCheck $hosting,
         private OperatorSecurityCheck $operatorSecurity,
         private TunnelCheck $tunnel,
+        private ConfigCheck $configCheck,
     ) {}
 
     /**
@@ -51,7 +52,7 @@ final readonly class DoctorService
         $findings[] = $this->checkSecretDriver();
         $findings[] = $this->checkCatalogEncryption();
 
-        return [...$findings, ...$this->operatorSecurity->findings()];
+        return [...$findings, ...$this->operatorSecurity->findings(), ...$this->configCheck->findings()];
     }
 
     /**

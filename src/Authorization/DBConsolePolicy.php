@@ -18,11 +18,9 @@ use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
  * The scope is passed as the gate's second argument (a string like
  * 'server:prod-mysql'); the AccessManager resolves coverage.
  *
- * The bare db-console.<permission> abilities used until 0.1 stay defined as
- * deprecated aliases: each announces itself once and asks the gate for the
- * scoped ability, so a host's own definition or before/after callback for the
- * scoped name governs the bare one too. Removed no earlier than the next minor
- * after 0.1.
+ * Only the scoped names are defined. The bare db-console.<permission>
+ * aliases kept through 0.1.1 are gone: a host still checking one gets the
+ * gate's ordinary "undefined ability" denial.
  */
 final readonly class DBConsolePolicy
 {
@@ -40,14 +38,6 @@ final readonly class DBConsolePolicy
                 ),
             );
 
-            $gate->define(
-                $permission->deprecatedAbility(),
-                static function (?object $user, ?string $scope = null) use ($gate, $permission): bool {
-                    DeprecatedAbilities::announce($permission->deprecatedAbility(), $permission->ability());
-
-                    return $gate->forUser($user)->check($permission->ability(), $scope === null ? [] : [$scope]);
-                },
-            );
         }
     }
 }

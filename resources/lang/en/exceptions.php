@@ -61,10 +61,6 @@ return [
 
     'not_authorized' => 'You are not authorized to perform :ability at :scope.',
 
-    'confirmation' => [
-        'required' => 'Confirm your identity first: :action needs a password, passkey or code confirmed within the last :seconds seconds.',
-    ],
-
     'assurance_required' => 'You have access to :ability, but it needs more proof of who you are. :action',
 
     'assurance' => [
