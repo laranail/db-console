@@ -115,11 +115,23 @@ final class PostgresEngine implements DatabaseScopedGrantsEngine, EmptinessProbi
     public function createDatabase(DbName $db, Charset $charset): StatementList
     {
         $q = Quoter::for($this->type());
+        $encoding = self::ENCODINGS[strtolower($charset->value)] ?? strtoupper($charset->value);
 
+        if ($encoding === 'UTF8') {
+            return new StatementList(
+                Statement::plain('CREATE DATABASE ' . $q->identifier($db->value) . ' ENCODING ' . $q->literal($encoding)),
+            );
+        }
+
+        // CREATE DATABASE copies template1, which is UTF8 on every image and
+        // managed service, and a copy keeps its template's encoding. Only
+        // template0 may be copied into another one, and the cluster's locale
+        // (en_US.utf8) is valid for UTF8 alone; C is valid for every encoding.
         return new StatementList(
             Statement::plain(
                 'CREATE DATABASE ' . $q->identifier($db->value)
-                . ' ENCODING ' . $q->literal(self::ENCODINGS[strtolower($charset->value)] ?? strtoupper($charset->value)),
+                . ' TEMPLATE template0 ENCODING ' . $q->literal($encoding)
+                . " LC_COLLATE 'C' LC_CTYPE 'C'",
             ),
         );
     }
