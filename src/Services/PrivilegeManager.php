@@ -11,6 +11,7 @@ use Simtabi\Laranail\DBConsole\Engines\Engine;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Servers\ScopedSession;
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
@@ -293,7 +294,7 @@ final readonly class PrivilegeManager
         foreach ($engine->grantDatabases($user) as $statement) {
             foreach ($connection->selectStatement($statement, $context) as $row) {
                 $name = (string) reset($row);
-                if (in_array($row['can_connect'] ?? true, [false, 0, '0', 'f', 'false'], true)) {
+                if (! DriverBoolean::truthy($row['can_connect'] ?? true)) {
                     $unreadable[] = $name;
 
                     continue;
