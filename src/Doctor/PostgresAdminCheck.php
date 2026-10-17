@@ -16,14 +16,23 @@ use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
  * - CREATEDB and CREATEROLE are what provisioning needs; without either it
  *   fails at the first database or account.
  * - 13 is the floor: dropDatabase() sends DROP DATABASE ... WITH (FORCE).
- * - A known pooler port is a warning: a transaction-mode pooler hands each
- *   statement to whichever server session is free, which the grant
- *   transaction and scoped connections do not survive, and some poolers
- *   refuse CREATE and DROP DATABASE outright.
+ * - A pooler is a warning: a transaction-mode pooler hands each statement
+ *   to whichever server session is free, which the grant transaction and
+ *   scoped connections do not survive, and some poolers refuse CREATE and
+ *   DROP DATABASE outright. It is told by comparing the configured port
+ *   with the one the server listens on, not by the port number alone.
+ * - From 16, login roles the admin holds no ADMIN OPTION on are a warning:
+ *   DBConsole cannot drop or change them.
  */
 final readonly class PostgresAdminCheck
 {
     public const int MINIMUM_VERSION = 130000;
+
+    /**
+     * From 16, CREATEROLE manages only the roles the admin holds ADMIN
+     * OPTION on; before it, every role that is not a superuser.
+     */
+    public const int ROLE_ADMIN_VERSION = 160000;
 
     /**
      * PgBouncer's default, Supabase's pooler, DigitalOcean's connection pools.
@@ -36,6 +45,8 @@ final readonly class PostgresAdminCheck
         25061 => 'a DigitalOcean connection pool',
     ];
 
+    private const int LISTED_ROLES = 10;
+
     public static function minimalRole(): string
     {
         return "CREATE ROLE db_console_admin WITH LOGIN CREATEDB CREATEROLE PASSWORD '...';";
@@ -43,10 +54,11 @@ final readonly class PostgresAdminCheck
 
     /**
      * @param array<string, mixed> $profile the row AdminInspectingEngine::adminProfile() reads
+     * @param list<string> $unmanageable login roles the admin holds no ADMIN OPTION on
      *
      * @return list<DoctorFinding>
      */
-    public function findings(string $server, array $profile, ?int $port): array
+    public function findings(string $server, array $profile, ?int $port, array $unmanageable = []): array
     {
         $findings = [];
 
@@ -78,8 +90,33 @@ final readonly class PostgresAdminCheck
                 "PostgreSQL on '{$server}' is {$this->version($version)}; DBConsole needs 13 or later (DROP DATABASE ... WITH (FORCE)).",
             );
 
-        if ($port !== null && isset(self::POOLER_PORTS[$port])) {
-            $findings[] = DoctorFinding::warning(
+        $pooler = $this->pooler($server, $port, is_numeric($profile['server_port'] ?? null) ? (int) $profile['server_port'] : null);
+        if ($pooler instanceof DoctorFinding) {
+            $findings[] = $pooler;
+        }
+
+        if ($version >= self::ROLE_ADMIN_VERSION && $unmanageable !== []) {
+            $findings[] = $this->unmanageableRoles($server, $unmanageable);
+        }
+
+        return $findings;
+    }
+
+    /**
+     * The configured port against the one the server listens on
+     * (inet_server_port()). A known pooler port the server itself listens on
+     * is a direct connection; a difference means something relays it, which
+     * is a pooler, a proxy or a port mapping, and on a known pooler port is
+     * almost certainly the pooler.
+     */
+    private function pooler(string $server, ?int $port, ?int $serverPort): ?DoctorFinding
+    {
+        if ($port === null || $serverPort === $port) {
+            return null;
+        }
+
+        if (isset(self::POOLER_PORTS[$port])) {
+            return DoctorFinding::warning(
                 "server:{$server}:pooler",
                 "The admin connection for '{$server}' uses port {$port}, the port of " . self::POOLER_PORTS[$port] . '. '
                 . 'A transaction-mode pooler breaks grants and drops, which run across transactions and databases.',
@@ -87,7 +124,32 @@ final readonly class PostgresAdminCheck
             );
         }
 
-        return $findings;
+        if ($serverPort === null) {
+            return null;
+        }
+
+        return DoctorFinding::ok(
+            "server:{$server}:pooler",
+            "The admin connection for '{$server}' uses port {$port}, but the server listens on {$serverPort}: a pooler, proxy or port mapping "
+            . 'relays it. A port mapping is fine; a transaction-mode pooler breaks grants and drops.',
+        );
+    }
+
+    /**
+     * @param non-empty-list<string> $roles
+     */
+    private function unmanageableRoles(string $server, array $roles): DoctorFinding
+    {
+        $named = array_slice($roles, 0, self::LISTED_ROLES);
+        $more = count($roles) - count($named);
+
+        return DoctorFinding::warning(
+            "server:{$server}:role-admin",
+            "The admin role on '{$server}' cannot drop, rename or change the password of " . count($roles) . ' login role(s) it holds no ADMIN OPTION on: '
+            . implode(', ', $named) . ($more > 0 ? " and {$more} more" : '') . '. '
+            . 'From PostgreSQL 16 CREATEROLE covers only the roles the admin created or was granted with ADMIN OPTION.',
+            'For each role DBConsole should manage, run as its creator or a superuser: GRANT <role> TO <admin> WITH ADMIN OPTION;',
+        );
     }
 
     private function version(int $number): string

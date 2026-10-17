@@ -512,8 +512,24 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
         return new StatementList(
             Statement::plain(
                 'SELECT rolsuper AS is_superuser, rolcreatedb AS can_create_db, rolcreaterole AS can_create_role,'
-                . " current_setting('server_version_num')::int AS server_version_num"
+                . " current_setting('server_version_num')::int AS server_version_num,"
+                . ' pg_catalog.inet_server_port() AS server_port'
                 . ' FROM pg_catalog.pg_roles WHERE rolname = current_user',
+            ),
+        );
+    }
+
+    public function unmanageableRoles(): StatementList
+    {
+        // ADMIN OPTION is what DROP ROLE and ALTER ROLE check from 16 on; a
+        // superuser admin holds it on everything, so this reads empty there.
+        return new StatementList(
+            Statement::plain(
+                'SELECT r.rolname FROM pg_catalog.pg_roles r'
+                . ' WHERE r.rolcanlogin AND NOT r.rolsuper AND r.rolname <> current_user'
+                . " AND r.rolname NOT LIKE 'pg\\_%'"
+                . " AND NOT pg_catalog.pg_has_role(r.oid, 'MEMBER WITH ADMIN OPTION')"
+                . ' ORDER BY r.rolname',
             ),
         );
     }

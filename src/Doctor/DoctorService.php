@@ -154,10 +154,19 @@ final readonly class DoctorService
     {
         $connection = $this->registry->connection($server);
 
+        $context = ['operation' => 'server.view'];
+
         try {
             $profile = [];
             foreach ($engine->adminProfile() as $statement) {
-                $profile = [...$profile, ...($connection->selectStatement($statement, ['operation' => 'server.view'])[0] ?? [])];
+                $profile = [...$profile, ...($connection->selectStatement($statement, $context)[0] ?? [])];
+            }
+
+            $unmanageable = [];
+            foreach ($engine->unmanageableRoles() as $statement) {
+                foreach ($connection->selectStatement($statement, $context) as $row) {
+                    $unmanageable[] = (string) reset($row);
+                }
             }
         } catch (DBConsoleException $e) {
             return [DoctorFinding::warning("server:{$server}:admin", "Could not read the admin role: {$e->userMessage()}")];
@@ -166,7 +175,7 @@ final readonly class DoctorService
         $underlying = $connection->underlying();
         $port = $underlying instanceof Connection ? $underlying->getConfig('port') : null;
 
-        return $this->postgresAdmin->findings($server, $profile, is_numeric($port) ? (int) $port : null);
+        return $this->postgresAdmin->findings($server, $profile, is_numeric($port) ? (int) $port : null, $unmanageable);
     }
 
     /**
