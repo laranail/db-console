@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Engines;
 
 use Override;
-use InvalidArgumentException;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
@@ -31,17 +30,13 @@ final class MariaDbEngine extends MySqlEngine
     #[Override]
     public function createAccountWithAuth(Username $u, Host $h, string $plugin, string $hashLiteral): StatementList
     {
-        if (preg_match('/^0x((?:[0-9A-Fa-f]{2})*)$/', $hashLiteral, $match) !== 1) {
-            throw new InvalidArgumentException('An authentication hash must be a 0x... hex literal.');
-        }
-
         $q = Quoter::for($this->type());
         $account = $this->account($q, $u, $h);
         $pluginQuoted = $q->identifier($plugin);
 
         return new StatementList(
             Statement::sensitive(
-                sql: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS " . $q->literal((string) hex2bin($match[1])),
+                sql: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS " . $q->literal((string) hex2bin($this->hashHex($hashLiteral))),
                 redacted: "CREATE USER {$account} IDENTIFIED WITH {$pluginQuoted} AS [redacted]",
             ),
         );
