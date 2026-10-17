@@ -8,6 +8,7 @@ use Closure;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Enums\Severity;
 use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
 use Simtabi\Laranail\DBConsole\Exceptions\RollbackFailed;
@@ -104,14 +105,6 @@ final readonly class RoleMembership
     }
 
     /**
-     * Postgres returns booleans; other drivers and fakes return 1/0 or 't'/'f'.
-     */
-    private function truthy(mixed $value): bool
-    {
-        return in_array($value, [true, 1, '1', 't', 'true'], true);
-    }
-
-    /**
      * @param array<string, mixed> $context
      *
      * @return array{0: list<Username>, 1: list<string>}
@@ -129,11 +122,11 @@ final readonly class RoleMembership
 
         foreach ($this->scoped->select($admin, $engine->rolesToAssume($set, $db, $user), $context) as $row) {
             $name = (string) $row['rolname'];
-            if ($this->truthy($row['held'])) {
+            if (DriverBoolean::truthy($row['held'])) {
                 continue;
             }
 
-            if (! $this->truthy($row['can_admin'])) {
+            if (! DriverBoolean::truthy($row['can_admin'])) {
                 $notCovered[] = $name;
 
                 continue;

@@ -786,3 +786,23 @@ it('re-runs the wizard without a password when the operator adopts, keeping the 
     livePgAs($db, $role)->statement('CREATE TABLE rerun_check (id integer)');
     livePgClose($db, $role);
 });
+
+it('does not call a database empty when it holds only a function or only a schema', function (): void {
+    $function = liveName('fnonly');
+    $schema = liveName('schemaonly');
+    $this->cleanup = [['database', $function], ['database', $schema]];
+    $databases = app(DatabaseManager::class);
+
+    $databases->create('live_pgsql', new DbName($function), new Charset('utf8'));
+    $databases->create('live_pgsql', new DbName($schema), new Charset('utf8'));
+    livePgAs($function)->statement('CREATE FUNCTION ping() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$');
+    livePgAs($schema)->statement('CREATE SCHEMA reporting');
+    livePgClose($function);
+    livePgClose($schema);
+
+    expect($databases->isEmpty('live_pgsql', new DbName($function)))->toBeFalse()
+        ->and($databases->isEmpty('live_pgsql', new DbName($schema)))->toBeFalse();
+
+    $databases->rollbackCreatedDatabase('live_pgsql', new DbName($function));
+    expect((int) livePgScalar('SELECT COUNT(*) FROM pg_database WHERE datname = ?', [$function]))->toBe(1);
+});

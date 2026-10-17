@@ -481,13 +481,23 @@ final class PostgresEngine implements AdminInspectingEngine, DatabaseScopedGrant
 
     public function countUserObjects(DbName $db): StatementList
     {
+        // Relations, functions and procedures, and schemas other than public:
+        // a database holding only a function or a schema is not empty.
+        // Objects an extension created are its own, not the application's.
+        $notExtension = ' AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend d WHERE d.objid = %s'
+            . " AND d.deptype = 'e')";
+
         return new StatementList(
             Statement::plain(
-                'SELECT COUNT(*) FROM pg_catalog.pg_class c'
+                'SELECT (SELECT COUNT(*) FROM pg_catalog.pg_class c'
                 . ' JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace'
-                . " WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')"
-                . " AND n.nspname NOT IN ('pg_catalog', 'information_schema')"
-                . " AND n.nspname NOT LIKE 'pg\\_%'",
+                . " WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f') AND " . self::USER_SCHEMA
+                . sprintf($notExtension, 'c.oid') . ')'
+                . ' + (SELECT COUNT(*) FROM pg_catalog.pg_proc f'
+                . ' JOIN pg_catalog.pg_namespace n ON n.oid = f.pronamespace'
+                . ' WHERE ' . self::USER_SCHEMA . sprintf($notExtension, 'f.oid') . ')'
+                . ' + (SELECT COUNT(*) FROM pg_catalog.pg_namespace n'
+                . ' WHERE ' . self::USER_SCHEMA . " AND n.nspname <> 'public'" . sprintf($notExtension, 'n.oid') . ')',
             )->inDatabase($db),
         );
     }

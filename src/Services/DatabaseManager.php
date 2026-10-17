@@ -10,6 +10,7 @@ use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
 use Simtabi\Laranail\DBConsole\Events\DatabaseDropped;
@@ -228,14 +229,6 @@ final readonly class DatabaseManager
     }
 
     /**
-     * Postgres returns booleans; other drivers return 1/0 or 't'/'f'.
-     */
-    private function truthy(mixed $value): bool
-    {
-        return in_array($value, [true, 1, '1', 't', 'true'], true);
-    }
-
-    /**
      * The roles whose sessions on $db the admin has to take membership in to
      * end them. Throws when a session belongs to a superuser, or to a role the
      * admin can neither end nor take.
@@ -250,11 +243,11 @@ final readonly class DatabaseManager
         foreach ($engine->sessionRoles($db) as $statement) {
             foreach ($connection->selectStatement($statement, ['operation' => 'database.view']) as $row) {
                 $name = (string) $row['rolname'];
-                if ($this->truthy($row['held'])) {
+                if (DriverBoolean::truthy($row['held'])) {
                     continue;
                 }
 
-                if ($this->truthy($row['superuser']) || ! $this->truthy($row['can_admin'])) {
+                if (DriverBoolean::truthy($row['superuser']) || ! DriverBoolean::truthy($row['can_admin'])) {
                     $blocking[] = $name;
 
                     continue;

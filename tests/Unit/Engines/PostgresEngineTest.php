@@ -371,8 +371,13 @@ it('counts user objects inside the target database for the emptiness check', fun
     expect($statements)->toHaveCount(1)
         ->and($statements[0]->database)->toBe('shop_prod')
         ->and($statements[0]->sql)->toContain('pg_class')
-        ->and($statements[0]->sql)->toContain("'pg_catalog'")
-        ->and($statements[0]->sql)->toContain("'information_schema'");
+        ->and($statements[0]->sql)->toContain("n.nspname !~ '^pg_'")
+        ->and($statements[0]->sql)->toContain("'information_schema'")
+        // A database holding only a function, or only a schema, is not empty:
+        // a rollback that thought so dropped them with it.
+        ->and($statements[0]->sql)->toContain('pg_catalog.pg_proc')
+        ->and($statements[0]->sql)->toContain("d.deptype = 'e'")       // not an extension's own
+        ->and($statements[0]->sql)->toContain("n.nspname <> 'public'");
 });
 
 it('reads whether the admin already has the privileges of a role', function () use ($engine): void {

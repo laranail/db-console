@@ -185,6 +185,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- One `Support\DriverBoolean::truthy()` reads a driver's boolean column (Postgres `bool`, MySQL `1/0`,
+  `'t'/'f'`); four services each had their own copy.
+
 - `laranail/db-tools` (dev, suggested) is required at `^0.1.6`, whose backups honour `url`, pass TLS
   to the dump client and take a consistent dump on managed servers.
 - The `live-mysql` job runs MySQL with GTID on, as DigitalOcean does, installs each family's own dump
@@ -248,6 +251,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Both are removed no earlier than the next minor after 0.1.
 
 ### Fixed
+
+- **A Postgres database holding only a function, a procedure or a schema read as empty**, so a wizard
+  rollback dropped it with them. The emptiness check counts relations, functions and procedures, and
+  schemas other than `public`, leaving out what an extension created.
+- `OperatorAssurance` was bound to its null default twice; it is bound once, in the operator-security
+  registration.
 
 - **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
   It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already
