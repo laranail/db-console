@@ -34,6 +34,12 @@ final readonly class ApiGuard
 
     public function handle(Request $request, Closure $next): Response
     {
+        // The API answers in JSON whatever the client asked for. Exceptions
+        // render their code and status only for a request that expects JSON,
+        // so without this a client that sent no Accept header got a 500 for a
+        // refusal and a redirect for a validation error.
+        $request->headers->set('Accept', 'application/json');
+
         if (! (bool) $this->config->get('laranail.db-console.api.enabled', false)) {
             return $this->deny('The DBConsole API is disabled.', 404);
         }

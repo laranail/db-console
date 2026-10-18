@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
+  their code and status only for a request that expects JSON, so a client that sent no `Accept:
+  application/json` got a 500 for a refusal (`not_authorized`, `assurance_required`, a 409 for an
+  existing resource) and a 302 redirect for a validation error. `ApiGuard` now sets the header on
+  every API request.
 - **A create db-console half-made is reported as the failure it is.** Since 0.1.2, a create that
   failed while the resource then existed was treated as a lost race and refused with a 409, or
   adopted under `adopt`. That also caught db-console's own half-made resources: SQL Server's
