@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A failed wizard run takes back the adoptions it made.** When the provisioning wizard adopts
+  an account or database and a later step fails, the rollback now stops recording that resource as
+  managed (`AdoptionUndone`, a Security-category notification and webhook event). It still never
+  touches the server, where the resource is as it was before the run. An adoption an earlier run
+  made is kept.
+- **`Services\Contracts\TracksManagedResources`** (`managesAccount()`, `managesDatabase()`), an
+  optional interface beside `Catalog`, implemented by `DbConsoleCatalog` and `NullCatalog`. It is
+  how an adoption knows it is the first. A host catalog that does not implement it keeps the old
+  behaviour: adoptions report `newly_managed: false` and a rollback leaves their records alone.
+- Adoption results carry **`newly_managed`**: true when that call put the resource under
+  management for the first time. Results from `adopt_and_apply` also carry it.
+- **The live SSH job proves verified TLS inside the tunnel.** A PostgreSQL with TLS and a
+  certificate for one name: `verify-full` reaches `required_ok` through both drivers, a name the
+  certificate does not carry is refused, and backup-before-drop dumps through the tunnel.
+
 ### Fixed
 
 - **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
@@ -30,12 +47,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   phpseclib raises its read timeout to 5 seconds when it handles one channel's close while
   reading another, so a poll of an idle session could block the whole forwarding process and
   every session through it. `ForwardingSsh2` clamps that timeout to the poll's own while it polls.
-
-### Added
-
-- **The live SSH job proves verified TLS inside the tunnel.** A PostgreSQL with TLS and a
-  certificate for one name: `verify-full` reaches `required_ok` through both drivers, a name the
-  certificate does not carry is refused, and backup-before-drop dumps through the tunnel.
 
 ## [0.1.3] - 2026-10-18
 

@@ -53,6 +53,8 @@ final readonly class ProvisioningWizard
      *    password itself is applied last, so any earlier failure leaves the
      *    account's credential as it was.
      * A rollback never drops what was adopted, only what this run created.
+     * An adoption this run made (`newly_managed`) is taken back off the
+     * catalog, so a failed run leaves the catalog as it found it.
      */
     public function provision(
         string $server,
@@ -93,8 +95,14 @@ final readonly class ProvisioningWizard
                 // a rollback leaves it alone: undoing the run must not drop
                 // what was there before it.
                 function () use (&$databaseResult, $server, $database): void {
-                    if ($databaseResult instanceof OperationResult && ! $databaseResult->alreadyExisted) {
+                    if (! $databaseResult instanceof OperationResult) {
+                        return;
+                    }
+
+                    if (! $databaseResult->alreadyExisted) {
                         $this->databases->rollbackCreatedDatabase($server, $database);
+                    } elseif (($databaseResult->data['newly_managed'] ?? false) === true) {
+                        $this->databases->rollbackAdoptedDatabase($server, $database);
                     }
                 },
             ),
@@ -112,8 +120,14 @@ final readonly class ProvisioningWizard
                     return $accountResult;
                 },
                 function () use (&$accountResult, $server, $username, $host): void {
-                    if ($accountResult instanceof OperationResult && ! $accountResult->alreadyExisted) {
+                    if (! $accountResult instanceof OperationResult) {
+                        return;
+                    }
+
+                    if (! $accountResult->alreadyExisted) {
                         $this->accounts->rollbackCreatedAccount($server, $username, $host);
+                    } elseif (($accountResult->data['newly_managed'] ?? false) === true) {
+                        $this->accounts->rollbackAdoptedAccount($server, $username, $host);
                     }
                 },
             ),

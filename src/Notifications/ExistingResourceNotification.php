@@ -19,6 +19,7 @@ final class ExistingResourceNotification extends DBConsoleNotification
         return match ($this->event->operation()) {
             OperationType::AccountCreationRefused, OperationType::DatabaseCreationRefused => 'db-console: refused to take over an existing resource',
             OperationType::AccountPasswordApplied                                         => 'db-console: an adopted account was given a new password',
+            OperationType::AdoptionUndone                                                 => 'db-console: an adoption was undone after a failed run',
             default                                                                       => 'db-console: an existing resource was adopted',
         };
     }
@@ -28,6 +29,7 @@ final class ExistingResourceNotification extends DBConsoleNotification
         return match ($this->event->operation()) {
             OperationType::AccountCreationRefused, OperationType::DatabaseCreationRefused => 'A create found the resource already there. Nothing was changed. An operator holding resource.adopt can adopt it explicitly.',
             OperationType::AccountPasswordApplied                                         => 'The password of an account db-console did not create was replaced. Anything still using the old password can no longer log in.',
+            OperationType::AdoptionUndone                                                 => 'A provisioning run adopted a resource and then failed, so the adoption was taken back. The resource is unchanged on the server and is no longer recorded as managed.',
             default                                                                       => 'An operator adopted a resource db-console did not create. It is now managed as it was found; its password was not changed.',
         };
     }

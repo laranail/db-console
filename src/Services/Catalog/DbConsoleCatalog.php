@@ -16,6 +16,7 @@ use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Services\Results\AccountGrant;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Services\Contracts\TracksManagedResources;
 
 /**
  * The Eloquent-backed catalog. Records what DBConsole did — ownership and
@@ -23,7 +24,7 @@ use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
  * account username/host are encrypted at rest, lookups use a non-reversible
  * hash of (server, username, host) rather than a WHERE on the ciphertext.
  */
-final readonly class DbConsoleCatalog implements Catalog
+final readonly class DbConsoleCatalog implements Catalog, TracksManagedResources
 {
     public function __construct(private Guard $auth) {}
 
@@ -153,6 +154,16 @@ final readonly class DbConsoleCatalog implements Catalog
         }
 
         return $grants;
+    }
+
+    public function managesAccount(string $server, Username $user, Host $host): bool
+    {
+        return $this->findAccount($server, $user, $host) instanceof DbAccount;
+    }
+
+    public function managesDatabase(string $server, DbName $db): bool
+    {
+        return ManagedDatabase::query()->where('server_name', $server)->where('name', $db->value)->exists();
     }
 
     private function findAccount(string $server, Username $user, Host $host): ?DbAccount
