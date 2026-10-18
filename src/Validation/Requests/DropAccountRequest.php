@@ -33,6 +33,14 @@ final class DropAccountRequest extends FormRequest
         ];
     }
 
+    #[Override]
+    public function messages(): array
+    {
+        return [
+            'confirm.same' => (string) __('laranail-db-console::validation.confirm_username'),
+        ];
+    }
+
     /**
      * @return array<string, string>
      */
@@ -54,13 +62,5 @@ final class DropAccountRequest extends FormRequest
         if (! $this->has('confirm') && ! $this->container->make(ApiSettings::class)->confirmsDestructive()) {
             $this->merge(['confirm' => $this->input('username')]);
         }
-    }
-
-    #[Override]
-    public function messages(): array
-    {
-        return [
-            'confirm.same' => (string) __('laranail-db-console::validation.confirm_username'),
-        ];
     }
 }

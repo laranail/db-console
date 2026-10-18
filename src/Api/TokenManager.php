@@ -76,6 +76,12 @@ final readonly class TokenManager
         return ['token' => $token->plainTextToken, 'abilities' => $requested];
     }
 
+    /**
+     * The ConsolePermission values the operator actually holds at global
+     * scope — the ceiling for any token they issue.
+     *
+     * @return list<string>
+     */
     private function grantedAbilities(Authenticatable $operator): array
     {
         $granted = [];

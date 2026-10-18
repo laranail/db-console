@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Http\Api\Controllers;
 
 use Illuminate\Http\JsonResponse;
-use Simtabi\Laranail\DBConsole\Api\UserResolver;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Simtabi\Laranail\DBConsole\Api\UserResolver;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
-use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
+use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Validation\Requests\RoleAssignmentRequest;
 
 /**

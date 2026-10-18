@@ -6,9 +6,9 @@ namespace Simtabi\Laranail\DBConsole\Http\Api\Controllers;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Api\TokenManager;
 use Simtabi\Laranail\DBConsole\Api\UserResolver;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Validation\Requests\TokenIssueRequest;

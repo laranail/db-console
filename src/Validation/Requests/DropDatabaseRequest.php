@@ -32,6 +32,14 @@ final class DropDatabaseRequest extends FormRequest
         ];
     }
 
+    #[Override]
+    public function messages(): array
+    {
+        return [
+            'confirm.same' => (string) __('laranail-db-console::validation.confirm_name'),
+        ];
+    }
+
     /**
      * @return array<string, string>
      */
@@ -52,13 +60,5 @@ final class DropDatabaseRequest extends FormRequest
         if (! $this->has('confirm') && ! $this->container->make(ApiSettings::class)->confirmsDestructive()) {
             $this->merge(['confirm' => $this->input('name')]);
         }
-    }
-
-    #[Override]
-    public function messages(): array
-    {
-        return [
-            'confirm.same' => (string) __('laranail-db-console::validation.confirm_name'),
-        ];
     }
 }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Simtabi\Laranail\DBConsole\Models\RoleAssignment;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
+use Simtabi\Laranail\DBConsole\Models\RoleAssignment;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
@@ -306,5 +306,33 @@ describe('role assignment', function (): void {
             ->postJson('/api/db-console/role-assignments', ['user_id' => $assignee->id, 'role' => 'superuser', 'scope' => 'global'])
             ->assertStatus(422);
         expect(RoleAssignment::query()->count())->toBe(0);
+    });
+});
+
+describe('the read endpoints are gated', function (): void {
+    it('lists only the servers the caller may see', function (): void {
+        mountEndpointsApi();
+        $caller = endpointsCaller();
+
+        expect(array_column($this->actingAs($caller, 'sanctum')->getJson('/api/db-console/servers')->assertOk()->json('data'), 'name'))
+            ->toContain('fake');
+
+        $GLOBALS['apiDenied'] = [ConsolePermission::ServerView->ability()];
+
+        expect($this->actingAs($caller, 'sanctum')->getJson('/api/db-console/servers')->assertOk()->json('data'))->toBe([]);
+    });
+
+    it('refuses the audit trail without audit.view', function (): void {
+        mountEndpointsApi();
+        $GLOBALS['apiDenied'] = [ConsolePermission::AuditView->ability()];
+
+        $this->actingAs(endpointsCaller(), 'sanctum')->getJson('/api/db-console/audit')->assertForbidden();
+    });
+
+    it('refuses the webhook list without webhook.manage', function (): void {
+        mountEndpointsApi();
+        $GLOBALS['apiDenied'] = [ConsolePermission::WebhookManage->ability()];
+
+        $this->actingAs(endpointsCaller(), 'sanctum')->getJson('/api/db-console/webhooks')->assertForbidden();
     });
 });
