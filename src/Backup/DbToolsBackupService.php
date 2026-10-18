@@ -98,7 +98,7 @@ final readonly class DbToolsBackupService implements BackupService
         $scopedConfig['database'] = $database->value;
 
         // Laravel's MySQL socket key is unix_socket. db-tools 0.1.6 reads only
-        // socket; later releases read both, so setting both covers either.
+        // socket and 0.1.7 reads both; setting both covers either.
         if (is_string($scopedConfig['unix_socket'] ?? null) && $scopedConfig['unix_socket'] !== '') {
             $scopedConfig['socket'] ??= $scopedConfig['unix_socket'];
         }

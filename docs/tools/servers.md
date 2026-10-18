@@ -52,6 +52,8 @@ A server's `ssh` block routes its admin connection through an SSH tunnel, with t
 
 `ServerRegistry::capabilities($server)` returns the engine's capabilities with this profile merged in (`hosting`, `default_account_host`, `provider_backups` in `toArray()`); prefer it to `engine()->capabilities()`, which knows nothing of where the server runs. `ServerRegistry::defaultAccountHost($server)` is what `user:create` uses when no `--host` is given.
 
+[Managed databases](../managed-databases.md) puts these together, and [Connect to DigitalOcean Managed Databases](../recipes/digitalocean.md) walks through one provider.
+
 `doctor` warns when a self-hosted server's host belongs to a provider it recognises (`*.ondigitalocean.com`, `*.rds.amazonaws.com`). The provider account lists come from each provider's documentation; only the engine's own accounts are checked against live servers in CI.
 
 ## Multi-server isolation

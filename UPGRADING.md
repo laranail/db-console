@@ -1,5 +1,14 @@
 # Upgrading
 
+## Unreleased
+
+### laranail/db-tools 0.1.7 for tunnelled and socket servers
+
+Backup-before-drop on a server reached through an SSH tunnel or a unix socket needs
+`laranail/db-tools ^0.1.7`. With 0.1.6 the dump fails there, and a failed backup stops the drop.
+Run `composer require laranail/db-tools:^0.1.7`, then `composer clear-cache` if an earlier install
+cached the archive.
+
 ## 0.1.2
 
 ### Deprecated names removed
@@ -169,10 +178,10 @@ Nothing changes unless a server's `ssh.enabled` is set. Three things to know whe
   dialling another. Set `tls.verify=false` for that server, or forward to `ssh.remote_socket`.
   PostgreSQL keeps verifying the real name.
 - **Backup before drop through a PostgreSQL tunnel with `verify-full`** fails, and so stops the
-  drop: db-tools 0.1.6 runs `pg_dump --host`, which has no `hostaddr`. Until a db-tools release
-  after 0.1.6 is installed, set `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` or
-  `tls.verify=false` for that server. laranail/db-tools#67 passes `hostaddr` to libpq as
-  `PGHOSTADDR`, so with it the dump goes through the tunnel and still verifies the real name.
+  drop: db-tools 0.1.6 runs `pg_dump --host`, which has no `hostaddr`. Install db-tools 0.1.7,
+  which passes `hostaddr` to libpq as `PGHOSTADDR`, so the dump goes through the tunnel and still
+  verifies the real name (see the Unreleased section above). On 0.1.6, set
+  `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` or `tls.verify=false` for that server.
 
 A PostgreSQL server whose `host` is a socket directory is now local, so `doctor` no longer reports
 its TLS.

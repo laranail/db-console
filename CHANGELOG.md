@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** names the fix:
-  laranail/db-tools#67 hands `hostaddr` to libpq as `PGHOSTADDR`, so the `verify-full` workaround
-  is needed only until a db-tools release after 0.1.6 is installed. The note also said "two
-  things" over three.
+- **laranail/db-tools `^0.1.7`** (was `^0.1.6`) in `require-dev` and `suggest`. 0.1.7 dumps a
+  Postgres server reached through an SSH tunnel (`host;hostaddr=`, the form db-console writes for a
+  tunnelled server) with `sslmode=verify-full`, and a MySQL server reached through a unix socket,
+  including one described by its socket alone. With 0.1.6, backup-before-drop on those servers fails,
+  and since 0.1.1 a failed backup stops the drop.
+- **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** now points at db-tools 0.1.7,
+  which ends the `verify-full` workaround, and says "three things" over its three items.
 
 ## [0.1.2] - 2026-10-17
 
@@ -35,6 +38,7 @@ host still using one sees.
 
 ### Added
 
+- **A Managed databases page and a DigitalOcean recipe** (`docs/managed-databases.md`, `docs/recipes/digitalocean.md`), which bring the hosting profile, TLS, the least-privilege admin, `doctor`'s checks and backups together for a provider-managed server. Linked from the servers, doctor, backups and engines pages and the README.
 - **Catalog migration `0001_01_01_001100_migrate_db_console_permission_names`.** Renames permission
   rows stored under `db-console.*` to `laranail-db-console.*`, merging into a scoped row install
   already seeded so no role loses a permission, and gives the shipped Owner `resource.adopt`
