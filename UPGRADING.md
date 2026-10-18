@@ -1,5 +1,23 @@
 # Upgrading
 
+## Unreleased
+
+### MySQL verifies the real name through an SSH tunnel
+
+A MySQL or MariaDB server reached through an SSH tunnel with `tls.verify=true` used to fail: pdo_mysql
+checked the certificate against 127.0.0.1. It now connects through a TLS relay that verifies the
+certificate against the server's real name, so the 0.1.1 advice below to set `tls.verify=false` for
+such a server no longer applies. Set it back to `true`.
+
+Two things change for such a server:
+
+- **A PHP CLI binary is needed on the host**, to run the relay. It is the same requirement the
+  phpseclib driver has. `doctor` reports the tunnel as failed if the relay cannot start.
+- **`ssh.local=socket` is accepted with TLS required**, since the relay does the TLS itself.
+
+SQL Server through a tunnel still cannot verify the real name, because pdo_sqlsrv offers no way to.
+Keep `tls.verify=false` for it.
+
 ## 0.1.3
 
 ### Alerts keep their category's channels
