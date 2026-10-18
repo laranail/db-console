@@ -1,0 +1,41 @@
+name: composer update (retries GitHub auth blips)
+description: >
+  Runs composer update, retrying only when GitHub rejects the run's token for a
+  moment ("Could not authenticate against github.com") or rate-limits it. Every
+  laranail/* dependency resolves through a VCS repository on github.com, so each
+  install talks to the GitHub API with the job's token; on 2026-10-17 and
+  2026-10-18 several jobs of one run failed at the same second this way while
+  their siblings passed. Any other failure fails at once.
+inputs:
+  args:
+    description: Arguments to composer update.
+    default: --prefer-stable --no-interaction --no-progress
+  attempts:
+    description: How many times to try in all.
+    default: '3'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ARGS: ${{ inputs.args }}
+        ATTEMPTS: ${{ inputs.attempts }}
+      run: |
+        set -o pipefail
+        log="$RUNNER_TEMP/composer-update.log"
+        for attempt in $(seq 1 "$ATTEMPTS"); do
+          # ARGS is a list of flags, split on purpose.
+          # shellcheck disable=SC2086
+          if composer update $ARGS 2>&1 | tee "$log"; then
+            exit 0
+          fi
+          if ! grep -qE 'Could not authenticate against github.com|API limit|rate limit exceeded' "$log"; then
+            exit 1
+          fi
+          if [ "$attempt" -lt "$ATTEMPTS" ]; then
+            echo "::warning::GitHub refused the token (attempt $attempt of $ATTEMPTS); retrying."
+            sleep $((attempt * 20))
+          fi
+        done
+        echo "::error::GitHub refused the token on all $ATTEMPTS attempts."
+        exit 1
