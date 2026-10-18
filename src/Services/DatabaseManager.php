@@ -10,6 +10,7 @@ use Simtabi\Laranail\DBConsole\Domain\Charset;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\OperationType;
 use Simtabi\Laranail\DBConsole\Backup\BackupService;
+use Simtabi\Laranail\DBConsole\Events\AdoptionUndone;
 use Simtabi\Laranail\DBConsole\Support\DriverBoolean;
 use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
 use Simtabi\Laranail\DBConsole\Events\DatabaseCreated;
@@ -32,6 +33,7 @@ use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
 use Simtabi\Laranail\DBConsole\Engines\ServerVersionAwareEngine;
 use Simtabi\Laranail\DBConsole\Exceptions\InsufficientPrivilege;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Services\Contracts\TracksManagedResources;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
@@ -243,6 +245,20 @@ final readonly class DatabaseManager
         $this->catalog->forgetDatabase($server, $db);
     }
 
+    /**
+     * Compensating rollback for a database this run adopted: stop recording
+     * it as managed. Never touches the server. Used exclusively by
+     * ProvisioningWizard, and only when the adoption reported `newly_managed`.
+     *
+     * @internal
+     */
+    public function rollbackAdoptedDatabase(string $server, DbName $db): void
+    {
+        $this->catalog->forgetDatabase($server, $db);
+        $this->log->success(OperationType::AdoptionUndone->value, $server, ['target' => $db->value, 'kind' => 'database']);
+        $this->events->dispatch(new AdoptionUndone($server, ['target' => $db->value, 'kind' => 'database']));
+    }
+
     private function serverVersion(ServerVersionAwareEngine $engine, AdminConnection $connection): int
     {
         $version = 0;
@@ -305,6 +321,11 @@ final readonly class DatabaseManager
     {
         $this->guard->admit(ExistingResourceKind::Database, $server, $db->value, $onExisting);
 
+        // See AccountManager::adopt(): only an adoption that puts the
+        // database under management is one a failed run may take back.
+        $newlyManaged = $this->catalog instanceof TracksManagedResources
+            && ! $this->catalog->managesDatabase($server, $db);
+
         $this->catalog->recordDatabase($server, $db, '', null);
         $this->log->success(OperationType::DatabaseAdopted->value, $server, ['target' => $db->value]);
         $this->events->dispatch(new DatabaseAdopted($server, ['target' => $db->value]));
@@ -312,7 +333,7 @@ final readonly class DatabaseManager
         return OperationResult::succeeded(
             OperationType::DatabaseCreate,
             $server,
-            ['database' => $db->value, 'adopted' => true],
+            ['database' => $db->value, 'adopted' => true, 'newly_managed' => $newlyManaged],
             alreadyExisted: true,
         );
     }

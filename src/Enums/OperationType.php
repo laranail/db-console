@@ -50,6 +50,9 @@ enum OperationType: string implements Enumerator, Translatable
     #[Label('Adopt an existing database')]
     case DatabaseAdopted = 'database.adopted';
 
+    #[Label('Undo an adoption a failed run made')]
+    case AdoptionUndone = 'adoption.undone';
+
     #[Label('Grant privileges')]
     case GrantCreate = 'grant.create';
 

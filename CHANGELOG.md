@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A failed wizard run takes back the adoptions it made.** When the provisioning wizard adopts
+  an account or database and a later step fails, the rollback now stops recording that resource as
+  managed (`AdoptionUndone`, a Security-category notification and webhook event). It still never
+  touches the server, where the resource is as it was before the run. An adoption an earlier run
+  made is kept.
+- **`Services\Contracts\TracksManagedResources`** (`managesAccount()`, `managesDatabase()`), an
+  optional interface beside `Catalog`, implemented by `DbConsoleCatalog` and `NullCatalog`. It is
+  how an adoption knows it is the first. A host catalog that does not implement it keeps the old
+  behaviour: adoptions report `newly_managed: false` and a rollback leaves their records alone.
+- Adoption results carry **`newly_managed`**: true when that call put the resource under
+  management for the first time. Results from `adopt_and_apply` also carry it.
+
 ### Changed
 
 - **A Warning or Critical event's notification keeps its category's channels and adds

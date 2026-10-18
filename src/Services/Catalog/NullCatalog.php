@@ -9,14 +9,25 @@ use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Services\Contracts\TracksManagedResources;
 
 /**
  * A no-op catalog used when persistence is not wired (headless use before
  * the Eloquent catalog is bound). Every service still works against the
  * live server; only the audit/ownership history is skipped.
  */
-final class NullCatalog implements Catalog
+final class NullCatalog implements Catalog, TracksManagedResources
 {
+    public function managesAccount(string $server, Username $user, Host $host): bool
+    {
+        return false;
+    }
+
+    public function managesDatabase(string $server, DbName $db): bool
+    {
+        return false;
+    }
+
     public function recordDatabase(string $server, DbName $db, string $charset, ?string $collation): void {}
 
     public function forgetDatabase(string $server, DbName $db): void {}
