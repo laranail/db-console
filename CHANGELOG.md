@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A Warning or Critical event's notification keeps its category's channels and adds
+  `alerts.channel`**, each channel once. Since 0.1.1 `alerts.channel` replaced them, so setting it
+  to `slack` silently stopped the security mail for adoptions and suspicious activity.
 - **laranail/db-tools `^0.1.7`** (was `^0.1.6`) in `require-dev` and `suggest`. 0.1.7 dumps a
   Postgres server reached through an SSH tunnel (`host;hostaddr=`, the form db-console writes for a
   tunnelled server) with `sslmode=verify-full`, and a MySQL server reached through a unix socket,
@@ -16,6 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and since 0.1.1 a failed backup stops the drop.
 - **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** now points at db-tools 0.1.7,
   which ends the `verify-full` workaround, and says "three things" over its three items.
+
+### Fixed
+
+- **A create db-console half-made is reported as the failure it is.** Since 0.1.2, a create that
+  failed while the resource then existed was treated as a lost race and refused with a 409, or
+  adopted under `adopt`. That also caught db-console's own half-made resources: SQL Server's
+  `CREATE LOGIN` succeeding and `CREATE USER` failing, or the second statement of a Postgres
+  database create. Only a failure of the create's first statement is a race now
+  (`AdminConnection::runCreate()`); a later one fails as it did before 0.1.2.
 
 ## [0.1.2] - 2026-10-17
 

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Alerts keep their category's channels
+
+`alerts.channel` now adds to a Warning or Critical event's category channels rather than replacing
+them. If you set `alerts.channel` to a channel your security category does not use, the security
+recipients start receiving those alerts again, as they did before 0.1.1. To route alerts only to
+the alert channel, remove the overlap from `notifications.channels.security`.
+
 ### laranail/db-tools 0.1.7 for tunnelled and socket servers
 
 Backup-before-drop on a server reached through an SSH tunnel or a unix socket needs

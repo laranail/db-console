@@ -90,17 +90,29 @@ describe('channels per category', function (): void {
         Notification::assertSentTo($owner, DestructiveActionNotification::class, fn ($n, array $channels): bool => $channels === ['database']);
     });
 
-    it('routes a Warning or Critical event on alerts.channel instead', function (): void {
+    it('adds alerts.channel to a Warning or Critical event\'s own channels, once each', function (): void {
         Notification::fake();
         config()->set('laranail.db-console.alerts.channel', 'slack');
         config()->set('laranail.db-console.notifications.slack.route', 'https://hooks.slack.com/services/T/B/x');
 
         event(new SuspiciousActivity('prod', 'a root-like admin was detected'));
 
+        // The security mail it always had, plus the alert channel: an alert
+        // must not lose the route its category was configured with.
         Notification::assertSentOnDemand(
             SecurityAlertNotification::class,
-            fn ($n, array $channels): bool => $channels === ['slack'],
+            fn ($n, array $channels): bool => $channels === ['mail', 'slack'],
         );
+        Notification::assertSentOnDemandTimes(SecurityAlertNotification::class, 1);
+    });
+
+    it('does not repeat a channel the category and alerts.channel share', function (): void {
+        Notification::fake();
+        config()->set('laranail.db-console.alerts.channel', 'mail');
+
+        event(new SuspiciousActivity('prod', 'a root-like admin was detected'));
+
+        Notification::assertSentOnDemand(SecurityAlertNotification::class, fn ($n, array $channels): bool => $channels === ['mail']);
     });
 
     it('sends an adoption to the security recipients', function (): void {
