@@ -168,7 +168,7 @@ operator it runs as before. Run the migrations: `security_bypasses` is new.
 is on, for the last one with a second factor. Assign another Owner first.
 ### SSH tunnels
 
-Nothing changes unless a server's `ssh.enabled` is set. Two things to know when it is:
+Nothing changes unless a server's `ssh.enabled` is set. Three things to know when it is:
 
 - **`ssh.host_key` is required.** A server without a pinned host key is refused with
   `ServerMisconfigured`. Take the key from the server (`/etc/ssh/ssh_host_ed25519_key.pub`) or
@@ -178,7 +178,9 @@ Nothing changes unless a server's `ssh.enabled` is set. Two things to know when 
   dialling another. Set `tls.verify=false` for that server, or forward to `ssh.remote_socket`.
   PostgreSQL keeps verifying the real name.
 - **Backup before drop through a PostgreSQL tunnel with `verify-full`** fails, and so stops the
-  drop: db-tools runs `pg_dump --host`, which has no `hostaddr`. Until db-tools learns it, set
+  drop: db-tools 0.1.6 runs `pg_dump --host`, which has no `hostaddr`. Install db-tools 0.1.7,
+  which passes `hostaddr` to libpq as `PGHOSTADDR`, so the dump goes through the tunnel and still
+  verifies the real name (see the Unreleased section above). On 0.1.6, set
   `DB_CONSOLE_BACKUP_ABORT_DROP_ON_FAILURE=false` or `tls.verify=false` for that server.
 
 A PostgreSQL server whose `host` is a socket directory is now local, so `doctor` no longer reports

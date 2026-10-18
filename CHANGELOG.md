@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tunnelled server) with `sslmode=verify-full`, and a MySQL server reached through a unix socket,
   including one described by its socket alone. With 0.1.6, backup-before-drop on those servers fails,
   and since 0.1.1 a failed backup stops the drop.
+- **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** now points at db-tools 0.1.7,
+  which ends the `verify-full` workaround, and says "three things" over its three items.
 
 ## [0.1.2] - 2026-10-17
 
