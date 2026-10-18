@@ -83,9 +83,9 @@ The `tls` block still applies, and through a TCP forward the session is TLS from
 
 - **Hostname verification.** The client dials 127.0.0.1, and a certificate checked against that name fails. DBConsole keeps the check on the real name for both engines that allow it:
   - **PostgreSQL**: with `sslmode=verify-full` the connection's host becomes `db.example.com;hostaddr=127.0.0.1`, which tells libpq to dial the forward and check the certificate against the name.
-  - **MySQL and MariaDB**: pdo_mysql has no such option, so with `verify` on a **TLS relay** sits in front of the tunnel. It is a small PHP process that takes the client's place in MySQL's in-protocol TLS upgrade, verifies the certificate against the database's real name and `tls.ca` (and presents `tls.cert`/`tls.key` for mutual TLS), and passes everything else through. PDO talks to it in plaintext over a `0600` socket in the tunnel's `0700` directory. Everything past the relay is TLS, and `doctor` measures the session as encrypted. A certificate that does not match fails the login with a MySQL error naming why, for example `TLS to db.example.com failed: … did not match`. The relay needs a PHP CLI binary, as the phpseclib driver does, and `ssh.local=port`: it reaches the tunnel over TCP, since PHP cannot start TLS on a Unix socket.
-  - **SQL Server** cannot do it. pdo_sqlsrv has no `HostNameInCertificate` option, and its TLS handshake runs inside TDS packets, which no relay could take over. With `verify` on, a tunnel to SQL Server checks the certificate against 127.0.0.1. Set `tls.verify=false` for that server (the session is still encrypted, and the SSH host key is pinned).
-- **A socket carries no TLS.** Neither libpq nor mysqlnd negotiates TLS over a Unix socket. `local => 'socket'` with `tls.enabled` and a target across the network is refused (for MySQL with `verify` on, because the relay can only start TLS over TCP), because the hop from the SSH host to the database would be plaintext while config says TLS. A target that is a socket, or the loopback, on the SSH host never leaves that host, and `doctor` counts it as local.
+  - **MySQL and MariaDB**: pdo_mysql has no such option, so with `verify` on a **TLS relay** sits in front of the tunnel. It is a small PHP process that takes the client's place in MySQL's in-protocol TLS upgrade, verifies the certificate against the database's real name and `tls.ca` (and presents `tls.cert`/`tls.key` for mutual TLS), and passes everything else through. PDO talks to it in plaintext over a `0600` socket in the tunnel's `0700` directory. Everything past the relay is TLS, and `doctor` measures the session as encrypted. A certificate that does not match fails the login with a MySQL error naming why, for example `TLS to db.example.com failed: … did not match`. The relay needs a PHP CLI binary, as the phpseclib driver does. It works with either tunnel end: PHP starts TLS only on a tcp:// stream, so for `ssh.local=socket` the relay runs TLS over a loopback TCP pair of its own and splices it to the tunnel's socket. That pair's listener lives only until the relay's own connection is accepted, the accepted peer is checked to be that connection, and what crosses the pair is already TLS.
+  - **SQL Server** cannot do it. pdo_sqlsrv has no `HostNameInCertificate` option, and its TLS handshake runs inside TDS packets, which no relay could take over. With `verify` on, a tunnel to SQL Server checks the certificate against 127.0.0.1. Set `tls.verify=false` for that server (the session is still encrypted, and the SSH host key is pinned). What a fix would take is under [Follow-ups](#follow-ups).
+- **A socket carries no TLS.** Neither libpq nor mysqlnd negotiates TLS over a Unix socket. `local => 'socket'` with `tls.enabled` and a target across the network is refused, unless the TLS relay does the TLS (MySQL with `verify` on), because the hop from the SSH host to the database would be plaintext while config says TLS. A target that is a socket, or the loopback, on the SSH host never leaves that host, and `doctor` counts it as local.
 
 ## Doctor
 
@@ -100,6 +100,31 @@ The reachability check that follows runs its round trip through the tunnel. A tu
 ## Lifetime
 
 One tunnel per server per process. It opens on first use, is reused while it lives, is reopened if it dies, and is closed (with its directory, key and socket removed) when the application terminates, or at shutdown for anything that never reaches terminate. A queue worker keeps its tunnel for as long as it runs.
+
+
+## Follow-ups
+
+Open items for this feature, with what is known about each. A change that closes one moves it to the CHANGELOG.
+
+### SQL Server: verify the real name through a tunnel
+
+**Status: open.** Through a TCP tunnel SQL Server checks the certificate against 127.0.0.1, so a server with `tls.verify=true` fails; the workaround is `tls.verify=false` for it (the session is still encrypted, and the SSH host key is pinned).
+
+**Why it is not done yet.** Neither route available to PostgreSQL and MySQL exists here:
+
+- pdo_sqlsrv has no `HostNameInCertificate` or strict-encryption option. Its newest release, 5.12.0, adds neither, though the ODBC Driver 18 under it supports both.
+- A relay cannot take over the TLS step as it does for MySQL: before TDS 8.0, SQL Server carries its TLS handshake inside TDS PRELOGIN packets, and PHP has no API to run TLS over such a framing.
+
+**Likely design.** Two candidates, in order of preference:
+
+1. **pdo_sqlsrv gains `HostNameInCertificate`.** Then the fix is a DSN key: a connector for the admin connection that adds `HostNameInCertificate=<remote host>` when the server is tunnelled, the way `hostaddr` works for PostgreSQL. Laravel's `SqlServerConnector` escapes and filters DSN keys, so this needs a `db.connector.sqlsrv` binding that only adds the key when asked.
+2. **A TDS 8.0 relay for SQL Server 2022 and later.** With strict encryption TLS comes first, before any TDS, so a relay like the MySQL one could do it: TLS (ALPN `tds/8.0`) with the real name verified, the server's PRELOGIN answer rewritten so the client does not start TLS of its own, then bytes passed through. Unknowns to settle first: whether SQL Server accepts a client PRELOGIN that negotiates no encryption inside a strict session; PHP's client-side ALPN support; and only servers configured for strict encryption would be covered.
+
+**Done when** a live CI job with SQL Server behind the SSH server verifies the real name through both drivers and refuses a certificate for another name, as `live-ssh` does for PostgreSQL and MySQL.
+
+### MySQL relay through a socket-ended tunnel
+
+**Status: closed.** It used to need `ssh.local=port`, because PHP starts TLS only on a tcp:// stream. The relay now runs TLS over a loopback pair of its own and splices it to the tunnel's socket (see [TLS through a tunnel](#tls-through-a-tunnel)).
 
 ---
 
