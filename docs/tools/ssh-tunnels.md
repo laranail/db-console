@@ -56,7 +56,7 @@ A `known_hosts` line (`host ssh-ed25519 AAAA...`) is accepted too. `doctor` prin
 
 **openssh** runs `ssh -N -L <local>:<remote>` with `BatchMode=yes`, `StrictHostKeyChecking=yes` against a one-line `known_hosts` it writes, `ExitOnForwardFailure=yes`, `ServerAliveInterval`, `IdentitiesOnly=yes` and `IdentityAgent=none`, and `-F /dev/null` so nothing in the host's `~/.ssh/config` can change what runs.
 
-**phpseclib** needs `phpseclib/phpseclib` `^4.0.1`. It forwards from a child PHP process, because the request that uses the tunnel is blocked inside PDO and cannot move bytes itself. The child receives its settings, key included, on stdin rather than its command line, checks the host key after key exchange and before authenticating, and exits when its parent closes its stdin or dies. It opens `direct-tcpip` channels for a TCP target and `direct-streamlocal@openssh.com` channels for a socket target.
+**phpseclib** needs `phpseclib/phpseclib` `^4.0.1`. It forwards from a child PHP process, because the request that uses the tunnel is blocked inside PDO and cannot move bytes itself. The child receives its settings, key included, on stdin rather than its command line, checks the host key after key exchange and before authenticating, and exits when its parent closes its stdin or dies. It opens `direct-tcpip` channels for a TCP target and `direct-streamlocal@openssh.com` channels for a socket target, one per session, and serves them from one loop; a session the server closes does not hold up the others.
 
 ## Sockets
 

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A session closed by the server no longer stalls the others through a phpseclib tunnel.**
+  phpseclib raises its read timeout to 5 seconds when it handles one channel's close while
+  reading another, so a poll of an idle session blocked the whole forwarding process and every
+  session through it. `ForwardingSsh2` clamps that timeout to the poll's own while it polls.
+
+### Added
+
+- **The live SSH job proves verified TLS inside the tunnel.** A PostgreSQL with TLS and a
+  certificate for one name: `verify-full` reaches `required_ok` through both drivers, a name the
+  certificate does not carry is refused, and backup-before-drop dumps through the tunnel.
+
 ### Changed
 
 - **laranail/db-tools `^0.1.7`** (was `^0.1.6`) in `require-dev` and `suggest`. 0.1.7 dumps a

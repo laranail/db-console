@@ -21,7 +21,29 @@ final class ForwardingSsh2 extends SSH2
     /** Window and maximum packet size offered for each forwarded channel. */
     private const int PACKET_SIZE = 0x4000;
 
+    /** Seconds a poll of one channel may wait for its next packet. */
+    private const float POLL_TIMEOUT = 0.005;
+
+    /**
+     * phpseclib's remaining wait for the packet it is reading. When it
+     * handles a CHANNEL_CLOSE on another channel during a read, it raises this
+     * to 5 seconds and keeps reading, so a poll of an idle channel would block
+     * the whole pump, and every other session through it, until that timeout
+     * ran out. While polling, the wait is never raised past the poll's own.
+     * The hook applies to writes from phpseclib's code too, which is the point.
+     */
+    protected int|float|null $curTimeout = null {
+        set(int|float|null $value) {
+            $this->curTimeout = $this->polling && $value !== null && $value > self::POLL_TIMEOUT
+                ? self::POLL_TIMEOUT
+                : $value;
+        }
+    }
+
     private int $blockingTimeout = 10;
+
+    /** True while readForward() polls a channel. */
+    private bool $polling = false;
 
     public function setBlockingTimeout(int $seconds): void
     {
@@ -57,10 +79,16 @@ final class ForwardingSsh2 extends SSH2
             return false;
         }
 
-        $this->curTimeout = 0.005;
+        $this->polling = true;
+        $this->curTimeout = self::POLL_TIMEOUT;
         $this->is_timeout = false;
 
-        $data = $this->get_channel_packet($channel);
+        try {
+            $data = $this->get_channel_packet($channel);
+        } finally {
+            $this->polling = false;
+        }
+
         if (is_string($data)) {
             return $data;
         }
