@@ -16,7 +16,7 @@ Each notification has a category: `routine`, `destructive` or `security`. `notif
 | `slack` | `notifications.slack.route`: an incoming-webhook URL, or a channel name for a bot token | `laravel/slack-notification-channel` |
 | `database` | `notifications.database.users`: ids of `rbac.user_model` users | `Notifiable` on the model, a `notifications` table |
 
-A Warning or Critical event goes out on `alerts.channel` instead of its category's channels, so loud events can have their own route. `RaiseAlerts` also writes every alert to the log channel and posts it to `alerts.webhook` when set.
+A Warning or Critical event goes out on its category's channels and on `alerts.channel` too, each channel once, so loud events get their own route without losing their category's. `RaiseAlerts` also writes every alert to the log channel and posts it to `alerts.webhook` when set.
 
 ## Existing resources
 

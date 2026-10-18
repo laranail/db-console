@@ -72,24 +72,27 @@ final readonly class DatabaseManager
             return $this->adopt($server, $db, $onExisting);
         }
 
+        $raced = false;
+
         try {
             // Postgres writes LOCALE_PROVIDER only where the server parses it.
             if ($engine instanceof ServerVersionAwareEngine) {
                 $engine = $engine->forServerVersion($this->serverVersion($engine, $connection));
             }
 
-            $connection->run(
+            $raced = $connection->runCreate(
                 $engine->createDatabase($db, $charset),
                 ['operation' => OperationType::DatabaseCreate->value, 'target' => $db->value],
+                fn (): bool => $this->createdMeanwhile($server, $db),
             );
         } catch (DBConsoleException $e) {
-            // Created by someone else between the check and the create: the
-            // existing-resource policy decides, as if it had been there first.
-            if ($this->createdMeanwhile($server, $db)) {
-                return $this->adopt($server, $db, $onExisting);
-            }
-
             $this->fail(OperationType::DatabaseCreate, $server, $db->value, $e);
+        }
+
+        // Created by someone else between the check and the create: the
+        // existing-resource policy decides, as if it had been there first.
+        if ($raced) {
+            return $this->adopt($server, $db, $onExisting);
         }
 
         $this->catalog->recordDatabase($server, $db, $charset->value, $charset->collation);

@@ -222,3 +222,50 @@ it('treats a direct Postgres socket connection as local', function (): void {
 it('is a singleton, so one process keeps one set of tunnels', function (): void {
     expect(app(TunnelManager::class))->toBe(app(TunnelManager::class));
 });
+
+// doctor compares the port the server says it listens on with the port the
+// admin connection uses. Through a tunnel the connection's port is the
+// tunnel's local end, which never matches, so the comparison has to use the
+// port the tunnel forwards to.
+it('reports the port the database is reached on, not the tunnel\'s local end', function (): void {
+    tunnelledServer(connection: ['driver' => 'pgsql', 'port' => 6432]);
+    $registry = app(ServerRegistry::class);
+
+    expect($registry->connection('behind-bastion')->underlying()->getConfig('port'))->toBe(40000)
+        ->and($registry->databasePort('behind-bastion'))->toBe(6432);
+});
+
+it('reports the remote port the ssh block names over the connection\'s', function (): void {
+    tunnelledServer(ssh: ['remote_host' => 'pool.internal', 'remote_port' => 25061], connection: ['driver' => 'pgsql', 'port' => 5432]);
+
+    expect(app(ServerRegistry::class)->databasePort('behind-bastion'))->toBe(25061);
+});
+
+it('reports no port for a tunnel to a socket', function (): void {
+    tunnelledServer(ssh: ['remote_socket' => '/var/run/postgresql/.s.PGSQL.5432'], connection: ['driver' => 'pgsql']);
+
+    expect(app(ServerRegistry::class)->databasePort('behind-bastion'))->toBeNull();
+});
+
+it('reports the configured port of a server without a tunnel', function (): void {
+    config()->set('database.connections.direct_pg', ['driver' => 'pgsql', 'host' => 'db.internal', 'port' => 6432, 'database' => 'defaultdb']);
+    config()->set('laranail.db-console.servers.direct', ['engine' => 'pgsql', 'connection' => 'direct_pg', 'tls' => ['enabled' => false]]);
+
+    expect(app(ServerRegistry::class)->databasePort('direct'))->toBe(6432);
+});
+
+it('reports the host the database is reached on, not the tunnel\'s local end', function (): void {
+    tunnelledServer(connection: ['host' => 'db-shop.ondigitalocean.com']);
+    $registry = app(ServerRegistry::class);
+
+    expect($registry->connection('behind-bastion')->underlying()->getConfig('host'))->toBe('127.0.0.1')
+        ->and($registry->databaseHost('behind-bastion'))->toBe('db-shop.ondigitalocean.com');
+});
+
+// A read/write split names several hosts; the hosting check used the first.
+it('reports the first host of a connection that lists several', function (): void {
+    config()->set('database.connections.split_pg', ['driver' => 'pgsql', 'host' => ['db-a.ondigitalocean.com', 'db-b.ondigitalocean.com'], 'port' => 25060]);
+    config()->set('laranail.db-console.servers.split', ['engine' => 'pgsql', 'connection' => 'split_pg', 'tls' => ['enabled' => false]]);
+
+    expect(app(ServerRegistry::class)->databaseHost('split'))->toBe('db-a.ondigitalocean.com');
+});

@@ -50,7 +50,7 @@ jobs:
         run: rm -rf "$(composer config cache-files-dir)/laranail"
 
       - name: Install dependencies
-        run: composer update --prefer-stable --no-interaction --no-progress
+        uses: ./.github/actions/composer-update
 
       - name: Pint (code style)
         run: vendor/bin/laranail-pint --test

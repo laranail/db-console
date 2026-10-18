@@ -28,7 +28,8 @@ use Simtabi\Laranail\DBConsole\Notifications\DestructiveActionNotification;
  *
  * - **Channels**: `notifications.channels.<category>` lists mail, slack and
  *   database (default mail). A Warning or Critical event goes out on
- *   `alerts.channel` instead, so loud events can have their own route.
+ *   `alerts.channel` as well, so loud events get their own route without
+ *   losing their category's.
  * - **Recipients**: mail goes to `notifications.recipients.<category>`,
  *   slack to `notifications.slack.route` (a webhook URL or a bot channel),
  *   database to the `notifications.database.users` ids of the RBAC user
@@ -108,14 +109,26 @@ final readonly class SendNotifications
      */
     private function channelsFor(NotificationCategory $category, RecordsToAudit $event): array
     {
-        $configured = $event->severity()->alerts()
-            ? $this->config->get('laranail.db-console.alerts.channel', 'mail')
-            : $this->config->get("laranail.db-console.notifications.channels.{$category->value}", ['mail']);
+        $channels = $this->channelList($this->config->get("laranail.db-console.notifications.channels.{$category->value}", ['mail']));
 
-        $channels = is_string($configured) ? explode(',', $configured) : (array) $configured;
-        $channels = array_map(static fn (mixed $c): string => trim(is_scalar($c) ? (string) $c : ''), $channels);
+        // A loud event keeps its category's routes and adds the alert channel.
+        if ($event->severity()->alerts()) {
+            $channels = [...$channels, ...$this->channelList($this->config->get('laranail.db-console.alerts.channel', 'mail'))];
+        }
 
         return array_values(array_unique(array_intersect($channels, self::CHANNELS)));
+    }
+
+    /**
+     * A channel list from config: an array, or a comma-separated string.
+     *
+     * @return list<string>
+     */
+    private function channelList(mixed $configured): array
+    {
+        $channels = is_string($configured) ? explode(',', $configured) : (array) $configured;
+
+        return array_values(array_map(static fn (mixed $c): string => trim(is_scalar($c) ? (string) $c : ''), $channels));
     }
 
     /**

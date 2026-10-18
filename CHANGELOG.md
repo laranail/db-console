@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
+  their code and status only for a request that expects JSON, so a client that sent no `Accept:
+  application/json` got a 500 for a refusal (`not_authorized`, `assurance_required`, a 409 for an
+  existing resource) and a 302 redirect for a validation error. `ApiGuard` now sets the header on
+  every API request.
+- **`doctor` judged a tunnelled server by the tunnel's local end.** The pooler check compared the
+  server's own port with the admin connection's, which through an SSH tunnel is the tunnel's local
+  port: every tunnelled server read as relayed, and PgBouncer behind a bastion was never warned
+  about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
+  behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
+  `ServerRegistry::databasePort()` and `databaseHost()`.
 - **A session closed by the server no longer stalls the others through a phpseclib tunnel.**
   phpseclib raises its read timeout to 5 seconds when it handles one channel's close while
   reading another, so a poll of an idle session blocked the whole forwarding process and every
@@ -19,9 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The live SSH job proves verified TLS inside the tunnel.** A PostgreSQL with TLS and a
   certificate for one name: `verify-full` reaches `required_ok` through both drivers, a name the
   certificate does not carry is refused, and backup-before-drop dumps through the tunnel.
+## [0.1.3] - 2026-10-18
 
 ### Changed
 
+- **A Warning or Critical event's notification keeps its category's channels and adds
+  `alerts.channel`**, each channel once. Since 0.1.1 `alerts.channel` replaced them, so setting it
+  to `slack` silently stopped the security mail for adoptions and suspicious activity.
 - **laranail/db-tools `^0.1.7`** (was `^0.1.6`) in `require-dev` and `suggest`. 0.1.7 dumps a
   Postgres server reached through an SSH tunnel (`host;hostaddr=`, the form db-console writes for a
   tunnelled server) with `sslmode=verify-full`, and a MySQL server reached through a unix socket,
@@ -29,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and since 0.1.1 a failed backup stops the drop.
 - **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** now points at db-tools 0.1.7,
   which ends the `verify-full` workaround, and says "three things" over its three items.
+
+### Fixed
+
+- **A create db-console half-made is reported as the failure it is.** Since 0.1.2, a create that
+  failed while the resource then existed was treated as a lost race and refused with a 409, or
+  adopted under `adopt`. That also caught db-console's own half-made resources: SQL Server's
+  `CREATE LOGIN` succeeding and `CREATE USER` failing, or the second statement of a Postgres
+  database create. Only a failure of the create's first statement is a race now
+  (`AdminConnection::runCreate()`); a later one fails as it did before 0.1.2.
 
 ## [0.1.2] - 2026-10-17
 
@@ -510,6 +534,7 @@ Both are removed no earlier than the next minor after 0.1.
 
 Initial public release.
 
-[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/laranail/db-console/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/laranail/db-console/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/laranail/db-console/compare/v0.1.0...v0.1.1

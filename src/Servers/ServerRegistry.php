@@ -242,6 +242,52 @@ final class ServerRegistry
     }
 
     /**
+     * The host the database is reached on: where a tunnelled server's SSH
+     * host forwards to, or the admin connection's own host. Null for a Unix
+     * socket. Like databasePort(), it does not change when a tunnel opens.
+     */
+    public function databaseHost(string $server): ?string
+    {
+        $definition = $this->definition($server);
+        if ($definition->ssh instanceof SshSettings) {
+            return $this->tunnelTarget($server)?->host;
+        }
+
+        /** @var array<string, mixed> $config */
+        $config = (array) $this->config->get("database.connections.{$definition->connection}", []);
+
+        // A read/write split lists several hosts; the first stands for them.
+        $hosts = $config['host'] ?? null;
+        if (is_array($hosts)) {
+            $first = reset($hosts);
+
+            return is_string($first) && $first !== '' ? $first : null;
+        }
+
+        return TunnelledConnection::origin($config)['host'];
+    }
+
+    /**
+     * The port the database is reached on: where a tunnelled server's SSH
+     * host forwards to, or the admin connection's own port. Null for a Unix
+     * socket at either end, or a connection with no port set. Unlike the
+     * admin connection's port, it does not change when a tunnel opens and
+     * points the connection at the tunnel's local end.
+     */
+    public function databasePort(string $server): ?int
+    {
+        $definition = $this->definition($server);
+        if ($definition->ssh instanceof SshSettings) {
+            return $this->tunnelTarget($server)?->port;
+        }
+
+        /** @var array<string, mixed> $config */
+        $config = (array) $this->config->get("database.connections.{$definition->connection}", []);
+
+        return TunnelledConnection::origin($config)['port'];
+    }
+
+    /**
      * Stop every tunnel this process opened and put each tunnelled admin
      * connection back as it was. Runs when the application terminates.
      */

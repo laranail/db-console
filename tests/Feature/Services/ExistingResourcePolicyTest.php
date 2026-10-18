@@ -321,6 +321,34 @@ describe('a create that loses a race', function (): void {
             ->toThrow(DatabaseAlreadyExists::class);
     });
 
+    it('reports its own half-made account as the failure it is, not as someone else\'s', function (): void {
+        Event::fake([AccountCreationRefused::class]);
+        $this->engine->failAfterCreate = true;
+
+        try {
+            policyCreateShop(ExistingResourcePolicy::Adopt);
+            $this->fail('expected the create to fail');
+        } catch (DBConsoleException $e) {
+            expect($e)->not->toBeInstanceOf(AccountAlreadyExists::class);
+        }
+
+        expect(DbAccount::query()->count())->toBe(0);
+        Event::assertNotDispatched(AccountCreationRefused::class);
+    });
+
+    it('reports its own half-made database as the failure it is', function (): void {
+        $this->engine->failAfterCreate = true;
+
+        try {
+            app(DatabaseManager::class)->create('fake', new DbName('shop_prod'), new Charset('utf8'), ExistingResourcePolicy::Adopt);
+            $this->fail('expected the create to fail');
+        } catch (DBConsoleException $e) {
+            expect($e)->not->toBeInstanceOf(DatabaseAlreadyExists::class);
+        }
+
+        expect(ManagedDatabase::query()->count())->toBe(0);
+    });
+
     it('still fails as a failure when nothing appeared', function (): void {
         // A server that refuses the name outright: the create fails and no
         // database appears, so there is nothing to adopt or refuse.
