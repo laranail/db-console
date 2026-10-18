@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CREATE LOGIN` succeeding and `CREATE USER` failing, or the second statement of a Postgres
   database create. Only a failure of the create's first statement is a race now
   (`AdminConnection::runCreate()`); a later one fails as it did before 0.1.2.
+- **`doctor` judged a tunnelled server by the tunnel's local end.** The pooler check compared the
+  server's own port with the admin connection's, which through an SSH tunnel is the tunnel's local
+  port: every tunnelled server read as relayed, and PgBouncer behind a bastion was never warned
+  about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
+  behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
+  `ServerRegistry::databasePort()` and `databaseHost()`.
 
 ## [0.1.2] - 2026-10-17
 
