@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The 0.1.1 upgrade note on backups through a PostgreSQL tunnel** names the fix:
+  laranail/db-tools#67 hands `hostaddr` to libpq as `PGHOSTADDR`, so the `verify-full` workaround
+  is needed only until a db-tools release after 0.1.6 is installed. The note also said "two
+  things" over three.
+
 ## [0.1.2] - 2026-10-17
 
 ### Removed
