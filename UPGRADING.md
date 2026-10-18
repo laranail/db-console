@@ -1,5 +1,14 @@
 # Upgrading
 
+## Unreleased
+
+### laranail/db-tools 0.1.7 for tunnelled and socket servers
+
+Backup-before-drop on a server reached through an SSH tunnel or a unix socket needs
+`laranail/db-tools ^0.1.7`. With 0.1.6 the dump fails there, and a failed backup stops the drop.
+Run `composer require laranail/db-tools:^0.1.7`, then `composer clear-cache` if an earlier install
+cached the archive.
+
 ## 0.1.2
 
 ### Deprecated names removed

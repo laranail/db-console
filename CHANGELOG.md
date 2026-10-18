@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **laranail/db-tools `^0.1.7`** (was `^0.1.6`) in `require-dev` and `suggest`. 0.1.7 dumps a
+  Postgres server reached through an SSH tunnel (`host;hostaddr=`, the form db-console writes for a
+  tunnelled server) with `sslmode=verify-full`, and a MySQL server reached through a unix socket,
+  including one described by its socket alone. With 0.1.6, backup-before-drop on those servers fails,
+  and since 0.1.1 a failed backup stops the drop.
+
 ## [0.1.2] - 2026-10-17
 
 ### Removed
