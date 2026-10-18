@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Three API reads checked no permission.** `GET audit` returned the audit trail, and
+  `GET webhooks` every subscription with its target URL, to any authenticated caller; `GET servers`
+  listed every registered server. They now need `audit.view` and `webhook.manage`, and the server
+  list holds only the servers the caller has `server.view` on.
+
+### Added
+
+- **API endpoints for the request classes that had no route:** `PATCH servers/{server}/accounts/{username}`
+  (host move, grants kept), `POST …/accounts/{username}/password`, `DELETE servers/{server}/grants`
+  (revoke), `POST` and `DELETE servers/{server}/attachments` (bulk attach and detach, 207 on a
+  partial run), `POST tokens` and `POST role-assignments`. Issuing a token needs `token.manage` and
+  caps its abilities by both the caller's and the holder's (`TokenManager::issueFor`), so an Admin
+  cannot mint a token with an Owner's abilities; assigning a role needs `settings.manage` and refuses
+  a role that grants nothing. `TokenManager::issue()` takes an optional expiry.
+
+### Changed
+
+- **The drop endpoints are validated by `DropDatabaseRequest` and `DropAccountRequest`.** The name
+  in the route is validated, a wrong confirmation is a 422 with an error on `confirm`, and dropping
+  an account requires `host`. It used to default to `%`, dropping `user@%` when the caller meant
+  another host. With `api.confirm_destructive` off the confirmation is still not required.
+
 ### Changed
 
 - **Tests generate their passwords at run time.** A fixed strong sample, repeated across the test

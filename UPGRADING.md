@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### REST API
+
+- **`DELETE …/accounts/{username}` requires `host`.** Send the account's host; there is no `%`
+  default.
+- **A wrong or missing confirmation on a drop is a 422 validation error** (an `errors.confirm`
+  entry) rather than a 422 with only a message.
+- **`GET audit` needs `audit.view` and `GET webhooks` needs `webhook.manage`;** `GET servers` returns
+  only the servers the caller has `server.view` on. A caller holding none of these now gets 403 or an
+  empty list.
+
 ### MySQL verifies the real name through an SSH tunnel
 
 A MySQL or MariaDB server reached through an SSH tunnel with `tls.verify=true` used to fail: pdo_mysql
