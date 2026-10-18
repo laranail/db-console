@@ -63,7 +63,7 @@ describe('driver error mapping', function (): void {
 
 describe('secret hygiene (must never be weakened)', function (): void {
     it('never copies a QueryException message — it embeds the SQL, which can contain a password', function (): void {
-        $password = 'Xk9$mQ2vLpW7#nR4!secret';
+        $password = testPassword() . '!secret';
         $sql = "CREATE USER 'shop_user'@'%' IDENTIFIED BY '{$password}'";
         $query = new QueryException('admin', $sql, [], pdoExceptionWith('HY000', 1396, 'Operation CREATE USER failed'));
 
@@ -79,7 +79,7 @@ describe('secret hygiene (must never be weakened)', function (): void {
     });
 
     it('records only the class name when a QueryException has no plain PDO previous', function (): void {
-        $password = 'Xk9$mQ2vLpW7#nR4!secret';
+        $password = testPassword() . '!secret';
         $query = new QueryException(
             'admin',
             "CREATE USER 'u'@'%' IDENTIFIED BY '{$password}'",

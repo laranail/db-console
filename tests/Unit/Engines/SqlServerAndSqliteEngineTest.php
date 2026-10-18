@@ -35,10 +35,10 @@ describe('SQL Server: login + user two-step, bracket quoting', function (): void
     });
 
     it('creates a login AND a user (two statements), redacting the password', function () use ($engine): void {
-        $statements = $engine->createAccount(new Username('app_user'), new Host('%'), new Password('Xk9$mQ2vLpW7#nR4t!'))->all();
+        $statements = $engine->createAccount(new Username('app_user'), new Host('%'), new Password(testPassword()))->all();
 
         expect($statements)->toHaveCount(2)
-            ->and($statements[0]->sql)->toBe('CREATE LOGIN [app_user] WITH PASSWORD = \'Xk9$mQ2vLpW7#nR4t!\'')
+            ->and($statements[0]->sql)->toBe('CREATE LOGIN [app_user] WITH PASSWORD = \'' . testPassword() . '\'')
             ->and($statements[0]->redacted)->toBe('CREATE LOGIN [app_user] WITH PASSWORD = \'[redacted]\'')
             ->and($statements[1]->sql)->toBe('CREATE USER [app_user] FOR LOGIN [app_user]');
     });
@@ -84,10 +84,10 @@ describe('SQLite: honest capability degradation (section 13)', function (): void
     });
 
     it('throws UnsupportedOperation for every account/grant operation, honestly', function () use ($engine): void {
-        expect(fn (): StatementList => $engine->createAccount(new Username('u'), new Host('%'), new Password('Xk9$mQ2vLpW7#nR4t!')))
+        expect(fn (): StatementList => $engine->createAccount(new Username('u'), new Host('%'), new Password(testPassword())))
             ->toThrow(UnsupportedOperation::class)
             ->and(fn (): StatementList => $engine->dropAccount(new Username('u'), new Host('%')))->toThrow(UnsupportedOperation::class)
-            ->and(fn (): StatementList => $engine->setPassword(new Username('u'), new Host('%'), new Password('Xk9$mQ2vLpW7#nR4t!')))->toThrow(UnsupportedOperation::class)
+            ->and(fn (): StatementList => $engine->setPassword(new Username('u'), new Host('%'), new Password(testPassword())))->toThrow(UnsupportedOperation::class)
             ->and(fn (): StatementList => $engine->grant(PrivilegeSet::fromPreset(PrivilegePreset::ReadOnly), new DbName('d'), new Username('u'), new Host('%')))->toThrow(UnsupportedOperation::class)
             ->and(fn (): StatementList => $engine->showGrants(new Username('u'), new Host('%')))->toThrow(UnsupportedOperation::class);
     });

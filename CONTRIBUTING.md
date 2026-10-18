@@ -40,6 +40,14 @@ which owns the Docker stack and exercises the package end-to-end.
 - User-facing strings live in `resources/lang/en/` under the `db-console::`
   namespace; do not hardcode message literals.
 
+## Test credentials
+
+Never write a password into a test. Use `testPassword()` (defined in `tests/Pest.php`), which
+generates a strong one for the run with `Password::generate()`; pass a length when a test needs one.
+A literal sample here was reported by secret scanning as a leaked credential, and
+`tests/Architecture/NoLiteralTestCredentialsTest.php` now fails on a strong-looking literal in a
+password position. A deliberately weak sample, to test rejection, is fine as a literal.
+
 ## Commit messages
 
 - Subject in imperative mood, 72 characters or fewer.

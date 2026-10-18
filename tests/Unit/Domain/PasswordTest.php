@@ -6,8 +6,6 @@ use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
 
-const STRONG_SAMPLE = 'Xk9$mQ2vLpW7#nR4t!';
-
 describe('strength policy', function (): void {
     it('rejects a password shorter than the minimum', function (): void {
         new Password('Ab1!short');
@@ -18,48 +16,48 @@ describe('strength policy', function (): void {
     })->throws(WeakPassword::class);
 
     it('honors a caller-supplied higher minimum', function (): void {
-        new Password(STRONG_SAMPLE, 32);
+        new Password(testPassword(), 32);
     })->throws(WeakPassword::class);
 
     it('accepts a strong password and reveals it only explicitly', function (): void {
-        $password = new Password(STRONG_SAMPLE);
+        $password = new Password(testPassword());
 
-        expect($password->reveal())->toBe(STRONG_SAMPLE);
+        expect($password->reveal())->toBe(testPassword());
     });
 });
 
 describe('redaction (must never be weakened)', function (): void {
     it('redacts on string interpolation', function (): void {
-        $password = new Password(STRONG_SAMPLE);
+        $password = new Password(testPassword());
 
         expect("value: {$password}")->toBe('value: [redacted]')
-            ->and((string) $password)->not->toContain(STRONG_SAMPLE);
+            ->and((string) $password)->not->toContain(testPassword());
     });
 
     it('redacts in json_encode', function (): void {
-        $password = new Password(STRONG_SAMPLE);
+        $password = new Password(testPassword());
 
-        expect(json_encode(['password' => $password]))->not->toContain(STRONG_SAMPLE)
+        expect(json_encode(['password' => $password]))->not->toContain(testPassword())
             ->and(json_encode($password))->toContain('redacted');
     });
 
     it('redacts in var_dump via __debugInfo', function (): void {
-        $password = new Password(STRONG_SAMPLE);
+        $password = new Password(testPassword());
 
         ob_start();
         var_dump($password);
         $dump = ob_get_clean();
 
-        expect($dump)->not->toContain(STRONG_SAMPLE)
+        expect($dump)->not->toContain(testPassword())
             ->and($dump)->toContain('redacted');
     });
 
     it('does not survive serialization', function (): void {
-        $password = new Password(STRONG_SAMPLE);
+        $password = new Password(testPassword());
 
         $serialized = serialize($password);
 
-        expect($serialized)->not->toContain(STRONG_SAMPLE);
+        expect($serialized)->not->toContain(testPassword());
 
         $revived = unserialize($serialized);
         expect($revived->reveal())->toBe('[redacted]');

@@ -49,8 +49,8 @@ it('produces the keys of the RFC 7677 example exchange', function (): void {
 });
 
 it('salts each verifier with 16 fresh random bytes', function (): void {
-    $first = scramParts(ScramSha256::verifier('Xk9$mQ2vLpW7#nR4t!'));
-    $second = scramParts(ScramSha256::verifier('Xk9$mQ2vLpW7#nR4t!'));
+    $first = scramParts(ScramSha256::verifier(testPassword()));
+    $second = scramParts(ScramSha256::verifier(testPassword()));
 
     expect(strlen($first['salt']))->toBe(16)
         ->and($first['salt'])->not->toBe($second['salt'])
@@ -67,9 +67,9 @@ it('hashes passwords SASLprep leaves unchanged as they are', function (string $p
 
     expect($parts['serverKey'])->toBe(hash_hmac('sha256', 'Server Key', $salted, true));
 })->with([
-    'ASCII'                 => ['Xk9$mQ2vLpW7#nR4t!'],
-    'NFKC-stable non-ASCII' => ['Pässwörd-Ünïcode-2026'],
-    'not valid UTF-8'       => ["Latin1-\xE9t\xE9-Password!9"],
+    'ASCII'                 => [fn (): string => testPassword()],
+    'NFKC-stable non-ASCII' => [fn (): string => 'Pässwörd-Ünïcode-' . random_int(1000, 9999)],
+    'not valid UTF-8'       => [fn (): string => "Latin1-\xE9t\xE9-" . random_int(1000, 9999)],
 ]);
 
 // SASLprep would map or normalise these, and whether the server then keeps

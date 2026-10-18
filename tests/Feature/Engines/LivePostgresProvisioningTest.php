@@ -48,7 +48,8 @@ use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 
 uses()->group('live-pgsql');
 
-const LIVE_PG_PASSWORD = 'Live-Pg-Role-Password-2026!';
+// Generated per run: a fixed role password here is a credential in the source.
+defined('LIVE_PG_PASSWORD') || define('LIVE_PG_PASSWORD', testPassword(24));
 
 function livePg(string $variable, string $default = ''): string
 {
