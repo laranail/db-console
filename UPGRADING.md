@@ -1,6 +1,6 @@
 # Upgrading
 
-## Unreleased
+## 0.1.3
 
 ### Alerts keep their category's channels
 
