@@ -24,23 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot mint a token with an Owner's abilities; assigning a role needs `settings.manage` and refuses
   a role that grants nothing. `TokenManager::issue()` takes an optional expiry.
 
-### Changed
-
-- **The drop endpoints are validated by `DropDatabaseRequest` and `DropAccountRequest`.** The name
-  in the route is validated, a wrong confirmation is a 422 with an error on `confirm`, and dropping
-  an account requires `host`. It used to default to `%`, dropping `user@%` when the caller meant
-  another host. With `api.confirm_destructive` off the confirmation is still not required.
-
-### Changed
-
-- **Tests generate their passwords at run time.** A fixed strong sample, repeated across the test
-  suite since the first release, was reported by secret scanning as a leaked credential. Tests now
-  call `testPassword()`, which uses `Password::generate()`, and
-  `NoLiteralTestCredentialsTest` fails on a strong-looking literal in a password position. The live
-  provisioning jobs' account passwords are generated per run too.
-
-### Added
-
 - **MySQL and MariaDB verify the server's real name through an SSH tunnel.** pdo_mysql checks a
   certificate against the host it dials, which through a tunnel is 127.0.0.1, so `tls.verify=true`
   failed for every real certificate. A TLS relay (`Tunnels\Relay\MysqlTlsRelay`, a PHP process
@@ -80,6 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     reads back, so no migration is needed.
 
 ### Changed
+
+- **The drop endpoints are validated by `DropDatabaseRequest` and `DropAccountRequest`.** The name
+  in the route is validated, a wrong confirmation is a 422 with an error on `confirm`, and dropping
+  an account requires `host`. It used to default to `%`, dropping `user@%` when the caller meant
+  another host. With `api.confirm_destructive` off the confirmation is still not required.
+
+- **Tests generate their passwords at run time.** A fixed strong sample, repeated across the test
+  suite since the first release, was reported by secret scanning as a leaked credential. Tests now
+  call `testPassword()`, which uses `Password::generate()`, and
+  `NoLiteralTestCredentialsTest` fails on a strong-looking literal in a password position. The live
+  provisioning jobs' account passwords are generated per run too.
 
 - **laranail/db-tools `^0.1.8`** (was `^0.1.7`) in `require-dev` and `suggest`. doctor's
   `server:<name>:backup-client` check calls db-tools' `preflight()`, which first ships in 0.1.8; with
