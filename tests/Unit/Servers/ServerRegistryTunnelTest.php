@@ -3,14 +3,21 @@
 declare(strict_types=1);
 
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
+use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVault;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Tunnels\TunnelManager;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Exceptions\TunnelFailed;
+use Simtabi\Laranail\DBConsole\Servers\ServerDefinition;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
+use Simtabi\Laranail\DBConsole\Tunnels\PrivateDirectory;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\TunnelKeys;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeTunnelDriver;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TerminatesTls;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TlsRelayLauncher;
+use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeTlsRelayLauncher;
 use Simtabi\Laranail\DBConsole\Tunnels\Drivers\OpenSshTunnelDriver;
 
 /**
@@ -38,6 +45,9 @@ function tunnelledServer(array $ssh = [], array $tls = ['enabled' => false], arr
 beforeEach(function (): void {
     $this->driver = new FakeTunnelDriver;
     app()->instance(OpenSshTunnelDriver::class, $this->driver);
+
+    $this->relays = new FakeTlsRelayLauncher;
+    app()->instance(TlsRelayLauncher::class, $this->relays);
 });
 
 it('opens the tunnel on first use and points the admin connection at it', function (): void {
@@ -162,13 +172,18 @@ describe('sockets', function (): void {
 
     // The guard: TLS cannot cross a Unix socket, so this would quietly send
     // the SSH-host-to-database leg in plaintext while config says TLS.
-    it('refuses a socket local end that would drop required TLS on the onward hop', function (): void {
-        tunnelledServer(['local' => 'socket'], ['enabled' => true, 'verify' => true]);
+    it('refuses a socket local end that would drop required TLS on the onward hop', function (array $tls, array $connection): void {
+        tunnelledServer(['local' => 'socket'], $tls, $connection);
 
         expect(fn () => app(ServerRegistry::class)->resolve('behind-bastion'))
             ->toThrow(ServerMisconfigured::class, 'a Unix socket cannot carry TLS')
             ->and($this->driver->opened)->toBe([]);
-    });
+    })->with([
+        // Postgres verifies through hostaddr, which needs a TCP local end.
+        'postgres, verified' => [['enabled' => true, 'verify' => true], ['driver' => 'pgsql', 'port' => 5432]],
+        // Unverified MySQL TLS is the client's own, and it cannot run on a socket.
+        'mysql, not verified' => [['enabled' => true, 'verify' => false], []],
+    ]);
 
     it('allows a socket local end when the onward hop stays on the SSH host', function (): void {
         tunnelledServer(['local' => 'socket', 'remote_socket' => '/var/run/mysqld/mysqld.sock'], ['enabled' => true]);
@@ -268,4 +283,56 @@ it('reports the first host of a connection that lists several', function (): voi
     config()->set('laranail.db-console.servers.split', ['engine' => 'pgsql', 'connection' => 'split_pg', 'tls' => ['enabled' => false]]);
 
     expect(app(ServerRegistry::class)->databaseHost('split'))->toBe('db-a.ondigitalocean.com');
+});
+
+describe('the MySQL TLS relay', function (): void {
+    // pdo_mysql verifies against the host it dials, 127.0.0.1 through a
+    // tunnel. The relay verifies the real name and the client talks to it.
+    it('puts the relay in front of a tunnel to a verified MySQL', function (): void {
+        tunnelledServer(tls: ['enabled' => true, 'verify' => true, 'ca' => '/certs/ca.pem']);
+
+        $connection = app(ServerRegistry::class)->connection('behind-bastion')->underlying();
+
+        expect($this->relays->launched)->toBe([['server' => 'behind-bastion', 'upstream' => '127.0.0.1:40000', 'name' => 'db.internal']])
+            ->and($connection->getConfig('unix_socket'))->toBe($this->driver->opened[0]->directory->path . '/mysql-tls.sock')
+            ->and((array) $connection->getConfig('options'))->toBe([]);
+    });
+
+    it('relays a socket local end too, since the relay does TLS itself', function (): void {
+        tunnelledServer(['local' => 'socket'], ['enabled' => true, 'verify' => true]);
+
+        app(ServerRegistry::class)->resolve('behind-bastion');
+
+        expect($this->relays->launched)->toHaveCount(1)
+            ->and($this->relays->launched[0]['upstream'])->toEndWith('/db.sock');
+    });
+
+    it('leaves TLS to the client where it can verify, or where nothing needs verifying', function (array $ssh, array $tls, array $connection): void {
+        tunnelledServer($ssh, $tls, $connection);
+
+        app(ServerRegistry::class)->resolve('behind-bastion');
+
+        expect($this->relays->launched)->toBe([]);
+    })->with([
+        'mysql, unverified TLS'    => [[], ['enabled' => true, 'verify' => false], []],
+        'mysql, TLS off'           => [[], ['enabled' => false], []],
+        'mysql to a remote socket' => [['remote_socket' => '/var/run/mysqld/mysqld.sock'], ['enabled' => true, 'verify' => true], []],
+        'mysql to the SSH host'    => [['remote_host' => '127.0.0.1'], ['enabled' => true, 'verify' => true], []],
+        'postgres, verified'       => [[], ['enabled' => true, 'verify' => true], ['driver' => 'pgsql', 'port' => 5432]],
+    ]);
+
+    it('closes the tunnel when its relay cannot start', function (): void {
+        app()->instance(TlsRelayLauncher::class, new class implements TlsRelayLauncher
+        {
+            public function launch(ServerDefinition $definition, Tunnel $tunnel, Endpoint $remote, PrivateDirectory $directory, int $timeout): Tunnel&TerminatesTls
+            {
+                throw new RuntimeException('no PHP CLI binary was found');
+            }
+        });
+        tunnelledServer(tls: ['enabled' => true, 'verify' => true]);
+
+        expect(fn () => app(ServerRegistry::class)->resolve('behind-bastion'))
+            ->toThrow(TunnelFailed::class, 'the MySQL TLS relay did not start: no PHP CLI binary was found')
+            ->and($this->driver->tunnels[0]->closed)->toBeTrue();
+    });
 });

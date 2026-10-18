@@ -58,6 +58,7 @@ use Simtabi\Laranail\DBConsole\Encryption\SqlCipherManager;
 use Simtabi\Laranail\DBConsole\Listeners\SendNotifications;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\Package\Tools\Commands\InstallCommand;
+use Simtabi\Laranail\DBConsole\Tunnels\Relay\VerifyingRelay;
 use Simtabi\Laranail\DBConsole\Authorization\DBConsolePolicy;
 use Simtabi\Laranail\DBConsole\Encryption\AtRestStatusReader;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\SecretStore;
@@ -70,6 +71,7 @@ use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
 use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Enums\RbacDriver as RbacDriverEnum;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\DatabaseSecretStore;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TlsRelayLauncher;
 use Simtabi\Laranail\Package\Tools\Providers\PackageServiceProvider;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\AboutSectionDefinition;
 use Simtabi\Laranail\Package\Tools\Support\Definitions\InstallCommandDefinition;
@@ -365,6 +367,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
         $this->app->singleton(ServerRegistry::class);
         // One tunnel per server per process; closed when the app terminates.
         $this->app->singleton(TunnelManager::class);
+        $this->app->bindIf(TlsRelayLauncher::class, VerifyingRelay::class);
 
         $this->app->singleton(DBConsoleLogger::class, fn ($app): DBConsoleLogger => new DBConsoleLogger(
             $app->make(LoggerInterface::class),

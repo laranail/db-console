@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tunnels;
 
+use Pdo\Mysql;
 use InvalidArgumentException;
 use Illuminate\Database\ConfigurationUrlParser;
 
@@ -76,6 +77,33 @@ final class TunnelledConnection
                 : [...$config, 'host' => $local->host, 'port' => $local->port],
             default => throw new InvalidArgumentException("a '{$driver}' connection cannot be tunnelled"),
         };
+    }
+
+    /**
+     * A MySQL connection with its own TLS settings removed, for a client that
+     * talks to the TLS relay: TLS is the relay's, and a client asking the
+     * relay for it would be refused. Both the PDO attributes and the keys
+     * db-tools reads for mysqldump go.
+     *
+     * @param array<string, mixed> $config
+     *
+     * @return array<string, mixed>
+     */
+    public static function withoutClientTls(array $config): array
+    {
+        foreach (['ssl-ca', 'ssl_ca', 'ssl-capath', 'ssl_capath', 'ssl-cert', 'ssl_cert', 'ssl-key', 'ssl_key',
+            'ssl-cipher', 'ssl_cipher', 'ssl-mode', 'ssl_mode'] as $key) {
+            unset($config[$key]);
+        }
+
+        if (is_array($config['options'] ?? null) && extension_loaded('pdo_mysql')) {
+            foreach ([Mysql::ATTR_SSL_CA, Mysql::ATTR_SSL_CAPATH, Mysql::ATTR_SSL_CERT, Mysql::ATTR_SSL_KEY,
+                Mysql::ATTR_SSL_CIPHER, Mysql::ATTR_SSL_VERIFY_SERVER_CERT] as $attribute) {
+                unset($config['options'][$attribute]);
+            }
+        }
+
+        return $config;
     }
 
     /**

@@ -12,7 +12,9 @@ use Simtabi\Laranail\DBConsole\Enums\TunnelDriverType;
 use Simtabi\Laranail\DBConsole\Exceptions\TunnelFailed;
 use Simtabi\Laranail\DBConsole\Servers\ServerDefinition;
 use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
+use Simtabi\Laranail\DBConsole\Tunnels\Relay\VerifyingRelay;
 use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TunnelDriver;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TlsRelayLauncher;
 use Simtabi\Laranail\DBConsole\Tunnels\Drivers\OpenSshTunnelDriver;
 use Simtabi\Laranail\DBConsole\Tunnels\Drivers\PhpseclibTunnelDriver;
 
@@ -50,7 +52,19 @@ final class TunnelManager
 
         $this->registerShutdown();
 
-        return $this->tunnels[$definition->name] = $this->driver($ssh->driver)->open($spec);
+        $tunnel = $this->driver($ssh->driver)->open($spec);
+
+        if (VerifyingRelay::appliesTo($definition, $remote, $engineDriver)) {
+            try {
+                $tunnel = $this->container->make(TlsRelayLauncher::class)->launch($definition, $tunnel, $remote, $spec->directory, $ssh->connectTimeout);
+            } catch (RuntimeException $e) {
+                $tunnel->close();
+
+                throw TunnelFailed::forServer($definition->name, "the MySQL TLS relay did not start: {$e->getMessage()}", $e);
+            }
+        }
+
+        return $this->tunnels[$definition->name] = $tunnel;
     }
 
     public function isAlive(string $server): bool
