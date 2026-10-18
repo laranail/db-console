@@ -66,6 +66,10 @@ $name = (string) stream_socket_get_name($server, false);
 fwrite(STDOUT, 'READY ' . substr($name, strrpos($name, ':') + 1) . "\n");
 
 while ($conn = @stream_socket_accept($server, 30)) {
+    // No read-ahead: a client may send its SSLRequest and TLS ClientHello in
+    // one write, and a buffered fread() would hide the ClientHello from TLS.
+    stream_set_read_buffer($conn, 0);
+
     // Protocol 41 | SSL | plugin auth, in the lower and upper halves.
     $caps = 0x0200 | 0x0800 | 0x8000 | 0x0008_0000;
     fwrite($conn, frame(0, "\x0a" . "8.4.0-fake\0" . pack('V', 1) . str_repeat('a', 8) . "\0" . pack('v', $caps & 0xFFFF)

@@ -35,6 +35,12 @@ final class MysqlTlsRelay
     private array $pairs = [];
 
     /**
+     * The sequence number the client expects next from the server, while its
+     * connection phase runs: where an ERR telling it why has to go.
+     */
+    private int $clientExpects = 0;
+
+    /**
      * Raw byte pipes, each end to the other: a loopback pair's far end and
      * the tunnel's socket. Keyed by the client they serve.
      *
@@ -136,10 +142,18 @@ final class MysqlTlsRelay
         $id = (int) $client;
         stream_set_blocking($client, false);
 
+        $this->clientExpects = 0;
+
         try {
             $this->pairs[$id] = [$client, $this->upgrade($id, $client)];
-        } catch (Throwable $e) {
+        } catch (RelayRefusal $e) {
             fwrite(STDERR, "relay refused a connection: {$e->getMessage()}\n");
+            $this->drop($id, $client);
+        } catch (Throwable $e) {
+            // Whatever stopped the connection phase, the client hears why, as
+            // the MySQL error its login fails with, not as a dropped socket.
+            fwrite(STDERR, "relay refused a connection: {$e->getMessage()}\n");
+            $this->refuse($client, $this->clientExpects, "the MySQL TLS relay could not connect to {$this->settings['peer_name']}: {$e->getMessage()}");
             $this->drop($id, $client);
         }
     }
@@ -184,11 +198,12 @@ final class MysqlTlsRelay
         if (! MysqlHandshake::serverSupportsSsl($greeting)) {
             $this->refuse($client, 0, "TLS to {$this->settings['peer_name']} is required, and the server does not offer it");
 
-            throw new RuntimeException('the server does not offer TLS');
+            throw new RelayRefusal('the server does not offer TLS');
         }
 
         $this->send($client, MysqlHandshake::withoutSsl($greeting));
         $response = $this->readPacket($client, $fromClient, $deadline);
+        $this->clientExpects = $response->sequence + 1;
 
         $this->send($server, MysqlHandshake::sslRequest($response));
 
@@ -196,7 +211,7 @@ final class MysqlTlsRelay
         if ($failure !== null) {
             $this->refuse($client, $response->sequence + 1, "TLS to {$this->settings['peer_name']} failed: {$failure}");
 
-            throw new RuntimeException($failure);
+            throw new RelayRefusal($failure);
         }
 
         $this->send($server, MysqlHandshake::afterSslRequest($response));
@@ -206,13 +221,15 @@ final class MysqlTlsRelay
         while (true) {
             if (($packet = $fromServer->next()) instanceof MysqlPacket) {
                 $this->send($client, $packet->withSequence($packet->sequence - 1));
+                $this->clientExpects = $packet->sequence;
 
                 if (! MysqlHandshake::endsConnectionPhase($packet)) {
                     continue;
                 }
 
                 if ($packet->first() === 0xFF) {
-                    throw new RuntimeException('the server refused the login');
+                    // The client already has the server's own ERR.
+                    throw new RelayRefusal('the server refused the login');
                 }
 
                 // Commands number from 0 on both sides, so from here bytes pass
@@ -225,6 +242,7 @@ final class MysqlTlsRelay
 
             if (($packet = $fromClient->next()) instanceof MysqlPacket) {
                 $this->send($server, $packet->withSequence($packet->sequence + 1));
+                $this->clientExpects = $packet->sequence + 1;
 
                 continue;
             }
