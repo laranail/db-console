@@ -28,7 +28,7 @@ final class MysqlPacketReader
         }
 
         $packet = new MysqlPacket(ord($this->buffer[3]), substr($this->buffer, 4, $length));
-        $this->buffer = (string) substr($this->buffer, 4 + $length);
+        $this->buffer = substr($this->buffer, 4 + $length);
 
         return $packet;
     }

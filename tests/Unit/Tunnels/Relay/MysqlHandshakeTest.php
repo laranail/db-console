@@ -30,7 +30,7 @@ it('frames and parses packets, across reads split anywhere', function (): void {
     $packets = [];
     foreach (str_split($wire, 7) as $chunk) {
         $reader->feed($chunk);
-        while (($packet = $reader->next()) !== null) {
+        while (($packet = $reader->next()) instanceof MysqlPacket) {
             $packets[] = $packet;
         }
     }
