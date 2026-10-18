@@ -13,6 +13,7 @@ use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Validation\Requests\GrantRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\RevokeRequest;
 
 /**
  * Grants API over PrivilegeManager (shared service + Gate + forbidden-privilege guard).
@@ -35,5 +36,24 @@ final class GrantController
         );
 
         return OperationResponse::make($result, 201);
+    }
+
+    /**
+     * Revoke privileges on one database. Without `privileges` it revokes the
+     * full preset, as the revoke command does.
+     */
+    public function destroy(RevokeRequest $request, string $server, PrivilegeManager $privileges): JsonResponse
+    {
+        /** @var list<string> $custom */
+        $custom = (array) ($request->validated('privileges') ?? []);
+        $set = $custom === [] ? PrivilegeSet::fromPreset(PrivilegePreset::Full) : PrivilegeSet::custom($custom);
+
+        return OperationResponse::make($privileges->revoke(
+            $server,
+            new Username((string) $request->validated('username')),
+            new Host((string) $request->validated('host')),
+            new DbName((string) $request->validated('database')),
+            $set,
+        ));
     }
 }

@@ -6,8 +6,10 @@ namespace Simtabi\Laranail\DBConsole\Http\Api\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
 use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
+use Simtabi\Laranail\DBConsole\Services\Access\Authorizer;
 use Simtabi\Laranail\DBConsole\Validation\Requests\WebhookRequest;
 
 /**
@@ -17,8 +19,14 @@ use Simtabi\Laranail\DBConsole\Validation\Requests\WebhookRequest;
  */
 final class WebhookController
 {
-    public function index(): JsonResponse
+    /**
+     * Needs webhook.manage, as subscribing and unsubscribing do: the list,
+     * target URLs included, was readable by any authenticated caller.
+     */
+    public function index(Authorizer $authorizer): JsonResponse
     {
+        $authorizer->authorize(ConsolePermission::WebhookManage, 'global');
+
         $data = WebhookSubscription::query()->get()->map(static fn (WebhookSubscription $s): array => [
             'id'            => $s->id,
             'url'           => $s->url,

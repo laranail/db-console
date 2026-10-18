@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
+use Override;
 use Illuminate\Foundation\Http\FormRequest;
 use Simtabi\Laranail\DBConsole\Validation\Rules\HostRule;
 use Simtabi\Laranail\DBConsole\Validation\Rules\UsernameRule;
@@ -30,5 +31,17 @@ final class EditAccountRequest extends FormRequest
             'new_host' => ['required', 'string', 'different:host', new HostRule],
             'rotate'   => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * Over HTTP the username is the route's `{username}`.
+     */
+    #[Override]
+    protected function prepareForValidation(): void
+    {
+        $username = $this->route('username');
+        if (is_string($username)) {
+            $this->merge(['username' => $username]);
+        }
     }
 }

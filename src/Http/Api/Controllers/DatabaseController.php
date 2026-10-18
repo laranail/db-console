@@ -8,10 +8,10 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Validation\Requests\DropDatabaseRequest;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateDatabaseRequest;
 
 /**
@@ -40,13 +40,12 @@ final class DatabaseController
         return OperationResponse::make($result, $result->alreadyExisted ? 200 : 201);
     }
 
-    public function destroy(Request $request, string $server, string $name, DatabaseManager $databases, ApiSettings $settings): JsonResponse
+    /**
+     * The body repeats the name as `confirm` (unless api.confirm_destructive
+     * is off); DropDatabaseRequest validates it.
+     */
+    public function destroy(DropDatabaseRequest $request, string $server, string $name, DatabaseManager $databases): JsonResponse
     {
-        // api.confirm_destructive (default true): the body must repeat the name.
-        if ($settings->confirmsDestructive() && $request->input('confirm') !== $name) {
-            return new JsonResponse(['message' => "Confirmation required: send {\"confirm\":\"{$name}\"} to drop this database."], 422);
-        }
-
-        return OperationResponse::make($databases->drop($server, new DbName($name)));
+        return OperationResponse::make($databases->drop($server, new DbName((string) $request->validated('name'))));
     }
 }

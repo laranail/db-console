@@ -9,13 +9,15 @@ use Illuminate\Http\JsonResponse;
 use Simtabi\Laranail\DBConsole\Domain\Host;
 use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\PrivilegeManager;
 use Simtabi\Laranail\DBConsole\Http\Api\OperationResponse;
 use Simtabi\Laranail\DBConsole\Services\Results\GrantEntry;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
+use Simtabi\Laranail\DBConsole\Validation\Requests\DropAccountRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\EditAccountRequest;
 use Simtabi\Laranail\DBConsole\Validation\Requests\CreateAccountRequest;
+use Simtabi\Laranail\DBConsole\Validation\Requests\RotatePasswordRequest;
 
 /**
  * Accounts API over AccountManager (shared service + Gate).
@@ -61,15 +63,45 @@ final class AccountController
         return new JsonResponse(['data' => array_map(static fn (GrantEntry $entry): array => $entry->toArray(), $entries)]);
     }
 
-    public function destroy(Request $request, string $server, string $username, AccountManager $accounts, ApiSettings $settings): JsonResponse
+    /**
+     * Move an account to another host, grants kept; `rotate` also sets a new
+     * generated password, returned once.
+     */
+    public function update(EditAccountRequest $request, string $server, string $username, AccountManager $accounts): JsonResponse
     {
-        // api.confirm_destructive (default true): the body must repeat the name.
-        if ($settings->confirmsDestructive() && $request->input('confirm') !== $username) {
-            return new JsonResponse(['message' => "Confirmation required: send {\"confirm\":\"{$username}\"} to drop this account."], 422);
-        }
+        return OperationResponse::make($accounts->changeHost(
+            $server,
+            new Username($username),
+            new Host((string) $request->validated('host')),
+            new Host((string) $request->validated('new_host')),
+            (bool) $request->validated('rotate'),
+        ));
+    }
 
-        $host = (string) ($request->input('host') ?? '%');
+    /**
+     * Set the account's password: the one supplied, or a generated one
+     * (returned once) with `generate`.
+     */
+    public function rotatePassword(RotatePasswordRequest $request, string $server, string $username, AccountManager $accounts): JsonResponse
+    {
+        $supplied = $request->validated('password');
+        $password = is_string($supplied) && $supplied !== '' ? new Password($supplied) : null;
 
-        return OperationResponse::make($accounts->drop($server, new Username($username), new Host($host)));
+        return OperationResponse::make($accounts->rotatePassword(
+            $server,
+            new Username($username),
+            new Host((string) $request->validated('host')),
+            $password,
+        ));
+    }
+
+    /**
+     * The host is required and the body repeats the username as `confirm`
+     * (unless api.confirm_destructive is off); DropAccountRequest validates
+     * both.
+     */
+    public function destroy(DropAccountRequest $request, string $server, string $username, AccountManager $accounts): JsonResponse
+    {
+        return OperationResponse::make($accounts->drop($server, new Username($username), new Host((string) $request->validated('host'))));
     }
 }
