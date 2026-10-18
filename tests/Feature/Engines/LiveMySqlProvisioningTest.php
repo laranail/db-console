@@ -51,7 +51,8 @@ use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
 
 uses()->group('live-mysql');
 
-const LIVE_MY_PASSWORD = 'Live-My-Account-Password-2026!';
+// Generated per run: a fixed account password here is a credential in the source.
+defined('LIVE_MY_PASSWORD') || define('LIVE_MY_PASSWORD', testPassword(24));
 
 // TEST-NET-3: a host no runner connects from, so an account scoped to it
 // exists but cannot log in.

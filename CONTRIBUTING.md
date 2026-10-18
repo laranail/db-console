@@ -32,13 +32,22 @@ which owns the Docker stack and exercises the package end-to-end.
 ## Coding conventions
 
 - PHP 8.4+, `declare(strict_types=1)` in every file.
-- Laravel Pint (laravel preset) formats the code; PHPStan level 8 must pass.
+- `composer pint` (`laranail-pint`, the shared laranail rules from package-tools) formats the
+  code; PHPStan level 8 must pass.
 - Closed value sets are `laranail/enumerator` enums; open sets are validated
   value objects or catalog rows.
-- Artisan commands are namespaced `laranail::db-console.<command>` with the
-  short `db-console:<command>` alias.
-- User-facing strings live in `resources/lang/en/` under the `db-console::`
+- Artisan commands are namespaced `laranail::db-console.<command>`. No command declares a
+  short alias: a bare `db-console:` name is the collision the namespace exists to avoid.
+- User-facing strings live in `resources/lang/en/` under the `laranail-db-console::`
   namespace; do not hardcode message literals.
+
+## Test credentials
+
+Never write a password into a test. Use `testPassword()` (defined in `tests/Pest.php`), which
+generates a strong one for the run with `Password::generate()`; pass a length when a test needs one.
+A literal sample here was reported by secret scanning as a leaked credential, and
+`tests/Architecture/NoLiteralTestCredentialsTest.php` now fails on a strong-looking literal in a
+password position. A deliberately weak sample, to test rejection, is fine as a literal.
 
 ## Commit messages
 

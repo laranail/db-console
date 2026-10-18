@@ -15,8 +15,6 @@ use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
 use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 
-const PW = 'Xk9$mQ2vLpW7#nR4t!';
-
 function engine(): MySqlEngine
 {
     return new MySqlEngine;
@@ -77,16 +75,16 @@ describe('exact database statements', function (): void {
 
 describe('exact account statements', function (): void {
     it('creates an account at a host', function (): void {
-        $statements = engine()->createAccount(new Username('shop_user'), new Host('10.0.%'), new Password(PW))->all();
+        $statements = engine()->createAccount(new Username('shop_user'), new Host('10.0.%'), new Password(testPassword()))->all();
 
-        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'10.0.%' IDENTIFIED BY '" . PW . "'");
+        expect($statements[0]->sql)->toBe("CREATE USER 'shop_user'@'10.0.%' IDENTIFIED BY '" . testPassword() . "'");
     });
 
     it('redacts the password in the display form (never the real value)', function (): void {
-        $statements = engine()->createAccount(new Username('shop_user'), new Host('%'), new Password(PW))->all();
+        $statements = engine()->createAccount(new Username('shop_user'), new Host('%'), new Password(testPassword()))->all();
 
         expect($statements[0]->redacted)->toBe("CREATE USER 'shop_user'@'%' IDENTIFIED BY '[redacted]'")
-            ->and($statements[0]->redacted)->not->toContain(PW);
+            ->and($statements[0]->redacted)->not->toContain(testPassword());
     });
 
     it('drops an account', function (): void {
@@ -95,9 +93,9 @@ describe('exact account statements', function (): void {
     });
 
     it('sets a password, redacting the display form', function (): void {
-        $statements = engine()->setPassword(new Username('shop_user'), new Host('%'), new Password(PW))->all();
+        $statements = engine()->setPassword(new Username('shop_user'), new Host('%'), new Password(testPassword()))->all();
 
-        expect($statements[0]->sql)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '" . PW . "'")
+        expect($statements[0]->sql)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '" . testPassword() . "'")
             ->and($statements[0]->redacted)->toBe("ALTER USER 'shop_user'@'%' IDENTIFIED BY '[redacted]'");
     });
 

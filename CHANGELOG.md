@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Tests generate their passwords at run time.** A fixed strong sample, repeated across the test
+  suite since the first release, was reported by secret scanning as a leaked credential. Tests now
+  call `testPassword()`, which uses `Password::generate()`, and
+  `NoLiteralTestCredentialsTest` fails on a strong-looking literal in a password position. The live
+  provisioning jobs' account passwords are generated per run too.
+
 ### Added
 
 - **MySQL and MariaDB verify the server's real name through an SSH tunnel.** pdo_mysql checks a

@@ -84,11 +84,11 @@ it('translates MySQL charset names into Postgres encodings', function (string $c
 // ascii, sql_ascii and latin1 translate too, and need template0: see below.
 
 it('creates a role WITH LOGIN, redacting the password', function () use ($engine): void {
-    $statements = $engine->createAccount(new Username('report_user'), new Host('%'), new Password('Xk9$mQ2vLpW7#nR4t!'))->all();
+    $statements = $engine->createAccount(new Username('report_user'), new Host('%'), new Password(testPassword()))->all();
 
     expect($statements[0]->sql)->toStartWith('CREATE ROLE "report_user" WITH LOGIN PASSWORD \'SCRAM-SHA-256$')
         ->and($statements[0]->redacted)->toBe('CREATE ROLE "report_user" WITH LOGIN PASSWORD \'[redacted]\'')
-        ->and($statements[0]->redacted)->not->toContain('Xk9');
+        ->and($statements[0]->redacted)->not->toContain(testPassword());
 });
 
 // DigitalOcean and every pooler keep sessions open on a database, and a plain
@@ -542,14 +542,14 @@ it('creates a database in an encoding other than UTF8 from template0 with the C 
 // (log_min_error_statement) write to the server log. A SCRAM verifier is what
 // Postgres would store anyway, and the password cannot be recovered from it.
 it('sends a SCRAM-SHA-256 verifier, never the password, when creating or rotating a role', function () use ($engine): void {
-    $password = 'Xk9$mQ2vLpW7#nR4t!';
+    $password = testPassword();
     $create = $engine->createAccount(new Username('report_user'), new Host('%'), new Password($password))->all()[0];
     $rotate = $engine->setPassword(new Username('report_user'), new Host('%'), new Password($password))->all()[0];
 
     foreach ([[$create, 'CREATE ROLE "report_user" WITH LOGIN PASSWORD '], [$rotate, 'ALTER ROLE "report_user" WITH PASSWORD ']] as [$statement, $prefix]) {
         expect($statement->sql)->toStartWith($prefix)
             ->toMatch('/PASSWORD \'SCRAM-SHA-256\$4096:[A-Za-z0-9+\/=]{24}\$[A-Za-z0-9+\/=]{44}:[A-Za-z0-9+\/=]{44}\'$/')
-            ->not->toContain('Xk9')
+            ->not->toContain(testPassword())
             ->and($statement->redacted)->toBe($prefix . "'[redacted]'");
     }
 
@@ -582,7 +582,7 @@ it('says up front whether it can take a password', function () use ($engine): vo
 
     $engine->assertAcceptsPassword(Password::generate());
 
-    expect(fn () => $engine->assertAcceptsPassword(new Password("Pass\u{00A0}word-2026!X")))->toThrow(WeakPassword::class, 'SASLprep');
+    expect(fn () => $engine->assertAcceptsPassword(new Password("Pass\u{00A0}word-" . random_int(1000, 9999) . '!X')))->toThrow(WeakPassword::class, 'SASLprep');
 });
 
 it('reads the port the server listens on with the admin profile', function () use ($engine): void {

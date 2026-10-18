@@ -71,7 +71,7 @@ describe('FormRequests enforce the shared rules', function (): void {
         ])->passes())->toBeTrue();
 
         expect(validateRequest(CreateAccountRequest::class, [
-            'username' => 'shop_user', 'host' => '10.0.%', 'password' => 'Xk9$mQ2vLpW7#nR4t!',
+            'username' => 'shop_user', 'host' => '10.0.%', 'password' => testPassword(),
         ])->passes())->toBeTrue();
     });
 

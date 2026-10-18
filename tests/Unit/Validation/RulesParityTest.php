@@ -63,7 +63,7 @@ describe('password policy flows from config', function (): void {
     it('applies the configured minimum on top of the hard floor', function (): void {
         config()->set('laranail.db-console.accounts.password_min_length', 20);
 
-        $eighteen = 'Xk9$mQ2vLpW7#nR4t!';
+        $eighteen = testPassword(18);
 
         expect(strlen($eighteen))->toBe(18)
             ->and(validateField($eighteen, [new PasswordStrengthRule]))->not->toBe([]);
@@ -78,7 +78,7 @@ describe('password policy flows from config', function (): void {
     it('accepts a strong password at the default policy', function (): void {
         config()->set('laranail.db-console.accounts.password_min_length', 16);
 
-        expect(validateField('Xk9$mQ2vLpW7#nR4t!', [new PasswordStrengthRule]))->toBe([]);
+        expect(validateField(testPassword(18), [new PasswordStrengthRule]))->toBe([]);
     });
 });
 
