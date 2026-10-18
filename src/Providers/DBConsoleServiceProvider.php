@@ -39,6 +39,7 @@ use Simtabi\Laranail\DBConsole\Security\SecurityPolicy;
 use Simtabi\Laranail\DBConsole\Services\AccountManager;
 use Simtabi\Laranail\DBConsole\Services\WizardExecutor;
 use Simtabi\Laranail\DBConsole\Webhooks\WebhookManager;
+use Simtabi\Laranail\DBConsole\Access\DefaultRoleSeeder;
 use Simtabi\Laranail\DBConsole\Access\RbacAccessManager;
 use Simtabi\Laranail\DBConsole\Http\Middleware\ApiGuard;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
@@ -166,8 +167,13 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
             ->publishes('config', 'translations')
             ->runsMigrations()
             ->step('Seed console roles', function (InstallCommand $command): void {
-                $command->getLaravel()->make(RbacDriver::class)->seedDefaultRoles();
-                $command->info('Seeded the shipped console roles.');
+                if ($command->getLaravel()->make(DefaultRoleSeeder::class)->seedIfEnabled()) {
+                    $command->info('Seeded the shipped console roles.');
+
+                    return;
+                }
+
+                $command->info('Left the console roles unseeded (rbac.seed_default_roles is false).');
             })
             ->step('Assign the bootstrap Owner', function (InstallCommand $command): void {
                 $this->assignBootstrapOwner($command);
