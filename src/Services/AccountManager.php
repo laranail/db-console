@@ -14,6 +14,7 @@ use Simtabi\Laranail\DBConsole\Domain\StatementList;
 use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
 use Simtabi\Laranail\DBConsole\Events\AccountDropped;
+use Simtabi\Laranail\DBConsole\Events\AdoptionUndone;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
 use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
@@ -33,6 +34,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\UnsupportedOperation;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
 use Simtabi\Laranail\DBConsole\Engines\PasswordConstrainedEngine;
+use Simtabi\Laranail\DBConsole\Services\Contracts\TracksManagedResources;
 use Simtabi\Laranail\DBConsole\Events\OperationFailed as OperationFailedEvent;
 
 /**
@@ -416,6 +418,22 @@ final readonly class AccountManager
     }
 
     /**
+     * Compensating rollback for an account this run adopted: stop recording
+     * it as managed. Never touches the server, where the account is as it
+     * was before the run. No gate: a system rollback of the wizard's own
+     * forward step. Used exclusively by ProvisioningWizard, and only when the
+     * adoption reported `newly_managed`.
+     *
+     * @internal
+     */
+    public function rollbackAdoptedAccount(string $server, Username $user, Host $host): void
+    {
+        $this->catalog->forgetAccount($server, $user, $host);
+        $this->log->success(OperationType::AdoptionUndone->value, $server, ['target' => $this->label($user, $host), 'kind' => 'account']);
+        $this->events->dispatch(new AdoptionUndone($server, ['target' => $this->label($user, $host), 'kind' => 'account']));
+    }
+
+    /**
      * Drop an account. Where the engine cannot drop one that still owns
      * objects or holds privileges (Postgres), OwnershipReleasingDrop releases
      * them first and undoes what it took when a step fails.
@@ -485,6 +503,13 @@ final readonly class AccountManager
             $applied = $this->applyAuthorizedPassword($server, $user, $host, $password);
         }
 
+        // Whether this adoption is the one that puts the account under
+        // management, so a failed wizard run can take back its own and no
+        // other. Unknown (a host catalog without TracksManagedResources)
+        // counts as not, which keeps the record on rollback.
+        $newlyManaged = $this->catalog instanceof TracksManagedResources
+            && ! $this->catalog->managesAccount($server, $user, $host);
+
         $this->catalog->recordAccount($server, $user, $host);
         $this->log->success(OperationType::AccountAdopted->value, $server, ['target' => $this->label($user, $host)]);
         $this->events->dispatch(new AccountAdopted($server, [
@@ -492,11 +517,18 @@ final readonly class AccountManager
             'password_applied' => $applied instanceof OperationResult,
         ]));
 
-        return $applied ?? OperationResult::succeeded(
+        return OperationResult::succeeded(
             OperationType::AccountCreate,
             $server,
-            ['username' => $user->value, 'host' => $host->value, 'adopted' => true, 'password_applied' => false],
+            [
+                'username'         => $user->value,
+                'host'             => $host->value,
+                'adopted'          => true,
+                'password_applied' => $applied instanceof OperationResult,
+                'newly_managed'    => $newlyManaged,
+            ],
             alreadyExisted: true,
+            generatedPassword: $applied?->takeGeneratedPassword(),
         );
     }
 

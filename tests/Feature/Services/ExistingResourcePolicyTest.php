@@ -19,6 +19,7 @@ use Simtabi\Laranail\DBConsole\Tests\Fixtures\User;
 use Simtabi\Laranail\DBConsole\Enums\PrivilegePreset;
 use Simtabi\Laranail\DBConsole\Events\AccountAdopted;
 use Simtabi\Laranail\DBConsole\Events\AccountCreated;
+use Simtabi\Laranail\DBConsole\Events\AdoptionUndone;
 use Simtabi\Laranail\DBConsole\Events\DatabaseAdopted;
 use Simtabi\Laranail\DBConsole\Models\ManagedDatabase;
 use Simtabi\Laranail\DBConsole\Enums\ConsolePermission;
@@ -27,6 +28,7 @@ use Simtabi\Laranail\DBConsole\Exceptions\NotAuthorized;
 use Simtabi\Laranail\DBConsole\Services\DatabaseManager;
 use Simtabi\Laranail\DBConsole\Events\AssuranceShortfall;
 use Simtabi\Laranail\DBConsole\Enums\NotificationCategory;
+use Simtabi\Laranail\DBConsole\Services\Contracts\Catalog;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ProvisioningWizard;
 use Simtabi\Laranail\DBConsole\Enums\ExistingResourcePolicy;
@@ -40,6 +42,7 @@ use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Exceptions\AccountAlreadyExists;
 use Simtabi\Laranail\DBConsole\Exceptions\DatabaseAlreadyExists;
 use Simtabi\Laranail\DBConsole\Services\Results\OperationResult;
+use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FakeProvisioningEngine;
 use Simtabi\Laranail\DBConsole\Tests\Fixtures\FixedOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Notifications\ExistingResourceNotification;
@@ -549,6 +552,107 @@ describe('the provisioning wizard', function (): void {
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
             ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1);
+    });
+
+    it('undoes only the adoptions the failed run made: off the catalog, never off the server', function (): void {
+        Event::fake([AdoptionUndone::class]);
+        FakeProvisioningEngine::addDatabase('shop_prod');
+        policyTheirAccount();
+        $this->engine->failGrants = true;
+
+        expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
+
+        // Both are still on the server, as they were before the run...
+        expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(1)
+            ->and(FakeProvisioningEngine::count('fake_accounts', 'shop'))->toBe(1)
+            // ...and no longer recorded as managed, since the run that adopted them failed.
+            ->and(DbAccount::query()->count())->toBe(0)
+            ->and(ManagedDatabase::query()->count())->toBe(0);
+        Event::assertDispatchedTimes(AdoptionUndone::class, 2);
+        Event::assertDispatched(AdoptionUndone::class, fn (AdoptionUndone $e): bool => $e->context['kind'] === 'account' && $e->context['target'] === 'shop@%');
+    });
+
+    it('keeps an adoption an earlier run made when a later run fails', function (): void {
+        FakeProvisioningEngine::addDatabase('shop_prod');
+        policyTheirAccount();
+        policyProvisionShop(null, ExistingResourcePolicy::Adopt);
+        expect(DbAccount::query()->count())->toBe(1);
+
+        $this->engine->failGrants = true;
+        expect(fn (): OperationResult => policyProvisionShop(null, ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
+
+        expect(DbAccount::query()->count())->toBe(1)
+            ->and(ManagedDatabase::query()->count())->toBe(1);
+    });
+
+    it('says whether an adoption put the resource under management for the first time', function (): void {
+        FakeProvisioningEngine::addDatabase('shop_prod');
+        policyTheirAccount();
+
+        expect(policyCreateShop(ExistingResourcePolicy::Adopt)->data['newly_managed'])->toBeTrue()
+            ->and(policyCreateShop(ExistingResourcePolicy::Adopt)->data['newly_managed'])->toBeFalse()
+            ->and(app(DatabaseManager::class)->create('fake', new DbName('shop_prod'), new Charset('utf8'), ExistingResourcePolicy::Adopt)->data['newly_managed'])->toBeTrue()
+            ->and(policyCreateShop(ExistingResourcePolicy::AdoptAndApply)->data['newly_managed'])->toBeFalse();
+    });
+
+    it('leaves the record alone with a host catalog that cannot say what it already held', function (): void {
+        app()->instance(Catalog::class, new readonly class(app(DbConsoleCatalog::class)) implements Catalog
+        {
+            public function __construct(private Catalog $inner) {}
+
+            public function recordDatabase(string $server, DbName $db, string $charset, ?string $collation): void
+            {
+                $this->inner->recordDatabase($server, $db, $charset, $collation);
+            }
+
+            public function forgetDatabase(string $server, DbName $db): void
+            {
+                $this->inner->forgetDatabase($server, $db);
+            }
+
+            public function recordAccount(string $server, Username $user, Host $host): void
+            {
+                $this->inner->recordAccount($server, $user, $host);
+            }
+
+            public function forgetAccount(string $server, Username $user, Host $host): void
+            {
+                $this->inner->forgetAccount($server, $user, $host);
+            }
+
+            public function recordPasswordRotation(string $server, Username $user, Host $host): void
+            {
+                $this->inner->recordPasswordRotation($server, $user, $host);
+            }
+
+            public function recordHostChange(string $server, Username $user, Host $oldHost, Host $newHost): void
+            {
+                $this->inner->recordHostChange($server, $user, $oldHost, $newHost);
+            }
+
+            public function recordGrant(string $server, Username $user, Host $host, DbName $db, PrivilegeSet $set): void
+            {
+                $this->inner->recordGrant($server, $user, $host, $db, $set);
+            }
+
+            public function forgetGrant(string $server, Username $user, Host $host, DbName $db): void
+            {
+                $this->inner->forgetGrant($server, $user, $host, $db);
+            }
+
+            public function grantsForAccount(string $server, Username $user, Host $host): array
+            {
+                return $this->inner->grantsForAccount($server, $user, $host);
+            }
+        });
+        policyTheirAccount();
+        $this->engine->failGrants = true;
+
+        expect(fn (): OperationResult => policyProvisionShop(null, ExistingResourcePolicy::Adopt))->toThrow(DBConsoleException::class);
+
+        // Without TracksManagedResources db-console cannot tell its own
+        // adoption from an older one, so it keeps the record, as before.
+        expect(DbAccount::query()->count())->toBe(1);
     });
 
     it('never drops an adopted database or account on rollback', function (): void {

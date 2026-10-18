@@ -450,9 +450,12 @@ it('rolls the wizard back without dropping an account it did not create', functi
         ExistingResourcePolicy::Adopt,
     ))->toThrow(DBConsoleException::class);
 
-    // The rollback undoes what this run created, and only that.
+    // The rollback undoes what this run did, and only that: the database it
+    // created is dropped, the account it adopted stays on the server and is
+    // no longer recorded as managed.
     expect(liveMyDatabaseCount($db))->toBe(0)
-        ->and(liveMyAccountCount($user))->toBe(1);
+        ->and(liveMyAccountCount($user))->toBe(1)
+        ->and(DbAccount::query()->count())->toBe(0);
 });
 
 it('rolls the wizard back without dropping a database it did not create', function (): void {

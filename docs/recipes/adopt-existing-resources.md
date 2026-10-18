@@ -22,6 +22,10 @@ Every refusal is reported to the security recipients as `AccountCreationRefused`
 
 The policy is resolved most specific first: the call, then `servers.<name>.accounts.on_existing` (or `databases.on_existing`), then the global `accounts.on_existing` / `databases.on_existing`.
 
+## When a wizard run fails
+
+A rollback never drops an adopted account or database from the server. It does take back the adoptions the failed run made itself, so the catalog ends as it started: the resource is no longer recorded as managed, and `AdoptionUndone` reports it. An adoption from an earlier run stays. Adoption results say which kind they are with `newly_managed`. A host that binds its own `Catalog` gets this by also implementing `Services\Contracts\TracksManagedResources`; without it, rollbacks keep every adoption, as before.
+
 ## CLI
 
 ```bash

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A failed wizard run takes back the adoptions it made.** When the provisioning wizard adopts
+  an account or database and a later step fails, the rollback now stops recording that resource as
+  managed (`AdoptionUndone`, a Security-category notification and webhook event). It still never
+  touches the server, where the resource is as it was before the run. An adoption an earlier run
+  made is kept.
+- **`Services\Contracts\TracksManagedResources`** (`managesAccount()`, `managesDatabase()`), an
+  optional interface beside `Catalog`, implemented by `DbConsoleCatalog` and `NullCatalog`. It is
+  how an adoption knows it is the first. A host catalog that does not implement it keeps the old
+  behaviour: adoptions report `newly_managed: false` and a rollback leaves their records alone.
+- Adoption results carry **`newly_managed`**: true when that call put the resource under
+  management for the first time. Results from `adopt_and_apply` also carry it.
+
+### Fixed
+
+- **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
+  their code and status only for a request that expects JSON, so a client that sent no `Accept:
+  application/json` got a 500 for a refusal (`not_authorized`, `assurance_required`, a 409 for an
+  existing resource) and a 302 redirect for a validation error. `ApiGuard` now sets the header on
+  every API request.
+- **`doctor` judged a tunnelled server by the tunnel's local end.** The pooler check compared the
+  server's own port with the admin connection's, which through an SSH tunnel is the tunnel's local
+  port: every tunnelled server read as relayed, and PgBouncer behind a bastion was never warned
+  about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
+  behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
+  `ServerRegistry::databasePort()` and `databaseHost()`.
+
 ## [0.1.3] - 2026-10-18
 
 ### Changed
@@ -24,23 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
-  their code and status only for a request that expects JSON, so a client that sent no `Accept:
-  application/json` got a 500 for a refusal (`not_authorized`, `assurance_required`, a 409 for an
-  existing resource) and a 302 redirect for a validation error. `ApiGuard` now sets the header on
-  every API request.
 - **A create db-console half-made is reported as the failure it is.** Since 0.1.2, a create that
   failed while the resource then existed was treated as a lost race and refused with a 409, or
   adopted under `adopt`. That also caught db-console's own half-made resources: SQL Server's
   `CREATE LOGIN` succeeding and `CREATE USER` failing, or the second statement of a Postgres
   database create. Only a failure of the create's first statement is a race now
   (`AdminConnection::runCreate()`); a later one fails as it did before 0.1.2.
-- **`doctor` judged a tunnelled server by the tunnel's local end.** The pooler check compared the
-  server's own port with the admin connection's, which through an SSH tunnel is the tunnel's local
-  port: every tunnelled server read as relayed, and PgBouncer behind a bastion was never warned
-  about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
-  behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
-  `ServerRegistry::databasePort()` and `databaseHost()`.
 
 ## [0.1.2] - 2026-10-17
 

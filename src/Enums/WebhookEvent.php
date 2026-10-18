@@ -60,6 +60,9 @@ enum WebhookEvent: string implements Enumerator, Translatable
     #[Label('Database adopted')]
     case DatabaseAdopted = 'database.adopted';
 
+    #[Label('Adoption undone')]
+    case AdoptionUndone = 'adoption.undone';
+
     #[Label('Privileges granted')]
     case PrivilegesGranted = 'privileges.granted';
 
