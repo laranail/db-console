@@ -404,13 +404,54 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Copy the MySQL CA out of the service container
         run: docker cp "${{ job.services.mysql.id }}:/var/lib/mysql/ca.pem" "$RUNNER_TEMP/mysql-ca.pem"
+      # A PostgreSQL with TLS on, so verification inside the tunnel is proven
+      # rather than assumed. Its certificate names `pgtls` only; the same
+      # container also answers to `pgtls-alias`, which a verifying client must
+      # refuse. Started with docker run because a service container cannot
+      # take server arguments, and the key is copied in so postgres owns it.
+      - name: Issue a CA and a certificate for pgtls
+        run: |
+          mkdir -p "$RUNNER_TEMP/pgtls" && cd "$RUNNER_TEMP/pgtls"
+          openssl req -x509 -nodes -newkey rsa:2048 -days 2 -subj "/CN=db-console CI CA" -keyout ca.key -out ca.crt
+          openssl req -nodes -newkey rsa:2048 -subj "/CN=pgtls" -keyout server.key -out server.csr
+          openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 2 -out server.crt \
+            -extfile <(printf 'subjectAltName=DNS:pgtls\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n')
+          openssl x509 -in server.crt -noout -ext subjectAltName
+      - name: Start PostgreSQL with TLS on the service network
+        run: |
+          docker run -d --name pgtls \
+            --network "${{ job.services.postgres.network }}" \
+            --network-alias pgtls --network-alias pgtls-alias \
+            -e POSTGRES_USER=db_console -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=db_console_test \
+            -v "$RUNNER_TEMP/pgtls:/certs:ro" \
+            --entrypoint bash postgres:18 -euc '
+              install -d -o postgres -g postgres -m 700 /etc/pgtls
+              install -o postgres -g postgres -m 600 /certs/server.crt /certs/server.key /etc/pgtls/
+              exec docker-entrypoint.sh postgres -c ssl=on \
+                -c ssl_cert_file=/etc/pgtls/server.crt -c ssl_key_file=/etc/pgtls/server.key
+            '
+          # TCP only answers once initdb's temporary socket-only server is gone.
+          for attempt in $(seq 1 60); do
+            if docker exec pgtls pg_isready -h 127.0.0.1 -U db_console >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec pgtls pg_isready -h 127.0.0.1 -U db_console
+      - name: Install the PostgreSQL 18 client tools for pg_dump
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-18 >/dev/null
+          /usr/lib/postgresql/18/bin/pg_dump --version
       - name: Live SSH tunnels
         env:
           DB_CONSOLE_LIVE_SSH_PORT: '2222'
           DB_CONSOLE_LIVE_SSH_USER: tunnel
           DB_CONSOLE_LIVE_SSH_KEY: ${{ runner.temp }}/id_tunnel
           DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
+          DB_CONSOLE_LIVE_PGTLS_CA: ${{ runner.temp }}/pgtls/ca.crt
+          DB_CONSOLE_LIVE_PG_BIN: /usr/lib/postgresql/18/bin
         run: vendor/bin/pest --no-coverage --colors=never --group=live-ssh --fail-on-skipped
-      - name: SSH server log
+      - name: SSH server and TLS PostgreSQL logs
         if: failure()
-        run: docker logs sshd
+        run: |
+          docker logs sshd
+          docker logs pgtls

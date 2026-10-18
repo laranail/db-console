@@ -3,10 +3,14 @@
 declare(strict_types=1);
 
 use Illuminate\Database\Connection;
+use Illuminate\Support\Facades\Storage;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Enums\TlsStatus;
 use Simtabi\Laranail\DBConsole\Doctor\DoctorService;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
 use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Exceptions\TunnelFailed;
+use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
 
 /*
@@ -43,13 +47,13 @@ afterEach(function (): void {
  * @param array<string, mixed> $ssh
  * @param array<string, mixed> $tls
  */
-function liveTunnel(string $engine, string $driver, array $ssh = [], array $tls = ['enabled' => false]): string
+function liveTunnel(string $engine, string $driver, array $ssh = [], array $tls = ['enabled' => false], ?string $host = null): string
 {
-    $name = "ssh_{$engine}_{$driver}";
+    $name = "ssh_{$engine}_{$driver}" . ($host !== null ? '_' . str_replace('-', '_', $host) : '');
 
     config()->set("database.connections.{$name}", $engine === 'pgsql'
-        ? ['driver' => 'pgsql', 'host' => 'postgres', 'port' => 5432, 'database' => 'db_console_test', 'username' => 'db_console', 'password' => 'secret']
-        : ['driver' => 'mysql', 'host' => 'mysql', 'port' => 3306, 'database' => 'db_console_test', 'username' => 'root', 'password' => 'secret']);
+        ? ['driver' => 'pgsql', 'host' => $host ?? 'postgres', 'port' => 5432, 'database' => 'db_console_test', 'username' => 'db_console', 'password' => 'secret']
+        : ['driver' => 'mysql', 'host' => $host ?? 'mysql', 'port' => 3306, 'database' => 'db_console_test', 'username' => 'root', 'password' => 'secret']);
 
     config()->set("laranail.db-console.servers.{$name}", [
         'engine'     => $engine,
@@ -196,4 +200,86 @@ it('stops the forwarder when the tunnels close', function (string $driver): void
     app(ServerRegistry::class)->closeTunnels();
 
     expect(@fsockopen('127.0.0.1', $port, $errno, $error, 1))->toBeFalse();
+})->with('drivers');
+
+/*
+ * A second PostgreSQL, `pgtls`, runs with TLS on and a certificate for the
+ * name `pgtls` only, signed by a CA the job generates. It also answers to
+ * `pgtls-alias` on the network, a name its certificate does not carry. From
+ * the runner neither name resolves: every byte goes through the tunnel.
+ */
+
+/**
+ * @param array<string, mixed> $ssh
+ */
+function liveVerifiedTunnel(string $driver, string $host, array $ssh = []): string
+{
+    $ca = (string) getenv('DB_CONSOLE_LIVE_PGTLS_CA');
+    expect(is_file($ca))->toBeTrue("DB_CONSOLE_LIVE_PGTLS_CA must name the CA that signed pgtls's certificate, got '{$ca}'");
+
+    return liveTunnel('pgsql', $driver, $ssh, ['enabled' => true, 'verify' => true, 'ca' => $ca], $host);
+}
+
+it('verifies the certificate against the real name through the tunnel', function (string $driver): void {
+    $server = liveVerifiedTunnel($driver, 'pgtls');
+
+    expect(app(TlsChecker::class)->status($server))->toBe(TlsStatus::RequiredOk)
+        ->and(app(ServerRegistry::class)->connection($server)->underlying()->getConfig('sslmode'))->toBe('verify-full')
+        ->and(liveScalar($server, 'SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()'))->toBeTrue();
+})->with('drivers');
+
+it('refuses a certificate that does not name the host', function (string $driver): void {
+    $server = liveVerifiedTunnel($driver, 'pgtls-alias');
+
+    try {
+        app(ServerRegistry::class)->ensureReachable($server);
+        $this->fail('a certificate for pgtls was accepted for pgtls-alias');
+    } catch (ServerUnreachable $e) {
+        expect((string) $e->getPrevious()?->getMessage())->toContain('does not match host name');
+    }
+})->with('drivers');
+
+// db-tools 0.1.7 hands hostaddr to pg_dump as PGHOSTADDR. Before it, this
+// backup failed, and a failed backup stops the drop it was taken for.
+it('backs up through the tunnel under verify-full', function (string $driver): void {
+    $bin = (string) getenv('DB_CONSOLE_LIVE_PG_BIN');
+    expect(is_executable("{$bin}/pg_dump"))->toBeTrue("DB_CONSOLE_LIVE_PG_BIN must hold a PostgreSQL 18 pg_dump, got '{$bin}'");
+
+    foreach (['pg_dump', 'pg_restore', 'psql'] as $tool) {
+        config()->set("laranail.db-tools.backup.binaries.{$tool}", "{$bin}/{$tool}");
+    }
+    config()->set('filesystems.disks.local', ['driver' => 'local', 'root' => sys_get_temp_dir() . "/db-console-live-ssh-{$driver}"]);
+
+    $server = liveVerifiedTunnel($driver, 'pgtls');
+    liveScalar($server, 'CREATE TABLE IF NOT EXISTS tunnelled_backup_marker (id int)');
+
+    $path = app(DbToolsBackupService::class)->snapshot($server, new DbName('db_console_test'));
+
+    expect($path)->toBeString()
+        ->and(Storage::disk('local')->size((string) $path))->toBeGreaterThan(0);
+})->with('drivers');
+
+// phpseclib raises its read timeout to 5 s when it handles one channel's
+// CHANNEL_CLOSE while reading for another. The server ends session B through
+// idle_session_timeout while A sits idle, so B's close arrives while the pump
+// polls A, the first channel. A's next query must not wait out that timeout.
+it('keeps other sessions responsive when the server closes one', function (string $driver): void {
+    $server = liveTunnel('pgsql', $driver);
+    $a = app(ServerRegistry::class)->connection($server)->underlying();
+    assert($a instanceof Connection);
+    $a->selectOne('SELECT 1');
+
+    $b = app('db')->connectUsing("{$server}_idle", $a->getConfig(), true);
+    $b->statement("SET idle_session_timeout = '300ms'");
+
+    usleep(1_000_000);
+
+    $start = microtime(true);
+    $answer = $a->selectOne('SELECT 41 + 1 AS answer')->answer;
+    $elapsed = microtime(true) - $start;
+
+    app('db')->purge("{$server}_idle");
+
+    expect($answer)->toBe(42)
+        ->and($elapsed)->toBeLessThan(1.0, sprintf('session A waited %.2fs after the server closed session B', $elapsed));
 })->with('drivers');
