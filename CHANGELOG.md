@@ -42,6 +42,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DbToolsBackupService`. Separate from `BackupService`, so a host's own implementation of that is
   unaffected; doctor asks for it with `instanceof`. The db-tools preflight is read by method, so a
   db-tools without it (0.1.7 and earlier) simply yields no finding.
+- **Four config keys that were read by nothing now work.** Each one's shipped value keeps the
+  behaviour it had before:
+  - `rbac.seed_default_roles` gates the install step that seeds the shipped roles
+    (`Access\DefaultRoleSeeder`).
+  - `webhooks.queue` names the queue webhook deliveries and their retries go to; `true` keeps the
+    default queue.
+  - `presets` is validated at boot against the privilege allow-list, and a bad preset fails the
+    boot with `Exceptions\PresetMisconfigured` (`preset.misconfigured`), naming it
+    (`Domain\Privileges\CustomPresets`).
+  - `catalog_encryption.encrypt_topology_columns` set to `false` writes a server's `host` and an
+    account's `username` and `host` in plaintext (`Models\Casts\TopologyColumn`). Either form
+    reads back, so no migration is needed.
+
+### Changed
+
+- **laranail/db-tools `^0.1.8`** (was `^0.1.7`) in `require-dev` and `suggest`. doctor's
+  `server:<name>:backup-client` check calls db-tools' `preflight()`, which first ships in 0.1.8; with
+  0.1.7 the check yields no finding.
+- **The Tests workflow defaults every job to `contents: read`.** The `pest` job, which calls the
+  shared reusable workflow, set no permissions and so ran with the repository's default token
+  scope; the live jobs already set `contents: read` and keep it.
+
+### Fixed
+
+- **`secrets.reference.token` is in the shipped config** (env `DB_CONSOLE_DOPPLER_TOKEN`). The
+  Doppler reference resolver read it, but the config never defined it, so a published config gave
+  the resolver no token and every Doppler lookup failed as misconfigured. Documented in the
+  configuration and secret vault pages.
 
 ## [0.1.4] - 2026-10-18
 
@@ -131,6 +159,12 @@ host still using one sees.
 
 ### Added
 
+- **`api.auth_failure_limit`** (default `10,1`): an IP that fails to authenticate that many times
+  in the window is answered 429, with `Retry-After`, until the window ends. `api.rate_limit` is
+  keyed on the authenticated caller, so failed authentication was never throttled.
+- `Authorizer::authorize()`, `Authorizer::assure()` and `AssuranceEnforcer::enforce()` take an
+  optional last `$alsoRequire` list of `Assurance`, added to what `security.assurance` asks of the
+  permission and checked in the same pass.
 - **A Managed databases page and a DigitalOcean recipe** (`docs/managed-databases.md`, `docs/recipes/digitalocean.md`), which bring the hosting profile, TLS, the least-privilege admin, `doctor`'s checks and backups together for a provider-managed server. Linked from the servers, doctor, backups and engines pages and the README.
 - **Catalog migration `0001_01_01_001100_migrate_db_console_permission_names`.** Renames permission
   rows stored under `db-console.*` to `laranail-db-console.*`, merging into a scoped row install
@@ -168,9 +202,26 @@ host still using one sees.
   against a list, which warned about a direct connection on 6432 and missed a pooler on any other
   port. A known pooler port the server itself listens on is no longer warned about; a connection
   relayed from any other port is reported as information.
+- **`adopt_and_apply` is decided by the assurance policy.** It still needs `account.rotate`, which
+  the assurance policy (`security.assurance`) now checks with a recent confirmation always required,
+  whatever `assurance.recent_confirmation` lists. So it follows the same enforcement mode,
+  break-glass and `AssuranceRequired` (HTTP 403, `assurance_required`) as every other permission,
+  and a shell run with no operator is left to the gate. It dispatches `AccountPasswordApplied`. For
+  a database it adopts.
+- **Every adoption refusal is reported, not only the policy's**: an operator who asks to adopt
+  without `resource.adopt`, or to apply a password without `account.rotate` or the assurance, also
+  dispatches `AccountCreationRefused` / `DatabaseCreationRefused`, with `reason` (`policy`,
+  `not_authorized`, `assurance_required`) and `requested` in its context.
+- One `Support\DriverBoolean::truthy()` reads a driver's boolean column (Postgres `bool`, MySQL `1/0`,
+  `'t'/'f'`); four services each had their own copy.
 
 ### Fixed
 
+- **A Postgres database holding only a function, a procedure or a schema read as empty**, so a wizard
+  rollback dropped it with them. The emptiness check counts relations, functions and procedures, and
+  schemas other than `public`, leaving out what an extension created.
+- `OperatorAssurance` was bound to its null default twice; it is bound once, in the operator-security
+  registration.
 - **A create that loses a race to another process is handled by the existing-resource policy.**
   An account or database created between db-console's existence check and its create used to fail
   with the driver's duplicate error; it is now refused with a 409, or adopted when the call asked.
@@ -217,16 +268,12 @@ host still using one sees.
   - `adopt` needs the new **`resource.adopt`** permission (Owner only by default), records the
     resource in the catalog with its password untouched, and dispatches `AccountAdopted` /
     `DatabaseAdopted` (Warning, so they alert).
-  - `adopt_and_apply` also needs `account.rotate`, which the assurance policy
-    (`security.assurance`) checks with a recent confirmation always required, whatever
-    `assurance.recent_confirmation` lists. So it follows the same enforcement mode, break-glass and
-    `AssuranceRequired` (HTTP 403, `assurance_required`) as every other permission, and a shell run
-    with no operator is left to the gate. It dispatches `AccountPasswordApplied`. For a database it
-    adopts.
-  - Every refusal is reported, not only the policy's: an operator who asks to adopt without
-    `resource.adopt`, or to apply a password without `account.rotate` or the assurance, also
-    dispatches `AccountCreationRefused` / `DatabaseCreationRefused`, with `reason`
-    (`policy`, `not_authorized`, `assurance_required`) and `requested` in its context.
+  - `adopt_and_apply` also needs `account.rotate` and an identity confirmation within
+    `security.step_up.ttl` seconds (default 300), read from the new `Contracts\OperatorAssurance`
+    that the host binds (`hasSecondFactor()`, `recentlyConfirmedAt()`). Authentication stays with
+    the host. Until it binds one, `NullOperatorAssurance` reports none, so `adopt_and_apply` is
+    refused with `ConfirmationRequired` (HTTP 403, `confirmation.required`). It dispatches
+    `AccountPasswordApplied`. For a database it adopts.
   - Results carry `adopted` and `password_applied`. All five events are Security-category
     notifications (`ExistingResourceNotification`) and webhook events.
 - **`ProvisioningWizard::provision()` takes `$onExisting`.** Without a password it never replaces an
@@ -243,12 +290,6 @@ host still using one sees.
 - **`api.rate_limit` is applied** as the `laranail-db-console.api` named limiter, keyed on the API
   caller (`'requests,minutes'`; empty or `0` switches it off).
 - `Http\Api\ApiSettings`, the API's settings read from the documented keys.
-- **`api.auth_failure_limit`** (default `10,1`): an IP that fails to authenticate that many times
-  in the window is answered 429, with `Retry-After`, until the window ends. `api.rate_limit` is
-  keyed on the authenticated caller, so failed authentication was never throttled.
-- `Authorizer::authorize()`, `Authorizer::assure()` and `AssuranceEnforcer::enforce()` take an
-  optional last `$alsoRequire` list of `Assurance`, added to what `security.assurance` asks of the
-  permission and checked in the same pass.
 - **Operator assurance, answered by the host.** `Contracts\OperatorAssurance`
   (`hasSecondFactor()`, `recentlyConfirmedAt()`) is how the host's authentication tells db-console
   what it knows about an operator; db-console verifies no codes and owns no enrolment.
@@ -364,9 +405,6 @@ host still using one sees.
 
 ### Changed
 
-- One `Support\DriverBoolean::truthy()` reads a driver's boolean column (Postgres `bool`, MySQL `1/0`,
-  `'t'/'f'`); four services each had their own copy.
-
 - `laranail/db-tools` (dev, suggested) is required at `^0.1.6`, whose backups honour `url`, pass TLS
   to the dump client and take a consistent dump on managed servers.
 - The `live-mysql` job runs MySQL with GTID on, as DigitalOcean does, installs each family's own dump
@@ -414,10 +452,6 @@ host still using one sees.
 
 ### Deprecated
 
-- **`Exceptions\ConfirmationRequired` and `ExceptionCode::ConfirmationRequired`
-  (`confirmation.required`).** Nothing throws them any more: `adopt_and_apply` is decided by the
-  assurance policy, which throws `AssuranceRequired`. Both still exist. Removed no earlier than the
-  next minor after 0.1.
 - **Config keys `api.guard` and `api.prefix`.** Read only when `api.auth` / `api.path` is unset,
   with one `E_USER_DEPRECATED` notice each. Removed no earlier than the next minor after 0.1.
 
@@ -430,12 +464,6 @@ host still using one sees.
 Both are removed no earlier than the next minor after 0.1.
 
 ### Fixed
-
-- **A Postgres database holding only a function, a procedure or a schema read as empty**, so a wizard
-  rollback dropped it with them. The emptiness check counts relations, functions and procedures, and
-  schemas other than `public`, leaving out what an extension created.
-- `OperatorAssurance` was bound to its null default twice; it is bound once, in the operator-security
-  registration.
 
 - **`MySqlEngine::createAccountWithAuth()` spliced its hash literal into `CREATE USER` unchecked.**
   It now refuses anything that is not a `0x` literal of whole hex bytes, as `MariaDbEngine` already

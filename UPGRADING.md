@@ -19,6 +19,20 @@ Two things change for such a server:
 SQL Server through a tunnel still cannot verify the real name, because pdo_sqlsrv offers no way to.
 Keep `tls.verify=false` for it.
 
+### Config keys that were not read now are
+
+Four keys in the published config did nothing. Their shipped values keep today's behaviour, so a
+config that never changed them needs nothing. One that did:
+
+- **`rbac.seed_default_roles: false`** now stops install seeding the shipped roles.
+- **`webhooks.queue: '<name>'`** now sends deliveries and their retries to that queue. Run a worker
+  on it.
+- **`presets`** is checked at boot. A preset with a forbidden or unknown privilege, an empty list,
+  or a shipped preset's name now fails the boot with `PresetMisconfigured`.
+- **`catalog_encryption.encrypt_topology_columns: false`** now writes server hosts and account
+  usernames and hosts in plaintext. No migration: existing rows stay encrypted until they are saved
+  again, and both forms read back. Switching it back to `true` encrypts rows as they are next saved.
+
 ## 0.1.3
 
 ### Alerts keep their category's channels
