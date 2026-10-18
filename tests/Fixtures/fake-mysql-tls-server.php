@@ -9,10 +9,13 @@ declare(strict_types=1);
  * answers OK, then answers one COM_QUERY with an OK whose info string echoes
  * the query. Every packet's sequence number is checked against the protocol.
  *
- * Usage: php fake-mysql-tls-server.php <socket> <cert> <key>
+ * It listens on a loopback port, because PHP starts TLS only on tcp://
+ * streams, and prints `READY <port>`.
+ *
+ * Usage: php fake-mysql-tls-server.php <cert> <key>
  */
 
-[, $socket, $cert, $key] = $argv;
+[, $cert, $key] = $argv;
 
 function frame(int $seq, string $payload): string
 {
@@ -53,14 +56,14 @@ function expectSequence(int $got, int $want, string $what): void
     }
 }
 
-@unlink($socket);
-$server = stream_socket_server("unix://{$socket}", $errno, $error, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+$server = stream_socket_server('tcp://127.0.0.1:0', $errno, $error, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
     stream_context_create(['ssl' => ['local_cert' => $cert, 'local_pk' => $key]]));
 if ($server === false) {
     fwrite(STDERR, "listen: {$error}\n");
     exit(2);
 }
-fwrite(STDOUT, "READY\n");
+$name = (string) stream_socket_get_name($server, false);
+fwrite(STDOUT, 'READY ' . substr($name, strrpos($name, ':') + 1) . "\n");
 
 while ($conn = @stream_socket_accept($server, 30)) {
     // Protocol 41 | SSL | plugin auth, in the lower and upper halves.

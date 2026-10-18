@@ -31,7 +31,7 @@ final class MysqlTlsRelay
     /**
      * @param array{
      *     listen: string,
-     *     upstream: array{socket: string}|array{host: string, port: int},
+     *     upstream: array{host: string, port: int},
      *     peer_name: string,
      *     tls: array{cafile?: ?string, local_cert?: ?string, local_pk?: ?string},
      *     timeout: int
@@ -263,10 +263,10 @@ final class MysqlTlsRelay
      */
     private function connectUpstream(int $timeout)
     {
+        // TCP only: PHP can start TLS on a tcp:// stream, and a unix://
+        // stream "does not support SSL/crypto".
         $upstream = $this->settings['upstream'];
-        $address = isset($upstream['socket'])
-            ? "unix://{$upstream['socket']}"
-            : "tcp://{$upstream['host']}:{$upstream['port']}";
+        $address = "tcp://{$upstream['host']}:{$upstream['port']}";
 
         $server = @stream_socket_client($address, $errno, $error, $timeout);
         if ($server === false) {

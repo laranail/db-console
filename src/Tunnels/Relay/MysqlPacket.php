@@ -26,10 +26,8 @@ final readonly class MysqlPacket
 
     public function encode(): string
     {
-        $length = strlen($this->payload);
-
-        return chr($length & 0xFF) . chr(($length >> 8) & 0xFF) . chr($length >> 16)
-            . chr($this->sequence & 0xFF) . $this->payload;
+        // The length is 3 bytes little-endian: the low 3 of a 32-bit one.
+        return substr(pack('V', strlen($this->payload)), 0, 3) . pack('C', $this->sequence & 0xFF) . $this->payload;
     }
 
     public function withSequence(int $sequence): self

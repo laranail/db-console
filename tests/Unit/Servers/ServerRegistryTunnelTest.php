@@ -298,13 +298,15 @@ describe('the MySQL TLS relay', function (): void {
             ->and((array) $connection->getConfig('options'))->toBe([]);
     });
 
-    it('relays a socket local end too, since the relay does TLS itself', function (): void {
+    // PHP starts TLS only on tcp:// streams, so the relay cannot reach a
+    // tunnel whose local end is a Unix socket.
+    it('refuses a socket local end for a relayed server, and says why', function (): void {
         tunnelledServer(['local' => 'socket'], ['enabled' => true, 'verify' => true]);
 
-        app(ServerRegistry::class)->resolve('behind-bastion');
-
-        expect($this->relays->launched)->toHaveCount(1)
-            ->and($this->relays->launched[0]['upstream'])->toEndWith('/db.sock');
+        expect(fn () => app(ServerRegistry::class)->resolve('behind-bastion'))
+            ->toThrow(ServerMisconfigured::class, 'PHP cannot start TLS on a Unix socket')
+            ->and($this->driver->opened)->toBe([])
+            ->and($this->relays->launched)->toBe([]);
     });
 
     it('leaves TLS to the client where it can verify, or where nothing needs verifying', function (array $ssh, array $tls, array $connection): void {

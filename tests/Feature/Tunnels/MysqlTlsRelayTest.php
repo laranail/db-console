@@ -9,10 +9,10 @@ use Simtabi\Laranail\DBConsole\Tunnels\Support\WorkerProcess;
 use Simtabi\Laranail\DBConsole\Tunnels\Relay\MysqlPacketReader;
 
 /*
- * The relay end to end, over Unix sockets, against a fake TLS MySQL server
+ * The relay end to end against a fake TLS MySQL server on a loopback port
  * (tests/Fixtures/fake-mysql-tls-server.php) with a certificate for `mytls`
- * from a CA made here. A raw client speaks plaintext to the relay, as PDO
- * would. Needs local listening and the openssl CLI; outside CI a sandbox
+ * from a CA made here. A raw client speaks plaintext to the relay over its
+ * Unix socket, as PDO would. Needs local listening and the openssl CLI; outside CI a sandbox
  * without either skips, and in CI it must run.
  */
 
@@ -38,9 +38,10 @@ beforeEach(function (): void {
     $run(['openssl', 'req', '-nodes', '-newkey', 'rsa:2048', '-subj', '/CN=mytls', '-keyout', 'server.key', '-out', 'server.csr']);
     $run(['openssl', 'x509', '-req', '-in', 'server.csr', '-CA', 'ca.crt', '-CAkey', 'ca.key', '-CAcreateserial', '-days', '1', '-out', 'server.crt', '-extfile', 'ext']);
 
-    $this->server = new Process([PHP_BINARY, dirname(__DIR__, 2) . '/Fixtures/fake-mysql-tls-server.php', "{$this->dir}/db.sock", "{$this->dir}/server.crt", "{$this->dir}/server.key"]);
+    $this->server = new Process([PHP_BINARY, dirname(__DIR__, 2) . '/Fixtures/fake-mysql-tls-server.php', "{$this->dir}/server.crt", "{$this->dir}/server.key"]);
     $this->server->start();
-    $this->server->waitUntil(fn (string $type, string $output): bool => str_contains($output, 'READY'));
+    $this->server->waitUntil(fn (string $type, string $output): bool => preg_match('/READY \d+/', $output) === 1);
+    $this->serverPort = (int) preg_replace('/\D/', '', $this->server->getOutput());
 });
 
 afterEach(function (): void {
@@ -56,7 +57,7 @@ function startRelay(object $test, string $peerName): WorkerProcess
 {
     return $test->relay = WorkerProcess::start(dirname(__DIR__, 3) . '/resources/bin/mysql-tls-relay.php', [
         'listen'    => "{$test->dir}/relay.sock",
-        'upstream'  => ['socket' => "{$test->dir}/db.sock"],
+        'upstream'  => ['host' => '127.0.0.1', 'port' => $test->serverPort],
         'peer_name' => $peerName,
         'tls'       => ['cafile' => "{$test->dir}/ca.crt"],
         'timeout'   => 5,

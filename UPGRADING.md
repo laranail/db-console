@@ -13,7 +13,9 @@ Two things change for such a server:
 
 - **A PHP CLI binary is needed on the host**, to run the relay. It is the same requirement the
   phpseclib driver has. `doctor` reports the tunnel as failed if the relay cannot start.
-- **`ssh.local=socket` is accepted with TLS required**, since the relay does the TLS itself.
+- **`ssh.local` must be `port`.** The relay reaches the tunnel over TCP, because PHP cannot start
+  TLS on a Unix socket, and `ssh.local=socket` is refused with that reason. The client still
+  talks to the relay over a private `0600` socket.
 
 SQL Server through a tunnel still cannot verify the real name, because pdo_sqlsrv offers no way to.
 Keep `tls.verify=false` for it.

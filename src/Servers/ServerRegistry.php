@@ -360,11 +360,15 @@ final class ServerRegistry
 
         $remote = $this->tunnelTarget($definition->name) ?? throw new LogicException('unreachable: the server has an ssh block');
 
-        // The relay does TLS itself, over whatever the tunnel's local end is,
-        // so only a client that would start TLS on a socket is refused.
-        $relayed = VerifyingRelay::appliesTo($definition, $remote, $driver);
+        if ($ssh->local === LocalEnd::Socket && VerifyingRelay::appliesTo($definition, $remote, $driver)) {
+            throw ServerMisconfigured::named(
+                $definition->name,
+                'verified MySQL TLS through a tunnel runs through the TLS relay, which reaches the tunnel over TCP '
+                    . '(PHP cannot start TLS on a Unix socket); use ssh.local=port. The client still talks to the relay over a private socket',
+            );
+        }
 
-        if ($ssh->local === LocalEnd::Socket && $definition->tlsEnabled() && ! $relayed && ! $remote->isLocalToItsHost()) {
+        if ($ssh->local === LocalEnd::Socket && $definition->tlsEnabled() && ! $remote->isLocalToItsHost()) {
             throw ServerMisconfigured::named(
                 $definition->name,
                 'a Unix socket cannot carry TLS, so ssh.local=socket would leave the hop from the SSH host to '
