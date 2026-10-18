@@ -52,13 +52,6 @@ final readonly class VerifyingRelay implements TlsRelayLauncher
         $socket = $directory->file('mysql-tls.sock');
         $upstream = $tunnel->local();
 
-        // PHP cannot start TLS on a Unix socket stream, so the relay reaches
-        // the tunnel over its loopback port. ServerRegistry refuses the
-        // combination before it gets here; this is the backstop.
-        if ($upstream->isSocket()) {
-            throw new RuntimeException('the relay needs the tunnel on a loopback port (ssh.local=port): PHP cannot start TLS on a Unix socket');
-        }
-
         $worker = WorkerProcess::start(self::script(), [
             'listen'    => $socket,
             'upstream'  => ['host' => $upstream->host, 'port' => $upstream->port],

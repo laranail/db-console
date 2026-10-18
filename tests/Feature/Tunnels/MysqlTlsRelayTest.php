@@ -46,6 +46,7 @@ beforeEach(function (): void {
 
 afterEach(function (): void {
     ($this->relay ?? null)?->stop();
+    ($this->forwarder ?? null)?->stop(1);
     ($this->server ?? null)?->stop(1);
     foreach (glob("{$this->dir}/*") ?: [] as $file) {
         @unlink($file);
@@ -53,11 +54,27 @@ afterEach(function (): void {
     @rmdir($this->dir);
 });
 
-function startRelay(object $test, string $peerName): WorkerProcess
+// tcp: a tunnel on a loopback port; socket: a tunnel on a Unix socket, which
+// the relay reaches through a loopback pair of its own.
+dataset('upstreams', ['tcp', 'socket']);
+
+/**
+ * Start the relay, reaching the fake server straight over TCP, or through a
+ * Unix-socket "tunnel" as ssh.local=socket gives it.
+ */
+function startRelay(object $test, string $peerName, string $upstream = 'tcp'): WorkerProcess
 {
+    if ($upstream === 'socket') {
+        $test->forwarder = new Process([PHP_BINARY, dirname(__DIR__, 2) . '/Fixtures/unix-to-tcp-forwarder.php', "{$test->dir}/tunnel.sock", (string) $test->serverPort]);
+        $test->forwarder->start();
+        $test->forwarder->waitUntil(fn (string $type, string $output): bool => str_contains($output, 'READY'));
+    }
+
     return $test->relay = WorkerProcess::start(dirname(__DIR__, 3) . '/resources/bin/mysql-tls-relay.php', [
-        'listen'    => "{$test->dir}/relay.sock",
-        'upstream'  => ['host' => '127.0.0.1', 'port' => $test->serverPort],
+        'listen'   => "{$test->dir}/relay.sock",
+        'upstream' => $upstream === 'socket'
+            ? ['socket' => "{$test->dir}/tunnel.sock"]
+            : ['host' => '127.0.0.1', 'port' => $test->serverPort],
         'peer_name' => $peerName,
         'tls'       => ['cafile' => "{$test->dir}/ca.crt"],
         'timeout'   => 5,
@@ -80,8 +97,8 @@ function readMysqlPacket($stream, MysqlPacketReader $reader): MysqlPacket
     return $packet;
 }
 
-it('verifies the server, hides TLS from the client, and renumbers the login', function (): void {
-    $relay = startRelay($this, 'mytls');
+it('verifies the server, hides TLS from the client, and renumbers the login', function (string $upstream): void {
+    $relay = startRelay($this, 'mytls', $upstream);
     $client = stream_socket_client("unix://{$relay->local->socket}", $errno, $error, 5);
     stream_set_timeout($client, 5);
     $reader = new MysqlPacketReader;
@@ -105,10 +122,10 @@ it('verifies the server, hides TLS from the client, and renumbers the login', fu
 
     expect($reply->sequence)->toBe(1)
         ->and($reply->payload)->toEndWith("echo:SELECT 1:secret\0");
-});
+})->with('upstreams');
 
-it('refuses a server whose certificate does not name the host, and tells the client why', function (): void {
-    $relay = startRelay($this, 'mytls-alias');
+it('refuses a server whose certificate does not name the host, and tells the client why', function (string $upstream): void {
+    $relay = startRelay($this, 'mytls-alias', $upstream);
     $client = stream_socket_client("unix://{$relay->local->socket}", $errno, $error, 5);
     stream_set_timeout($client, 5);
     $reader = new MysqlPacketReader;
@@ -122,4 +139,4 @@ it('refuses a server whose certificate does not name the host, and tells the cli
         ->and($error->sequence)->toBe(2)
         ->and($error->payload)->toContain('TLS to mytls-alias failed')
         ->and($error->payload)->toContain('did not match');
-});
+})->with('upstreams');
