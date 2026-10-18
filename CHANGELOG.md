@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **laranail/db-tools `^0.1.8`** (was `^0.1.7`) in `require-dev` and `suggest`. doctor's
   `server:<name>:backup-client` check calls db-tools' `preflight()`, which first ships in 0.1.8; with
   0.1.7 the check yields no finding.
+- **The Tests workflow defaults every job to `contents: read`.** The `pest` job, which calls the
+  shared reusable workflow, set no permissions and so ran with the repository's default token
+  scope; the live jobs already set `contents: read` and keep it.
 
 ### Fixed
 
