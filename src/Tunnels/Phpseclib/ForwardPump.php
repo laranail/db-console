@@ -6,6 +6,7 @@ namespace Simtabi\Laranail\DBConsole\Tunnels\Phpseclib;
 
 use Throwable;
 use RuntimeException;
+use phpseclib4\Net\SSH2;
 use phpseclib4\Crypt\PublicKeyLoader;
 use Simtabi\Laranail\DBConsole\Tunnels\HostKey;
 
@@ -40,6 +41,9 @@ final class ForwardPump
     private array $clients = [];
 
     private int $nextChannel = self::FIRST_CHANNEL;
+
+    /** @var array<int, true> channels whose client has been told the far end closed */
+    private array $halfClosed = [];
 
     /**
      * @param array{
@@ -87,6 +91,13 @@ final class ForwardPump
 
     private function connect(): void
     {
+        // Routes every received packet through ForwardingSsh2's log hook, the
+        // only place a CHANNEL_EOF from the server can be seen. This process
+        // exists only to pump, so nothing else reads the constant.
+        if (! defined('NET_SSH2_LOGGING')) {
+            define('NET_SSH2_LOGGING', SSH2::LOG_SIMPLE);
+        }
+
         $pin = HostKey::parse($this->settings['host_key']);
 
         $this->ssh = new ForwardingSsh2($this->settings['host'], $this->settings['port'], $this->settings['connect_timeout']);
@@ -237,12 +248,21 @@ final class ForwardPump
             $data = $this->ssh->readForward($channel);
 
             if ($data === null) {
+                // The database closed its side (it ended the session): say so
+                // to the client by shutting our write side, as OpenSSH's own
+                // forwarding does. Without it libpq, having read a FATAL error,
+                // waits for an end of stream that never comes.
+                if ($this->ssh->remoteFinished($channel) && ! isset($this->halfClosed[$channel])) {
+                    stream_socket_shutdown($this->clients[$channel], STREAM_SHUT_WR);
+                    $this->halfClosed[$channel] = true;
+                }
+
                 return;
             }
 
             if ($data === false) {
                 fclose($this->clients[$channel]);
-                unset($this->clients[$channel]);
+                unset($this->clients[$channel], $this->halfClosed[$channel]);
 
                 return;
             }
@@ -254,7 +274,7 @@ final class ForwardPump
     private function drop(int $channel): void
     {
         fclose($this->clients[$channel]);
-        unset($this->clients[$channel]);
+        unset($this->clients[$channel], $this->halfClosed[$channel]);
 
         $this->ssh->closeForward($channel);
     }

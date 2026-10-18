@@ -457,9 +457,18 @@ jobs:
           DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
           DB_CONSOLE_LIVE_PGTLS_CA: ${{ runner.temp }}/pgtls/ca.crt
           DB_CONSOLE_LIVE_PG_BIN: /usr/lib/postgresql/18/bin
-        run: vendor/bin/pest --no-coverage --colors=never --group=live-ssh --fail-on-skipped
-      - name: SSH server and TLS PostgreSQL logs
+        # Bounded so a hung tunnel fails the step (and the logs below still
+        # run) instead of the job being cancelled at its own timeout. Events
+        # stream as they happen, so a hang names the test it happened in;
+        # pest's own output is buffered when stdout is not a terminal.
+        timeout-minutes: 8
+        run: >-
+          vendor/bin/pest --no-coverage --colors=never --group=live-ssh --fail-on-skipped
+          --log-events-text "$RUNNER_TEMP/live-ssh-events.txt"
+      - name: Test events, processes, SSH server and TLS PostgreSQL logs
         if: failure()
         run: |
+          grep -E 'Test (Prepared|Passed|Failed|Errored|Finished)' "$RUNNER_TEMP/live-ssh-events.txt" | tail -40 || true
+          ps -eo pid,etime,args | grep -E 'ssh|php|pg_dump|psql' | grep -v grep || true
           docker logs sshd
           docker logs pgtls

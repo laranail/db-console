@@ -45,6 +45,9 @@ final class ForwardingSsh2 extends SSH2
     /** True while readForward() polls a channel. */
     private bool $polling = false;
 
+    /** @var array<int, true> channels the server has sent CHANNEL_EOF on */
+    private array $remoteEof = [];
+
     public function setBlockingTimeout(int $seconds): void
     {
         $this->blockingTimeout = max(1, $seconds);
@@ -106,10 +109,53 @@ final class ForwardingSsh2 extends SSH2
         $this->send_channel_packet($channel, $data);
     }
 
+    /**
+     * Whether the server has finished sending on a channel: the far end
+     * (the database) closed its side. Whatever it sent before that has
+     * already been returned by readForward() once that returns null.
+     */
+    public function remoteFinished(int $channel): bool
+    {
+        return isset($this->remoteEof[$channel]);
+    }
+
     public function closeForward(int $channel): void
     {
+        unset($this->remoteEof[$channel]);
+
         if (isset($this->channel_status[$channel])) {
             $this->close_channel($channel);
+        }
+    }
+
+    /**
+     * phpseclib drops a received CHANNEL_EOF without recording it anywhere,
+     * so nothing in its state says the far end has closed. With
+     * NET_SSH2_LOGGING defined (ForwardPump defines it), every received
+     * packet passes through here; the EOFs are noted and nothing is kept,
+     * so the log never grows.
+     *
+     * @param array<int, mixed> $message_number_log
+     * @param array<int, mixed> $message_log
+     */
+    protected function append_log_helper(
+        int $constant,
+        string $message_number,
+        string $message,
+        array &$message_number_log,
+        array &$message_log,
+        ?int &$log_size,
+        mixed &$realtime_log_file,
+        ?bool &$realtime_log_wrap,
+        ?int &$realtime_log_size,
+    ): void {
+        // The payload is the message type, then the recipient channel: ours.
+        if (str_starts_with($message_number, '<- SSH_MSG_CHANNEL_EOF ') && strlen($message) >= 5) {
+            $channel = unpack('N', substr($message, 1, 4));
+
+            if (is_array($channel) && is_int($channel[1] ?? null)) {
+                $this->remoteEof[$channel[1]] = true;
+            }
         }
     }
 
