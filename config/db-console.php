@@ -217,7 +217,8 @@ return [
     |--------------------------------------------------------------------------
     */
     'catalog_encryption' => [
-        // Hostnames/usernames encrypted via Laravel casts.
+        // Server hosts and account usernames/hosts encrypted with the app key.
+        // false writes them in plaintext; rows keep their form until re-saved.
         'encrypt_topology_columns' => true,
 
         // Optional whole-file SQLCipher for the SQLite catalog. Requires the
@@ -325,7 +326,7 @@ return [
     */
     'webhooks' => [
         'enabled'      => (bool) env('DB_CONSOLE_WEBHOOKS', false),
-        'queue'        => true,
+        'queue'        => true, // true: the default queue; a string: that queue's name
         'timeout'      => 5,
         'max_attempts' => 5, // retries with backoff, then auto-disable + alert
         'sign_with'    => 'sha256', // HMAC over the payload using each subscription's secret
@@ -439,8 +440,8 @@ return [
     |--------------------------------------------------------------------------
     | Custom privilege presets
     |--------------------------------------------------------------------------
-    | Named custom presets, validated against the active engine's allow-list
-    | at boot.
+    | Named custom presets, 'name' => ['SELECT', 'SHOW VIEW'], validated
+    | against the privilege allow-list at boot (PresetMisconfigured).
     */
     'presets' => [],
 ];

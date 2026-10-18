@@ -56,7 +56,7 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 |---|---|---|
 | `catalog_encryption.sqlcipher.enabled` | `false` (env `DB_CONSOLE_SQLCIPHER`) | Encrypt the whole SQLite catalog file with SQLCipher. Needs `pdo_sqlcipher`; without it db-console keeps column encryption. |
 | `catalog_encryption.sqlcipher.key` | `null` (env `DB_CONSOLE_CIPHER_KEY`) | The SQLCipher key. |
-| `catalog_encryption.encrypt_topology_columns` | `true` | Not read. Topology columns are encrypted whatever it says. |
+| `catalog_encryption.encrypt_topology_columns` | `true` | Encrypt the topology columns (a server's `host`, an account's `username` and `host`) with the app key. `false` writes them in plaintext. Rows keep the form they were written in until saved again, and either form reads back. |
 
 See [Catalog encryption](tools/catalog-encryption.md).
 
@@ -67,7 +67,7 @@ See [Catalog encryption](tools/catalog-encryption.md).
 | `rbac.driver` | `builtin` | `builtin` or `spatie`. |
 | `rbac.user_model` | `App\Models\User` | The operator model. |
 | `rbac.owner_user_id` | `null` | Bootstrap Owner assigned on install. |
-| `rbac.seed_default_roles` | `true` | Not read. Install seeds the shipped roles whatever it says. |
+| `rbac.seed_default_roles` | `true` | Seed the shipped roles on install. `false` leaves the role tables as they are, for a host that manages its own roles. |
 | `rbac.teams.enabled` | `false` | Reserved for teams; `false` keeps the stub tables idle. |
 
 ## Existing resources
@@ -117,11 +117,11 @@ See [Events & notifications](tools/events-notifications.md).
 
 ## API & webhooks
 
-`api.enabled` (default `false`), `api.auth` (`sanctum` | `passport`), `api.path`, `api.allowed_ips`, `api.rate_limit` (`'requests,minutes'`), `api.auth_failure_limit` (`'failures,minutes'` per IP, default `10,1`), `api.require_https`, `api.confirm_destructive`. `api.guard` and `api.prefix`, read until 0.1.1, are no longer read; `doctor` reports them (`config:legacy-api-keys`). `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. `webhooks.queue` is not read: deliveries are always queued. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
+`api.enabled` (default `false`), `api.auth` (`sanctum` | `passport`), `api.path`, `api.allowed_ips`, `api.rate_limit` (`'requests,minutes'`), `api.auth_failure_limit` (`'failures,minutes'` per IP, default `10,1`), `api.require_https`, `api.confirm_destructive`. `api.guard` and `api.prefix`, read until 0.1.1, are no longer read; `doctor` reports them (`config:legacy-api-keys`). `webhooks.enabled`, `webhooks.sign_with` (`sha256`), `webhooks.max_attempts`, `webhooks.timeout`. `webhooks.queue` (default `true`): deliveries, and their retries, are always queued; a queue name sends them to that queue, and `true` leaves them on the default one. See [REST API](tools/api.md) and [Webhooks](tools/webhooks.md).
 
 ## Privilege presets
 
-`presets` (default `[]`) is not read. Use the shipped `PrivilegePreset` cases.
+`presets` (default `[]`) names custom privilege presets, `'name' => ['SELECT', 'SHOW VIEW']`, checked against the privilege allow-list at boot. A forbidden or unknown privilege, an empty list, or a name a shipped preset uses fails the boot with `PresetMisconfigured` (`preset.misconfigured`), naming the preset. Nothing grants a custom preset by name yet; grants take the shipped `PrivilegePreset` cases or a `custom` privilege list.
 
 ---
 

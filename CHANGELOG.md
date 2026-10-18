@@ -34,6 +34,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DbToolsBackupService`. Separate from `BackupService`, so a host's own implementation of that is
   unaffected; doctor asks for it with `instanceof`. The db-tools preflight is read by method, so a
   db-tools without it (0.1.7 and earlier) simply yields no finding.
+- **Four config keys that were read by nothing now work.** Each one's shipped value keeps the
+  behaviour it had before:
+  - `rbac.seed_default_roles` gates the install step that seeds the shipped roles
+    (`Access\DefaultRoleSeeder`).
+  - `webhooks.queue` names the queue webhook deliveries and their retries go to; `true` keeps the
+    default queue.
+  - `presets` is validated at boot against the privilege allow-list, and a bad preset fails the
+    boot with `Exceptions\PresetMisconfigured` (`preset.misconfigured`), naming it
+    (`Domain\Privileges\CustomPresets`).
+  - `catalog_encryption.encrypt_topology_columns` set to `false` writes a server's `host` and an
+    account's `username` and `host` in plaintext (`Models\Casts\TopologyColumn`). Either form
+    reads back, so no migration is needed.
 
 ### Changed
 
