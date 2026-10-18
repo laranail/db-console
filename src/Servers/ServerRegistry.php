@@ -345,10 +345,13 @@ final class ServerRegistry
      * backups) then goes through the tunnel too.
      *
      * TLS was applied first and still travels end to end: through a TCP
-     * forward the session is TLS from PHP to the database. A Unix socket
-     * cannot carry TLS, so a socket local end forwarding to a database
-     * across a network, with TLS required, is refused rather than silently
-     * dropping TLS on the SSH-host-to-database leg.
+     * forward the session is TLS from PHP to the database. A client cannot
+     * start TLS on a Unix socket, so a socket local end forwarding to a
+     * database across a network, with TLS required, is refused rather than
+     * silently dropping TLS on the SSH-host-to-database leg. The exception is
+     * a MySQL or MariaDB server with verified TLS (VerifyingRelay::appliesTo()):
+     * the relay does TLS itself over a loopback pair spliced to the socket,
+     * so that tunnel is opened whatever its local end.
      */
     private function applyTunnel(ServerDefinition $definition, SshSettings $ssh): void
     {
