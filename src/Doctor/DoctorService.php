@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Doctor;
 
-use Illuminate\Database\Connection;
 use Illuminate\Contracts\Events\Dispatcher;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Simtabi\Laranail\DBConsole\Encryption\TlsChecker;
@@ -172,10 +171,9 @@ final readonly class DoctorService
             return [DoctorFinding::warning("server:{$server}:admin", "Could not read the admin role: {$e->userMessage()}")];
         }
 
-        $underlying = $connection->underlying();
-        $port = $underlying instanceof Connection ? $underlying->getConfig('port') : null;
-
-        return $this->postgresAdmin->findings($server, $profile, is_numeric($port) ? (int) $port : null, $unmanageable);
+        // The database's own port, not the admin connection's: through an
+        // SSH tunnel the connection is pointed at the tunnel's local end.
+        return $this->postgresAdmin->findings($server, $profile, $this->registry->databasePort($server), $unmanageable);
     }
 
     /**
@@ -186,16 +184,14 @@ final readonly class DoctorService
     private function checkHosting(string $server): array
     {
         $definition = $this->registry->definition($server);
-        $connection = $this->registry->connection($server);
-        $underlying = $connection->underlying();
-        $host = $underlying instanceof Connection ? $underlying->getConfig('host') : null;
-        $host = is_array($host) ? reset($host) : $host;
 
+        // The database's own host: through an SSH tunnel the admin
+        // connection is pointed at the tunnel's local end, 127.0.0.1.
         return $this->hosting->findings(
             $server,
             $definition->hosting,
             $definition->engine,
-            is_string($host) ? $host : null,
+            $this->registry->databaseHost($server),
             $this->probeHosting($server, $definition->engine),
         );
     }
