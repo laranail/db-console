@@ -160,6 +160,11 @@ afterEach(function (): void {
             if ($kind === 'role' && (int) livePgScalar('SELECT COUNT(*) FROM pg_roles WHERE rolname = ?', [$name]) === 1) {
                 app(AccountManager::class)->drop('live_pgsql', new Username($name), new Host('%'));
             }
+            // A role the superuser made: from 16 the admin holds no ADMIN OPTION
+            // on it, so only the superuser can drop it.
+            if ($kind === 'superuser-role') {
+                livePgSuper('postgres')->statement("DROP ROLE IF EXISTS \"{$name}\"");
+            }
             if ($kind === 'superuser-database') {
                 DB::purge('live_pg_super_' . $name);
                 livePgSuper('postgres')->statement("DROP DATABASE IF EXISTS \"{$name}\" WITH (FORCE)");
@@ -781,7 +786,7 @@ function livePgCanLogIn(string $role, string $password): bool
 
 it('refuses a role it did not create, and the role keeps its own password', function (): void {
     $role = liveName('theirs');
-    $this->cleanup = [['role', $role]];
+    $this->cleanup = [['superuser-role', $role]];
     livePgSuper('postgres')->statement("CREATE ROLE \"{$role}\" LOGIN PASSWORD '" . livePgTheirPassword() . "'");
 
     expect(fn () => app(AccountManager::class)->create('live_pgsql', new Username($role), new Host('%'), new Password(LIVE_PG_PASSWORD)))
