@@ -96,19 +96,22 @@ final readonly class AccountManager
             $generated = $password->reveal();
         }
 
+        $raced = false;
+
         try {
-            $connection->run(
+            $raced = $connection->runCreate(
                 $engine->createAccount($user, $host, $password),
                 ['operation' => OperationType::AccountCreate->value, 'target' => $this->label($user, $host)],
+                fn (): bool => $this->createdMeanwhile($server, $user, $host),
             );
         } catch (DBConsoleException $e) {
-            // Created by someone else between the check and the create: the
-            // existing-resource policy decides, as if it had been there first.
-            if ($this->createdMeanwhile($server, $user, $host)) {
-                return $this->adopt($server, $user, $host, $password, $onExisting);
-            }
-
             $this->fail(OperationType::AccountCreate, $server, $this->label($user, $host), $e);
+        }
+
+        // Created by someone else between the check and the create: the
+        // existing-resource policy decides, as if it had been there first.
+        if ($raced) {
+            return $this->adopt($server, $user, $host, $password, $onExisting);
         }
 
         $this->catalog->recordAccount($server, $user, $host);

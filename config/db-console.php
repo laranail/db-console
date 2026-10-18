@@ -411,11 +411,11 @@ return [
     |--------------------------------------------------------------------------
     | Alerts — the high-severity channel
     |--------------------------------------------------------------------------
-    | Warning and Critical events (a refused or adopted existing resource, a
-    | failed rollback, suspicious activity) always go to the db-console log,
-    | to `webhook` when set, and as a notification on `channel` (mail, slack,
-    | database, or a comma-separated list) instead of their category's
-    | channels.
+    | Warning and Critical events (an adopted existing resource, a failed
+    | rollback, suspicious activity) always go to the db-console log, to
+    | `webhook` when set, and as a notification on `channel` (mail, slack,
+    | database, or a comma-separated list) as well as their category's
+    | channels, each channel once.
     */
     'alerts' => [
         'channel' => env('DB_CONSOLE_ALERT_CHANNEL', 'mail'),

@@ -46,10 +46,18 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
 
     /**
      * Another process creates the account or database between db-console's
-     * existence check and its create: the create's first statement plays the
-     * other process, its second fails as the duplicate would.
+     * existence check and its create. Building the create statements plays the
+     * other process (the row is written straight away), so the create's first
+     * statement fails on the unique key, as the duplicate would on a server.
      */
     public bool $raceOnCreate = false;
+
+    /**
+     * The create's first statement succeeds and a later one fails, as SQL
+     * Server's CREATE LOGIN then CREATE USER can: the resource now exists
+     * because db-console half-made it, not because anyone else did.
+     */
+    public bool $failAfterCreate = false;
 
     /** Refuse every password, as Postgres refuses one SASLprep would rewrite. */
     public bool $refusesPasswords = false;
@@ -62,8 +70,8 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
         ]);
 
         $db = DB::connection($connection);
-        $db->statement('CREATE TABLE fake_accounts (name TEXT, host TEXT, password_sha TEXT)');
-        $db->statement('CREATE TABLE fake_databases (name TEXT, objects INTEGER DEFAULT 0)');
+        $db->statement('CREATE TABLE fake_accounts (name TEXT, host TEXT, password_sha TEXT, UNIQUE (name, host))');
+        $db->statement('CREATE TABLE fake_databases (name TEXT UNIQUE, objects INTEGER DEFAULT 0)');
         $db->statement('CREATE TABLE fake_grants (name TEXT, host TEXT, db TEXT)');
 
         $engine = new self;
@@ -132,7 +140,11 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
         self::$createdForVersion = $this->version;
         $insert = Statement::plain("INSERT INTO fake_databases (name) VALUES ('{$db->value}')");
 
-        return $this->raceOnCreate
+        if ($this->raceOnCreate) {
+            self::addDatabase($db->value);
+        }
+
+        return $this->failAfterCreate
             ? new StatementList($insert, Statement::plain('INSERT INTO no_such_table VALUES (1)'))
             : new StatementList($insert);
     }
@@ -167,18 +179,17 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
 
         if ($this->raceOnCreate) {
             // The other process's account, with its own password.
-            $theirs = hash('sha256', 'theirs');
-
-            return new StatementList(
-                Statement::plain("INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '{$theirs}')"),
-                Statement::plain('INSERT INTO no_such_table VALUES (1)'),
-            );
+            self::addAccount($u->value, $h->value, 'theirs');
         }
 
-        return new StatementList(Statement::sensitive(
+        $insert = Statement::sensitive(
             "INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '{$sha}')",
             "INSERT INTO fake_accounts VALUES ('{$u->value}', '{$h->value}', '***')",
-        ));
+        );
+
+        return $this->failAfterCreate
+            ? new StatementList($insert, Statement::plain('INSERT INTO no_such_table VALUES (1)'))
+            : new StatementList($insert);
     }
 
     public function dropAccount(Username $u, Host $h): StatementList

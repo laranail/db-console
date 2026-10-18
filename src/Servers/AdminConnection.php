@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Servers;
 
+use Closure;
 use Throwable;
 use LogicException;
 use Illuminate\Database\ConnectionInterface;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
 use Simtabi\Laranail\DBConsole\Exceptions\ExceptionTranslator;
 
 /**
@@ -41,6 +43,37 @@ final readonly class AdminConnection
         foreach ($statements as $statement) {
             $this->runStatement($statement, $context);
         }
+    }
+
+    /**
+     * Run a create's statements in order, and say whether it lost a race:
+     * true when the FIRST statement failed and $existsNow() then finds the
+     * resource, so someone else created it between the caller's existence
+     * check and this create. A failure after the first statement is rethrown
+     * whatever exists, because the resource is then this create's own,
+     * half-made (SQL Server's CREATE LOGIN succeeding and CREATE USER not).
+     *
+     * @param array<string, mixed> $context sanitized context for error translation
+     * @param Closure(): bool $existsNow
+     */
+    public function runCreate(StatementList $statements, array $context, Closure $existsNow): bool
+    {
+        $first = true;
+        foreach ($statements as $statement) {
+            try {
+                $this->runStatement($statement, $context);
+            } catch (DBConsoleException $e) {
+                if ($first && $existsNow()) {
+                    return true;
+                }
+
+                throw $e;
+            }
+
+            $first = false;
+        }
+
+        return false;
     }
 
     /**
