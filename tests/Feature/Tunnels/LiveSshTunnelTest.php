@@ -12,6 +12,7 @@ use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 use Simtabi\Laranail\DBConsole\Exceptions\TunnelFailed;
 use Simtabi\Laranail\DBConsole\Backup\DbToolsBackupService;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
+use Simtabi\Laranail\DbTools\Providers\DbToolsServiceProvider;
 
 /*
  * Against a real SSH server: the `live-ssh` job in .github/workflows/tests.yml
@@ -245,6 +246,10 @@ it('backs up through the tunnel under verify-full', function (string $driver): v
     $bin = (string) getenv('DB_CONSOLE_LIVE_PG_BIN');
     expect(is_executable("{$bin}/pg_dump"))->toBeTrue("DB_CONSOLE_LIVE_PG_BIN must hold a PostgreSQL 18 pg_dump, got '{$bin}'");
 
+    // The suite boots db-console without db-tools' provider, which is what
+    // binds the backup manager the backup service hands the dump to.
+    app()->register(DbToolsServiceProvider::class);
+
     foreach (['pg_dump', 'pg_restore', 'psql'] as $tool) {
         config()->set("laranail.db-tools.backup.binaries.{$tool}", "{$bin}/{$tool}");
     }
@@ -260,26 +265,37 @@ it('backs up through the tunnel under verify-full', function (string $driver): v
 })->with('drivers');
 
 // phpseclib raises its read timeout to 5 s when it handles one channel's
-// CHANNEL_CLOSE while reading for another. The server ends session B through
-// idle_session_timeout while A sits idle, so B's close arrives while the pump
-// polls A, the first channel. A's next query must not wait out that timeout.
+// CHANNEL_CLOSE while reading for another, and OpenSSH sends that close for a
+// forwarded channel once both directions are shut: after the database ended
+// the session (idle_session_timeout) and a write to it then failed. So B is
+// ended, B writes, and A, the channel the pump polls first, must still answer
+// at once. Five rounds, because when the close lands is a matter of timing.
 it('keeps other sessions responsive when the server closes one', function (string $driver): void {
     $server = liveTunnel('pgsql', $driver);
     $a = app(ServerRegistry::class)->connection($server)->underlying();
     assert($a instanceof Connection);
     $a->selectOne('SELECT 1');
 
-    $b = app('db')->connectUsing("{$server}_idle", $a->getConfig(), true);
-    $b->statement("SET idle_session_timeout = '300ms'");
+    $slowest = 0.0;
+    for ($round = 1; $round <= 5; $round++) {
+        $b = app('db')->connectUsing("{$server}_idle_{$round}", $a->getConfig(), true);
+        $b->statement("SET idle_session_timeout = '200ms'");
+        usleep(500_000);
 
-    usleep(1_000_000);
+        try {
+            $b->getPdo()->exec('SELECT 1');
+        } catch (Throwable) {
+            // Expected: the server ended this session.
+        }
 
-    $start = microtime(true);
-    $answer = $a->selectOne('SELECT 41 + 1 AS answer')->answer;
-    $elapsed = microtime(true) - $start;
+        $start = microtime(true);
+        $answer = $a->selectOne('SELECT 41 + 1 AS answer')->answer;
+        $slowest = max($slowest, microtime(true) - $start);
 
-    app('db')->purge("{$server}_idle");
+        app('db')->purge("{$server}_idle_{$round}");
 
-    expect($answer)->toBe(42)
-        ->and($elapsed)->toBeLessThan(1.0, sprintf('session A waited %.2fs after the server closed session B', $elapsed));
+        expect($answer)->toBe(42);
+    }
+
+    expect($slowest)->toBeLessThan(1.0, sprintf('session A waited %.2fs after the server closed another session', $slowest));
 })->with('drivers');
