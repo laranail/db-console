@@ -21,6 +21,11 @@ Every `laranail.db-console.*` configuration key. Publish the file with `php arti
 
 `secrets.driver` selects the vault (`app_key` | `kms` | `vault` | `reference`). `app_key` is blocked in production without an explicit override. See [Secret vault](tools/secret-vault.md).
 
+| Key | Default | Purpose |
+|---|---|---|
+| `secrets.reference.provider` | `aws-secrets-manager` (env `DB_CONSOLE_SECRET_REF_PROVIDER`) | Where a `reference` pointer resolves: `aws-secrets-manager`, `vault` or `doppler`. |
+| `secrets.reference.token` | `null` (env `DB_CONSOLE_DOPPLER_TOKEN`) | The Doppler service token, read when the provider is `doppler`. Without it every Doppler lookup fails as misconfigured. |
+
 ## RBAC
 
 | Key | Default | Purpose |

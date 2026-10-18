@@ -205,6 +205,9 @@ return [
             // Where the real credentials live when nothing is stored locally:
             // aws-secrets-manager | vault | doppler
             'provider' => env('DB_CONSOLE_SECRET_REF_PROVIDER', 'aws-secrets-manager'),
+
+            // The Doppler service token, read when provider is doppler.
+            'token' => env('DB_CONSOLE_DOPPLER_TOKEN'),
         ],
     ],
 

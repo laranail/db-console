@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unaffected; doctor asks for it with `instanceof`. The db-tools preflight is read by method, so a
   db-tools without it (0.1.7 and earlier) simply yields no finding.
 
+### Fixed
+
+- **`secrets.reference.token` is in the shipped config** (env `DB_CONSOLE_DOPPLER_TOKEN`). The
+  Doppler reference resolver read it, but the config never defined it, so a published config gave
+  the resolver no token and every Doppler lookup failed as misconfigured. Documented in the
+  configuration and secret vault pages.
+
 ## [0.1.4] - 2026-10-18
 
 ### Added
