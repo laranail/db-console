@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`doctor` reports whether each server's backup-before-drop can run: `server:<name>:backup-client`.**
+  A missing `mysqldump`, or a `pg_dump` older than the server, used to surface only when a drop of a
+  non-empty database needed the backup, and with `backup.abort_drop_on_failure` on the drop was then
+  refused. Doctor now asks laranail/db-tools without dumping, through the same admin connection and
+  tunnel a snapshot uses. Error when a drop would be refused, warning when it would go ahead without a
+  backup, nothing when backups are off or the provider keeps point-in-time recovery.
+- **`Backup\PreflightsBackups`** (`preflight(string $server): ?BackupClientStatus`), implemented by
+  `DbToolsBackupService`. Separate from `BackupService`, so a host's own implementation of that is
+  unaffected; doctor asks for it with `instanceof`. The db-tools preflight is read by method, so a
+  db-tools without it (0.1.7 and earlier) simply yields no finding.
+
 ## [0.1.4] - 2026-10-18
 
 ### Added

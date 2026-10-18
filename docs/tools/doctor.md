@@ -45,6 +45,19 @@ Every server also gets the checks in `Doctor\HostingCheck`, judged from what the
 | `server:<name>:server-settings` | info | MySQL family: reports `sql_require_primary_key` and `gtid_mode`, which a managed MySQL turns on |
 | `server:<name>:forced-drop` | warning | PostgreSQL: the admin is not a superuser and not a member of `pg_signal_backend`, so dropping a database another role is connected to fails |
 
+## Backup client
+
+Before a non-empty database is dropped, DBConsole dumps it with `mysqldump` or `pg_dump`. Doctor asks laranail/db-tools whether that dump would run, without dumping, so a missing or too-old client shows here rather than when a drop is refused. See [Backup before drop](backups.md#checking-the-dump-client).
+
+| Check | Severity | When |
+|---|---|---|
+| `server:<name>:backup-client` | error | the client will not run, or `pg_dump` is older than the server, and `backup.abort_drop_on_failure` is on, so a drop of a non-empty database would be refused |
+| `server:<name>:backup-client` | warning | the same, with `abort_drop_on_failure` off: the drop would go ahead without a backup |
+| `server:<name>:backup-client` | warning | the check itself could not run (the server could not be resolved) |
+| `server:<name>:backup-client` | info | the client runs and can dump this server |
+
+No finding when there is nothing to check: backups are off, the server's [hosting](servers.md#hosting) keeps point-in-time recovery and `backup.dump_on_managed` is off, or the installed db-tools predates its preflight (0.1.7 and earlier).
+
 The `capabilities` finding reads `ServerRegistry::capabilities()`, so it includes `provider_backups` on a managed server. [Managed databases](../managed-databases.md) explains what each of these means on a provider's cluster.
 
 ---
