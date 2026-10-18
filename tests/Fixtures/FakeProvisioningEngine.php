@@ -85,9 +85,20 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
         return $engine;
     }
 
-    public static function addAccount(string $name, string $host = '%', string $password = 'theirs', string $connection = 'fake_admin'): void
+    /**
+     * The password an account already had before db-console saw it, generated
+     * once per run so no literal credential sits in the repository.
+     */
+    public static function theirPassword(): string
     {
-        DB::connection($connection)->insert('INSERT INTO fake_accounts VALUES (?, ?, ?)', [$name, $host, hash('sha256', $password)]);
+        static $password = null;
+
+        return $password ??= Password::generate()->reveal();
+    }
+
+    public static function addAccount(string $name, string $host = '%', ?string $password = null, string $connection = 'fake_admin'): void
+    {
+        DB::connection($connection)->insert('INSERT INTO fake_accounts VALUES (?, ?, ?)', [$name, $host, hash('sha256', $password ?? self::theirPassword())]);
     }
 
     public static function addDatabase(string $name, int $objects = 0, string $connection = 'fake_admin'): void
@@ -179,7 +190,7 @@ final class FakeProvisioningEngine implements EmptinessProbingEngine, Engine, Pa
 
         if ($this->raceOnCreate) {
             // The other process's account, with its own password.
-            self::addAccount($u->value, $h->value, 'theirs');
+            self::addAccount($u->value, $h->value);
         }
 
         $insert = Statement::sensitive(

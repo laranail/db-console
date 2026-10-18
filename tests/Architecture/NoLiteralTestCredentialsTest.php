@@ -10,6 +10,13 @@ declare(strict_types=1);
  *
  * "Looks strong" is the scanner's own heuristic: twelve or more characters
  * mixing upper case, lower case, a digit and a symbol.
+ *
+ * Secret scanning's generic detectors also flag a weak literal once its name
+ * says it is a credential, so a constant, a named argument or a Livewire
+ * property named for a password, secret or token may hold no literal at all.
+ * That check reads names only: an RFC vector such as RFC7677_SALT, or the
+ * password a hashing test feeds positionally, is not named for a credential
+ * and stays exact.
  */
 function looksLikeAStrongPassword(string $literal): bool
 {
@@ -56,6 +63,33 @@ function strongLookingLiteralsIn(string $source): array
     return $found;
 }
 
+/**
+ * Literals of any strength in a position named for a credential: a constant
+ * or define(), a named argument, or a Livewire set()/assertSet() property.
+ *
+ * @return list<string>
+ */
+function namedCredentialLiteralsIn(string $source): array
+{
+    $credential = '\w*(?:password|passwd|secret|token)\w*';
+    $positions = [
+        '/\bconst\s+(?:string\s+)?' . $credential . '\s*=\s*([\'"])(.+?)\1/is',
+        '/\bdefine\(\s*[\'"]' . $credential . '[\'"]\s*,\s*([\'"])(.+?)\1/is',
+        '/[(,]\s*' . $credential . '\s*:\s*([\'"])(.+?)\1/is',
+        '/->(?:set|assertSet)\(\s*[\'"]' . $credential . '[\'"]\s*,\s*([\'"])(.+?)\1/is',
+    ];
+
+    $found = [];
+    foreach ($positions as $pattern) {
+        preg_match_all($pattern, $source, $matches);
+        foreach ($matches[2] as $literal) {
+            $found[] = $literal;
+        }
+    }
+
+    return $found;
+}
+
 it('recognises the sample it replaced, so the scan can fail', function (): void {
     expect(strongLookingLiteralsIn("<?php new Password('Ab9\$cD3#eF7!gH');"))->toHaveCount(1)
         ->and(strongLookingLiteralsIn("<?php \$adminPassword = 'Ab9\$cD3#eF7!gH';"))->toHaveCount(1)
@@ -65,7 +99,28 @@ it('recognises the sample it replaced, so the scan can fail', function (): void 
         ->and(strongLookingLiteralsIn("<?php \$vector = 'Ab9\$cD3#eF7!gH';"))->toBe([]);
 });
 
-it('keeps strong-looking password literals out of the test suite', function (): void {
+/**
+ * A sample source with the name and the value filled in apart, so the sample
+ * is not itself a name-and-literal pair for secret scanning to report.
+ */
+function credentialSample(string $template, string $name, string $value): string
+{
+    return '<?php ' . strtr($template, ['NAME' => $name, 'VALUE' => $value]);
+}
+
+it('recognises a weak literal in a position named for a credential, and only there', function (): void {
+    expect(namedCredentialLiteralsIn(credentialSample("const NAME = 'VALUE';", 'POLICY_THEIR_PASSWORD', 'theirs')))->toHaveCount(1)
+        ->and(namedCredentialLiteralsIn(credentialSample("const string NAME = 'VALUE';", 'ADMIN_SECRET', 'not-real')))->toHaveCount(1)
+        ->and(namedCredentialLiteralsIn(credentialSample("define('NAME', 'VALUE');", 'LIVE_TOKEN', 'abc')))->toHaveCount(1)
+        ->and(namedCredentialLiteralsIn(credentialSample("result(applied: true, NAME: 'VALUE');", 'password', 'shown-once')))->toHaveCount(1)
+        ->and(namedCredentialLiteralsIn(credentialSample("\$c->assertSet('NAME', 'VALUE');", 'generatedPassword', 'shown-once')))->toHaveCount(1)
+        ->and(namedCredentialLiteralsIn(credentialSample("const NAME = 'VALUE';", 'RFC7677_SALT', base64_encode(random_bytes(16)))))->toBe([])
+        ->and(namedCredentialLiteralsIn("<?php ScramSha256::verifier('pencil', \$salt);"))->toBe([])
+        ->and(namedCredentialLiteralsIn("<?php define('LIVE_PASSWORD', testPassword(24));"))->toBe([])
+        ->and(namedCredentialLiteralsIn("<?php \$c->assertSet('flash', 'Its password is unchanged.');"))->toBe([]);
+});
+
+it('keeps credential-looking literals out of the test suite', function (): void {
     $files = 0;
     $offenders = [];
 
@@ -76,7 +131,8 @@ it('keeps strong-looking password literals out of the test suite', function (): 
         }
 
         $files++;
-        foreach (strongLookingLiteralsIn((string) file_get_contents($file->getPathname())) as $literal) {
+        $source = (string) file_get_contents($file->getPathname());
+        foreach ([...strongLookingLiteralsIn($source), ...namedCredentialLiteralsIn($source)] as $literal) {
             $offenders[] = basename($file->getPathname()) . ': ' . substr($literal, 0, 3) . '…';
         }
     }

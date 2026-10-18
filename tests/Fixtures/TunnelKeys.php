@@ -15,4 +15,17 @@ final class TunnelKeys
     public const string PINNED_FINGERPRINT = 'SHA256:6OedZyvDDha3pwPzF05wnnWi7JR0j3xRF2sks+cQlSA';
 
     public const string OTHER = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIAnaEumkY7TnM0aaTjL5esLFFFPLwHmvBXrwG/GB6m1';
+
+    /**
+     * A fresh ed25519 public key line, generated at run time for a test that
+     * needs a well-formed host key but no particular one. The constants above
+     * stay fixed because HostKeyTest proves their fingerprint exactly.
+     */
+    public static function generated(): string
+    {
+        $public = sodium_crypto_sign_publickey(sodium_crypto_sign_keypair());
+        $blob = pack('N', 11) . 'ssh-ed25519' . pack('N', strlen($public)) . $public;
+
+        return 'ssh-ed25519 ' . base64_encode($blob);
+    }
 }

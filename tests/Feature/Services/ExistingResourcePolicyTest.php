@@ -55,7 +55,14 @@ use Simtabi\Laranail\DBConsole\Notifications\ExistingResourceNotification;
  * which the host reports through OperatorAssurance.
  */
 
-const POLICY_THEIR_PASSWORD = 'theirs';
+/**
+ * The password the account had before db-console saw it: the fake engine's,
+ * generated once per run so no literal credential sits in the repository.
+ */
+function policyTheirPassword(): string
+{
+    return FakeProvisioningEngine::theirPassword();
+}
 
 /**
  * The password db-console is asked to set, generated once per run so no
@@ -92,11 +99,14 @@ beforeEach(function (): void {
     $operator->id = 7;
     $this->actingAs($operator);
     app()->instance(OperatorAssurance::class, FixedOperatorAssurance::confirmedNow());
+
+    // Both are random; every "kept its own password" assertion needs them apart.
+    expect(policyTheirPassword())->not->toBe(policyOurPassword());
 });
 
 function policyTheirAccount(): void
 {
-    FakeProvisioningEngine::addAccount('shop', '%', POLICY_THEIR_PASSWORD);
+    FakeProvisioningEngine::addAccount('shop', '%', policyTheirPassword());
 }
 
 function policyCreateShop(?ExistingResourcePolicy $policy = null, ?Password $password = null): OperationResult
@@ -125,7 +135,7 @@ describe('an existing account', function (): void {
 
         expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
 
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()))
             ->and(DbAccount::query()->count())->toBe(0);
         Event::assertDispatched(AccountCreationRefused::class);
         Event::assertNotDispatched(AccountAdopted::class);
@@ -152,7 +162,7 @@ describe('an existing account', function (): void {
             ->and($result->data['adopted'])->toBeTrue()
             ->and($result->data['password_applied'])->toBeFalse()
             ->and($result->hasGeneratedPassword())->toBeFalse()
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()))
             ->and(DbAccount::query()->count())->toBe(1);
         Event::assertDispatched(AccountAdopted::class, fn (AccountAdopted $e): bool => $e->notificationCategory() === NotificationCategory::Security);
         Event::assertNotDispatched(AccountPasswordApplied::class);
@@ -203,7 +213,7 @@ describe('an existing account', function (): void {
         policyTheirAccount();
 
         expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
     });
 
     it('takes the supplied password under adopt_and_apply, asking the host about the operator', function (): void {
@@ -233,7 +243,7 @@ describe('an existing account', function (): void {
         policyTheirAccount();
 
         expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(AssuranceRequired::class);
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()))
             ->and(DbAccount::query()->count())->toBe(0);
         Event::assertDispatched(AssuranceShortfall::class);
         Event::assertDispatched(AccountCreationRefused::class, fn (AccountCreationRefused $e): bool => $e->context['reason'] === 'assurance_required');
@@ -247,7 +257,7 @@ describe('an existing account', function (): void {
         policyTheirAccount();
 
         expect(fn (): OperationResult => policyCreateShop(ExistingResourcePolicy::AdoptAndApply))->toThrow(AssuranceRequired::class);
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
 
         // ...while a plain rotation, which the config governs, goes through.
         app(AccountManager::class)->rotatePassword('fake', new Username('shop'), new Host('%'), new Password(policyOurPassword()));
@@ -306,7 +316,7 @@ describe('a create that loses a race', function (): void {
         $this->engine->raceOnCreate = true;
 
         expect(fn (): OperationResult => policyCreateShop())->toThrow(AccountAlreadyExists::class);
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
         Event::assertDispatched(AccountCreationRefused::class);
         Event::assertNotDispatched(AccountCreated::class);
     });
@@ -522,7 +532,7 @@ describe('the provisioning wizard', function (): void {
         expect($result->data['adopted'])->toBeTrue()
             ->and($result->hasGeneratedPassword())->toBeFalse()
             ->and(FakeProvisioningEngine::count('fake_grants', 'shop'))->toBe(1)
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
     });
 
     it('never rotates on a re-run without a password, even under adopt_and_apply', function (): void {
@@ -532,7 +542,7 @@ describe('the provisioning wizard', function (): void {
         $result = policyProvisionShop(null, ExistingResourcePolicy::AdoptAndApply);
 
         expect($result->hasGeneratedPassword())->toBeFalse()
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
     });
 
     it('refuses a re-run by default, and undoes only what the run created', function (): void {
@@ -672,7 +682,7 @@ describe('the provisioning wizard', function (): void {
 
         expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply))->toThrow(DBConsoleException::class);
 
-        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD))
+        expect(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()))
             ->and(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0);
     });
 
@@ -683,7 +693,7 @@ describe('the provisioning wizard', function (): void {
         expect(fn (): OperationResult => policyProvisionShop(new Password(policyOurPassword()), ExistingResourcePolicy::AdoptAndApply))->toThrow(NotAuthorized::class);
 
         expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0)
-            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', POLICY_THEIR_PASSWORD));
+            ->and(FakeProvisioningEngine::passwordOf('shop'))->toBe(hash('sha256', policyTheirPassword()));
     });
 
     it('reports a password application the wizard was refused', function (): void {
