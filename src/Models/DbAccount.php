@@ -9,6 +9,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Simtabi\Laranail\DBConsole\Models\Casts\TopologyColumn;
 use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
 use Simtabi\Laranail\DBConsole\Database\Factories\DbAccountFactory;
 
@@ -64,9 +65,10 @@ final class DbAccount extends CatalogModel
     protected function casts(): array
     {
         return [
-            // Username/host are topology; encrypted at rest (defense in depth).
-            'username'                 => 'encrypted',
-            'host'                     => 'encrypted',
+            // Username/host are topology; encrypted at rest (defense in depth)
+            // while catalog_encryption.encrypt_topology_columns is true.
+            'username'                 => TopologyColumn::class,
+            'host'                     => TopologyColumn::class,
             'last_password_rotated_at' => 'datetime',
             'is_managed'               => 'boolean',
             'version'                  => 'integer',

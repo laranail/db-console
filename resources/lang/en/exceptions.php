@@ -72,6 +72,10 @@ return [
         'owner_stranded' => 'Refused: :reason. Another global Owner with a second factor must exist first.',
     ],
 
+    'preset' => [
+        'misconfigured' => "Privilege preset ':preset' is misconfigured: :problem.",
+    ],
+
     'secret' => [
         'unavailable'          => 'A stored credential could not be resolved from the :driver secret backend.',
         'driver_misconfigured' => 'The :driver secret driver is misconfigured: :problem.',

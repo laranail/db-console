@@ -94,8 +94,13 @@ final class DeliverWebhook implements ShouldQueue
 
         // Exponential backoff: 2^attempt seconds. The retry carries the same
         // body + signature, so it is self-contained.
-        self::dispatch($this->subscriptionId, $this->eventName, $this->body, $this->signature, $this->attempt + 1)
+        // The retry goes back on the queue this delivery ran on (webhooks.queue).
+        $retry = self::dispatch($this->subscriptionId, $this->eventName, $this->body, $this->signature, $this->attempt + 1)
             ->delay(2 ** $this->attempt);
+
+        if (is_string($this->queue) && $this->queue !== '') {
+            $retry->onQueue($this->queue);
+        }
     }
 
     private function recordDelivery(WebhookSubscription $subscription, string $payloadHash, ?int $status, bool $success): void

@@ -107,3 +107,33 @@ it('retries with backoff (re-dispatches the next attempt) before the cap', funct
     Queue::assertPushed(DeliverWebhook::class, fn (DeliverWebhook $job): bool => $job->attempt === 2);
     expect($this->sub->fresh()->active)->toBeTrue();
 });
+
+describe('webhooks.queue', function (): void {
+    it('keeps the default queue for true, the shipped default', function (): void {
+        Queue::fake();
+        expect(config('laranail.db-console.webhooks.queue'))->toBeTrue();
+
+        app(DeliverWebhooks::class)->handle(new DatabaseDropped('prod-mysql', ['target' => 'shop_prod']));
+
+        Queue::assertPushed(DeliverWebhook::class, fn (DeliverWebhook $job): bool => $job->queue === null);
+    });
+
+    it('dispatches onto the named queue', function (): void {
+        Queue::fake();
+        config()->set('laranail.db-console.webhooks.queue', 'webhooks');
+
+        app(DeliverWebhooks::class)->handle(new DatabaseDropped('prod-mysql', ['target' => 'shop_prod']));
+
+        Queue::assertPushedOn('webhooks', DeliverWebhook::class);
+    });
+
+    it('retries on the queue the delivery ran on', function (): void {
+        Http::fake(['*' => Http::response('', 500)]);
+        Queue::fake();
+
+        $job = new DeliverWebhook((string) $this->sub->id, 'database.dropped', '{}', 'sig')->onQueue('webhooks');
+        $job->handle(app(Factory::class), app('config'), app(DBConsoleLogger::class));
+
+        Queue::assertPushedOn('webhooks', DeliverWebhook::class, fn (DeliverWebhook $retry): bool => $retry->attempt === 2);
+    });
+});

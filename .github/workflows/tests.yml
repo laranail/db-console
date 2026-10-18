@@ -11,6 +11,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The default for every job, so the `pest` call below does not hand the reusable
+# workflow the repository's default token scope. The jobs that set their own
+# permissions keep them.
+permissions:
+  contents: read
+
 # Calls the one shared definition in laranail/.github. Everything this file used
 # to spell out -- the PHP matrix, the composer cache and its laranail eviction,
 # prefer-lowest, fail-fast, timeouts -- lives there now, so a change to how this

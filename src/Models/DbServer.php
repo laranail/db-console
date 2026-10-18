@@ -9,6 +9,7 @@ use Simtabi\Laranail\Enumerator\Casts\AsEnum;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Simtabi\Laranail\DBConsole\Models\Casts\TopologyColumn;
 use Simtabi\Laranail\DBConsole\Models\Concerns\OptimisticLocking;
 use Simtabi\Laranail\DBConsole\Database\Factories\DbServerFactory;
 
@@ -67,9 +68,9 @@ final class DbServer extends CatalogModel
     {
         return [
             'engine' => AsEnum::of(EngineType::class),
-            // Topology columns are encrypted at rest (defense in depth); the
-            // toggle is honored via the encrypted casts below.
-            'host'       => 'encrypted',
+            // Topology columns are encrypted at rest (defense in depth) while
+            // catalog_encryption.encrypt_topology_columns is true.
+            'host'       => TopologyColumn::class,
             'is_managed' => 'boolean',
             'version'    => 'integer',
         ];

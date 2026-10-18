@@ -13,6 +13,24 @@ Four secret drivers behind one seam; secrets redact themselves everywhere.
 | `vault` | HashiCorp Vault KV v2 over HTTP. |
 | `reference` | A pointer to a secret resolved elsewhere (env, file, external resolver). |
 
+## Reference providers
+
+The `reference` driver stores a pointer, not the secret, and resolves it through `secrets.reference.provider`:
+
+| Provider | Pointer | Credentials |
+|---|---|---|
+| `aws-secrets-manager` (default) | A Secrets Manager secret id | The AWS SDK credential chain, in `secrets.kms.region`. |
+| `vault` | A KV v2 path | The `secrets.vault.*` block. |
+| `doppler` | `project/config/NAME` | A service token in `secrets.reference.token` (env `DB_CONSOLE_DOPPLER_TOKEN`). |
+
+```dotenv
+DB_CONSOLE_SECRET_DRIVER=reference
+DB_CONSOLE_SECRET_REF_PROVIDER=doppler
+DB_CONSOLE_DOPPLER_TOKEN=dp.st.prd.xxxxxxxx
+```
+
+## Redaction
+
 Secrets are wrapped in a `Secret`/`Password` value object that redacts itself in `__toString`, `__debugInfo`, and JSON — so a secret can never appear in a log, an exception, the audit trail, or a webhook. `secrets:rotate` re-wraps every stored secret under the driver's new key material without changing the value.
 
 ---
