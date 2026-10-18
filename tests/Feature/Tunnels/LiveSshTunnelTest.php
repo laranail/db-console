@@ -307,12 +307,15 @@ it('keeps other sessions responsive when the server closes one', function (strin
  * does the TLS step and checks the real name.
  */
 
-function liveVerifiedMysqlTunnel(string $driver, string $host): string
+/**
+ * @param array<string, mixed> $ssh
+ */
+function liveVerifiedMysqlTunnel(string $driver, string $host, array $ssh = []): string
 {
     $ca = (string) getenv('DB_CONSOLE_LIVE_MYTLS_CA');
     expect(is_file($ca))->toBeTrue("DB_CONSOLE_LIVE_MYTLS_CA must name the CA that signed mytls's certificate, got '{$ca}'");
 
-    return liveTunnel('mysql', $driver, [], ['enabled' => true, 'verify' => true, 'ca' => $ca], $host);
+    return liveTunnel('mysql', $driver, $ssh, ['enabled' => true, 'verify' => true, 'ca' => $ca], $host);
 }
 
 it('verifies a MySQL certificate against the real name through the relay', function (string $driver): void {
@@ -355,4 +358,23 @@ it('backs up MySQL through the relay', function (string $driver): void {
 
     expect($path)->toBeString()
         ->and(Storage::disk('local')->get((string) $path))->toContain('relayed_backup_marker');
+})->with('drivers');
+
+// A tunnel ending in a Unix socket keeps other local users off it. The relay
+// reaches it through a loopback pair of its own, since PHP starts TLS only
+// on a tcp:// stream, and the verification is unchanged.
+it('verifies MySQL through a tunnel whose local end is a socket', function (string $driver): void {
+    $server = liveVerifiedMysqlTunnel($driver, 'mytls', ['local' => 'socket']);
+
+    expect(liveScalar($server, 'SELECT DATABASE()'))->toBe('db_console_test')
+        ->and(app(TlsChecker::class)->status($server))->toBe(TlsStatus::RequiredOk);
+
+    $refused = liveVerifiedMysqlTunnel($driver, 'mytls-alias', ['local' => 'socket']);
+
+    try {
+        app(ServerRegistry::class)->ensureReachable($refused);
+        $this->fail('a certificate for mytls was accepted for mytls-alias through a socket tunnel');
+    } catch (ServerUnreachable $e) {
+        expect((string) $e->getPrevious()?->getMessage())->toContain('did not match');
+    }
 })->with('drivers');

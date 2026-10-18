@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   verifies the certificate against the database's name and `tls.ca`, and passes everything else
   through; PDO talks to it in plaintext over a `0600` socket in the tunnel's `0700` directory. A
   certificate that does not match fails the login with a MySQL error naming why. Proven live in the
-  `live-ssh` job against a MySQL that refuses plaintext, through both drivers. The relay reaches
-  the tunnel over TCP (PHP cannot start TLS on a Unix socket), so it needs `ssh.local=port`.
+  `live-ssh` job against a MySQL that refuses plaintext, through both drivers and both tunnel ends.
+  PHP starts TLS only on a tcp:// stream, so for a tunnel ending in a Unix socket (`ssh.local=socket`)
+  the relay runs TLS over a loopback TCP pair of its own, spliced to the socket: its listener lives
+  until the relay's own connection is accepted, that one peer is checked, and what crosses it is
+  already TLS.
 - `Tunnels\Contracts\TlsRelayLauncher` (bound to `Tunnels\Relay\VerifyingRelay`) and
   `Tunnels\Contracts\TerminatesTls`, and `Tunnels\Support\WorkerProcess`, the child-process launch
   the phpseclib driver and the relay share.

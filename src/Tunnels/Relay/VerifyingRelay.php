@@ -37,6 +37,31 @@ final readonly class VerifyingRelay implements TlsRelayLauncher
     }
 
     /**
+     * What the relay process is told: where to listen, how to reach the
+     * tunnel, and what to verify. A socket-ended tunnel is passed as the
+     * socket, which the relay reaches through a loopback pair of its own,
+     * since PHP starts TLS only on a tcp:// stream.
+     *
+     * @return array<string, mixed>
+     */
+    public static function settings(ServerDefinition $definition, Endpoint $upstream, Endpoint $remote, string $listen, int $timeout): array
+    {
+        return [
+            'listen'   => $listen,
+            'upstream' => $upstream->isSocket()
+                ? ['socket' => (string) $upstream->socket]
+                : ['host' => (string) $upstream->host, 'port' => (int) $upstream->port],
+            'peer_name' => (string) $remote->host,
+            'tls'       => [
+                'cafile'     => $definition->tls['ca'],
+                'local_cert' => $definition->tls['cert'],
+                'local_pk'   => $definition->tls['key'],
+            ],
+            'timeout' => $timeout,
+        ];
+    }
+
+    /**
      * Put the relay in front of an open tunnel, on a socket in the tunnel's
      * private directory, with the tunnel's local end as its upstream.
      *
@@ -49,27 +74,12 @@ final readonly class VerifyingRelay implements TlsRelayLauncher
         PrivateDirectory $directory,
         int $timeout,
     ): RelayedTunnel {
-        $socket = $directory->file('mysql-tls.sock');
-        $upstream = $tunnel->local();
-
-        // PHP cannot start TLS on a Unix socket stream, so the relay reaches
-        // the tunnel over its loopback port. ServerRegistry refuses the
-        // combination before it gets here; this is the backstop.
-        if ($upstream->isSocket()) {
-            throw new RuntimeException('the relay needs the tunnel on a loopback port (ssh.local=port): PHP cannot start TLS on a Unix socket');
-        }
-
-        $worker = WorkerProcess::start(self::script(), [
-            'listen'    => $socket,
-            'upstream'  => ['host' => $upstream->host, 'port' => $upstream->port],
-            'peer_name' => (string) $remote->host,
-            'tls'       => [
-                'cafile'     => $definition->tls['ca'],
-                'local_cert' => $definition->tls['cert'],
-                'local_pk'   => $definition->tls['key'],
-            ],
-            'timeout' => $timeout,
-        ], $timeout + 5, 'MySQL TLS relay');
+        $worker = WorkerProcess::start(
+            self::script(),
+            self::settings($definition, $tunnel->local(), $remote, $directory->file('mysql-tls.sock'), $timeout),
+            $timeout + 5,
+            'MySQL TLS relay',
+        );
 
         return new RelayedTunnel($tunnel, $worker, (string) $remote->host);
     }
