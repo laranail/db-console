@@ -21,6 +21,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adoption results carry **`newly_managed`**: true when that call put the resource under
   management for the first time. Results from `adopt_and_apply` also carry it.
 
+### Fixed
+
+- **The REST API answers in JSON whatever the client's `Accept` header says.** Exceptions render
+  their code and status only for a request that expects JSON, so a client that sent no `Accept:
+  application/json` got a 500 for a refusal (`not_authorized`, `assurance_required`, a 409 for an
+  existing resource) and a 302 redirect for a validation error. `ApiGuard` now sets the header on
+  every API request.
+- **`doctor` judged a tunnelled server by the tunnel's local end.** The pooler check compared the
+  server's own port with the admin connection's, which through an SSH tunnel is the tunnel's local
+  port: every tunnelled server read as relayed, and PgBouncer behind a bastion was never warned
+  about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
+  behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
+  `ServerRegistry::databasePort()` and `databaseHost()`.
+
+## [0.1.3] - 2026-10-18
+
 ### Changed
 
 - **A Warning or Critical event's notification keeps its category's channels and adds
@@ -523,6 +539,7 @@ Both are removed no earlier than the next minor after 0.1.
 
 Initial public release.
 
-[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/laranail/db-console/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/laranail/db-console/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/laranail/db-console/compare/v0.1.0...v0.1.1

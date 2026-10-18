@@ -293,3 +293,47 @@ describe('an account\'s grants', function (): void {
             ->assertForbidden();
     });
 });
+
+describe('a client that does not send Accept: application/json', function (): void {
+    it('still gets a refusal as a JSON body with its code', function (): void {
+        mountDbConsoleApi();
+        $GLOBALS['apiDenied'] = [ConsolePermission::DatabaseView->ability()];
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->get('/api/db-console/servers/fake/databases')
+            ->assertForbidden()
+            ->assertHeader('Content-Type', 'application/json')
+            ->assertJson(['code' => 'not_authorized']);
+    });
+
+    it('gets assurance_required with what is missing', function (): void {
+        config()->set('laranail.db-console.security.assurance.enforce', 'require');
+        mountDbConsoleApi();
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->post('/api/db-console/servers/fake/databases', ['name' => 'shop_prod'])
+            ->assertForbidden()
+            ->assertJson(['code' => 'assurance_required', 'missing' => ['second_factor']]);
+        expect(FakeProvisioningEngine::count('fake_databases', 'shop_prod'))->toBe(0);
+    });
+
+    it('gets validation errors as JSON, not a redirect', function (): void {
+        mountDbConsoleApi();
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->post('/api/db-console/servers/fake/databases', ['name' => 'shop_prod', 'on_existing' => 'sure'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('on_existing');
+    });
+
+    it('even when it asks for HTML', function (): void {
+        mountDbConsoleApi();
+        $GLOBALS['apiDenied'] = [ConsolePermission::DatabaseView->ability()];
+
+        $this->actingAs(apiCaller(), 'sanctum')
+            ->withHeaders(['Accept' => 'text/html'])
+            ->get('/api/db-console/servers/fake/databases')
+            ->assertForbidden()
+            ->assertJson(['code' => 'not_authorized']);
+    });
+});
