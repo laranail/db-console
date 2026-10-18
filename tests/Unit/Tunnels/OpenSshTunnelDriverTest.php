@@ -20,7 +20,7 @@ function openSshSpec(Endpoint $remote, array $ssh = []): TunnelSpec
         server: 'primary',
         ssh: SshSettings::fromArray([
             'host' => 'bastion.example.com', 'port' => 2222, 'user' => 'tunnel',
-            'key'  => __FILE__, 'host_key' => TunnelKeys::PINNED, ...$ssh,
+            'key'  => __FILE__, 'host_key' => TunnelKeys::generated(), ...$ssh,
         ]),
         remote: $remote,
         privateKeyPath: __FILE__,

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **No credential-looking literal is left in the tests secret scanning flagged.** The vault tests'
+  admin secret, rotated secret and KMS data keys, the existing-account password in the policy tests
+  and `FakeProvisioningEngine`, and the SSH driver test's host key are generated at run time. The
+  RFC 7677 SCRAM vectors and the `TunnelKeys` constants stay fixed, since their tests prove exact
+  bytes. `NoLiteralTestCredentialsTest` now also refuses a literal of any strength in a constant,
+  `define()`, named argument or Livewire property named for a password, secret or token.
+
 ## [0.1.5] - 2026-10-18
 
 ### Security

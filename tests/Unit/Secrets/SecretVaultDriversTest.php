@@ -16,7 +16,20 @@ use Simtabi\Laranail\DBConsole\Secrets\Stores\ArraySecretStore;
 use Simtabi\Laranail\DBConsole\Secrets\Contracts\ReferenceResolver;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
 
-const ADMIN_SECRET = 'sup3r-s3cret-admin-p@ssw0rd-value';
+/**
+ * The admin credential each vault stores, generated per run so no literal
+ * secret sits in the source.
+ */
+function vaultAdminSecret(): string
+{
+    return testPassword();
+}
+
+/** A data key for the KMS clients to wrap, random each call. */
+function vaultDataKey(): string
+{
+    return random_bytes(32);
+}
 
 function appKeyVault(ArraySecretStore $store): AppKeyVault
 {
@@ -50,26 +63,28 @@ describe('app_key driver', function (): void {
         $store = new ArraySecretStore;
         $vault = appKeyVault($store);
 
-        $vault->store('server:prod', new Secret(ADMIN_SECRET));
+        $vault->store('server:prod', new Secret(vaultAdminSecret()));
 
-        expect($vault->reveal('server:prod')->reveal())->toBe(ADMIN_SECRET)
+        expect($vault->reveal('server:prod')->reveal())->toBe(vaultAdminSecret())
             ->and($vault->driver())->toBe(SecretDriver::AppKey->value);
     });
 
     it('stores ciphertext, never the plaintext', function (): void {
         $store = new ArraySecretStore;
-        appKeyVault($store)->store('server:prod', new Secret(ADMIN_SECRET));
+        appKeyVault($store)->store('server:prod', new Secret(vaultAdminSecret()));
 
-        expect($store->get('server:prod'))->not->toContain(ADMIN_SECRET);
+        expect($store->get('server:prod'))->not->toContain(vaultAdminSecret());
     });
 
     it('rotates by re-encrypting', function (): void {
         $store = new ArraySecretStore;
         $vault = appKeyVault($store);
-        $vault->store('server:prod', new Secret(ADMIN_SECRET));
-        $vault->rotate('server:prod', new Secret('a-completely-different-secret-9'));
+        $vault->store('server:prod', new Secret(vaultAdminSecret()));
+        $rotated = bin2hex(random_bytes(16));
+        $vault->rotate('server:prod', new Secret($rotated));
 
-        expect($vault->reveal('server:prod')->reveal())->toBe('a-completely-different-secret-9');
+        expect($rotated)->not->toBe(vaultAdminSecret())
+            ->and($vault->reveal('server:prod')->reveal())->toBe($rotated);
     });
 
     it('raises SecretUnavailable for an unknown handle', function (): void {
@@ -82,20 +97,20 @@ describe('kms driver (envelope encryption, real crypto behind a fake KMS)', func
         $store = new ArraySecretStore;
         $vault = new KmsVault(fakeKms(), $store);
 
-        $vault->store('server:prod', new Secret(ADMIN_SECRET));
+        $vault->store('server:prod', new Secret(vaultAdminSecret()));
 
-        expect($vault->reveal('server:prod')->reveal())->toBe(ADMIN_SECRET)
+        expect($vault->reveal('server:prod')->reveal())->toBe(vaultAdminSecret())
             ->and($vault->driver())->toBe(SecretDriver::Kms->value);
     });
 
     it('stores only a wrapped data key + ciphertext — nothing plaintext-recoverable from the catalog', function (): void {
         $store = new ArraySecretStore;
-        new KmsVault(fakeKms(), $store)->store('server:prod', new Secret(ADMIN_SECRET));
+        new KmsVault(fakeKms(), $store)->store('server:prod', new Secret(vaultAdminSecret()));
 
         $payload = (string) $store->get('server:prod');
         $envelope = json_decode($payload, true);
 
-        expect($payload)->not->toContain(ADMIN_SECRET)
+        expect($payload)->not->toContain(vaultAdminSecret())
             ->and($envelope)->toHaveKeys(['wrapped_key', 'iv', 'tag', 'ciphertext'])
             // The wrapped key is NOT the usable data key: without a live
             // unwrap call the ciphertext cannot be decrypted.
@@ -104,7 +119,7 @@ describe('kms driver (envelope encryption, real crypto behind a fake KMS)', func
 
     it('fails to reveal if the KMS cannot unwrap (simulated key loss)', function (): void {
         $store = new ArraySecretStore;
-        new KmsVault(fakeKms(), $store)->store('server:prod', new Secret(ADMIN_SECRET));
+        new KmsVault(fakeKms(), $store)->store('server:prod', new Secret(vaultAdminSecret()));
 
         $brokenKms = new class implements KmsClient
         {
@@ -115,7 +130,7 @@ describe('kms driver (envelope encryption, real crypto behind a fake KMS)', func
 
             public function unwrap(string $w): string
             {
-                return 'wrong-key-32-bytes-length-abcdef';
+                return vaultDataKey();
             }
 
             public function provider(): string
@@ -170,14 +185,14 @@ describe('optional-SDK degradation and config guards', function (): void {
         // optional dependency.
         $client = new GcpKmsClient(['key_id' => 'projects/p/locations/l/keyRings/r/cryptoKeys/k', 'region' => null]);
 
-        expect(fn (): string => $client->wrap('0123456789012345678901234567890a'))
+        expect(fn (): string => $client->wrap(vaultDataKey()))
             ->toThrow(SecretDriverMisconfigured::class);
     })->skip(class_exists('Google\\Cloud\\Kms\\V1\\KeyManagementServiceClient'), 'google/cloud-kms is installed');
 
     it('the AWS KMS client reports misconfiguration when no key id is configured (SDK present)', function (): void {
         $client = new AwsKmsClient(['key_id' => null, 'region' => 'us-east-1']);
 
-        expect(fn (): string => $client->wrap('0123456789012345678901234567890a'))
+        expect(fn (): string => $client->wrap(vaultDataKey()))
             ->toThrow(SecretDriverMisconfigured::class);
     })->skip(! class_exists(Aws\Kms\KmsClient::class), 'aws/aws-sdk-php not installed');
 });
