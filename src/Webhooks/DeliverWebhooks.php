@@ -42,8 +42,24 @@ final readonly class DeliverWebhooks
             $secret = $this->vault->reveal($subscription->secret_ref)->reveal();
             $payload = SignedPayload::build($event, $webhookEvent->value, $secret, $occurredAt);
 
-            DeliverWebhook::dispatch((string) $subscription->id, $payload->event, $payload->body, $payload->signature);
+            $pending = DeliverWebhook::dispatch((string) $subscription->id, $payload->event, $payload->body, $payload->signature);
+
+            $queue = $this->queue();
+            if ($queue !== null) {
+                $pending->onQueue($queue);
+            }
         }
+    }
+
+    /**
+     * webhooks.queue: a queue name sends deliveries there; true (the default),
+     * or anything that is not a name, leaves them on the default queue.
+     */
+    private function queue(): ?string
+    {
+        $queue = $this->config->get('laranail.db-console.webhooks.queue', true);
+
+        return is_string($queue) && $queue !== '' ? $queue : null;
     }
 
     /**
