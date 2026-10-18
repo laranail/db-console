@@ -57,6 +57,9 @@ enum ExceptionCode: string implements Enumerator, Translatable
     case ServerMisconfigured = 'server.misconfigured';
     case TunnelFailed = 'server.tunnel_failed';
 
+    // Configuration
+    case PresetMisconfigured = 'preset.misconfigured';
+
     /**
      * The HTTP status the REST API returns for this failure. Validation and
      * input problems are 422; authorization is 403; missing servers are 404; an existing

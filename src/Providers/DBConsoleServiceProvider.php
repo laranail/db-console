@@ -67,6 +67,7 @@ use Simtabi\Laranail\DBConsole\Access\Contracts\AccessManager;
 use Simtabi\Laranail\DBConsole\Security\NullOperatorAssurance;
 use Simtabi\Laranail\DBConsole\Services\ExistingResourceGuard;
 use Simtabi\Laranail\DBConsole\Access\Drivers\SpatieRbacDriver;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\CustomPresets;
 use Simtabi\Laranail\DBConsole\Events\Contracts\RecordsToAudit;
 use Simtabi\Laranail\DBConsole\Access\Drivers\BuiltinRbacDriver;
 use Simtabi\Laranail\DBConsole\Services\Catalog\DbConsoleCatalog;
@@ -114,6 +115,7 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
     {
         $this->applyCatalogPragmas();
         $this->guardSecretDriver();
+        $this->guardPresets();
         $this->registerAuditPipeline();
         $this->registerGate();
         $this->registerApiRateLimiter();
@@ -445,6 +447,15 @@ final class DBConsoleServiceProvider extends PackageServiceProvider
     private function guardSecretDriver(): void
     {
         $this->app->make(SecretVaultManager::class)->assertSecureForEnvironment();
+    }
+
+    /**
+     * Fail at boot on a custom privilege preset the allow-list refuses, as the
+     * presets config promises. The shipped default, [], always passes.
+     */
+    private function guardPresets(): void
+    {
+        CustomPresets::fromConfig($this->app->make(Config::class)->get('laranail.db-console.presets', []));
     }
 
     private function stringOrNull(mixed $value): ?string
