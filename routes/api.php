@@ -6,11 +6,14 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AuditController;
+use Simtabi\Laranail\DBConsole\Http\Api\Controllers\TokenController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\GrantController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\ServerController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AccountController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\WebhookController;
 use Simtabi\Laranail\DBConsole\Http\Api\Controllers\DatabaseController;
+use Simtabi\Laranail\DBConsole\Http\Api\Controllers\AttachmentController;
+use Simtabi\Laranail\DBConsole\Http\Api\Controllers\RoleAssignmentController;
 
 /*
  * DBConsole REST API. Loaded only when laranail.db-console.api.enabled is
@@ -31,9 +34,18 @@ Route::prefix(app(ApiSettings::class)->path())
         Route::get('servers/{server}/accounts', [AccountController::class, 'index']);
         Route::post('servers/{server}/accounts', [AccountController::class, 'store']);
         Route::get('servers/{server}/accounts/{username}/grants', [AccountController::class, 'grants']);
+        Route::patch('servers/{server}/accounts/{username}', [AccountController::class, 'update']);
+        Route::post('servers/{server}/accounts/{username}/password', [AccountController::class, 'rotatePassword']);
         Route::delete('servers/{server}/accounts/{username}', [AccountController::class, 'destroy']);
 
         Route::post('servers/{server}/grants', [GrantController::class, 'store']);
+        Route::delete('servers/{server}/grants', [GrantController::class, 'destroy']);
+
+        Route::post('servers/{server}/attachments', [AttachmentController::class, 'store']);
+        Route::delete('servers/{server}/attachments', [AttachmentController::class, 'destroy']);
+
+        Route::post('tokens', [TokenController::class, 'store']);
+        Route::post('role-assignments', [RoleAssignmentController::class, 'store']);
 
         Route::get('audit', [AuditController::class, 'index']);
 

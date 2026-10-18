@@ -6,6 +6,7 @@ namespace Simtabi\Laranail\DBConsole\Validation\Requests;
 
 use Override;
 use Illuminate\Foundation\Http\FormRequest;
+use Simtabi\Laranail\DBConsole\Http\Api\ApiSettings;
 use Simtabi\Laranail\DBConsole\Validation\Rules\IdentifierRule;
 
 /**
@@ -34,6 +35,25 @@ final class DropDatabaseRequest extends FormRequest
     /**
      * @return array<string, string>
      */
+    /**
+     * Over HTTP the name is the route's `{name}`, so the body need not repeat
+     * it. With api.confirm_destructive off the API takes the confirmation as
+     * given; the rules themselves are unchanged, because the web UI applies
+     * them through RuleProvider and always asks for the typed name.
+     */
+    #[Override]
+    protected function prepareForValidation(): void
+    {
+        $name = $this->route('name');
+        if (is_string($name)) {
+            $this->merge(['name' => $name]);
+        }
+
+        if (! $this->has('confirm') && ! $this->container->make(ApiSettings::class)->confirmsDestructive()) {
+            $this->merge(['confirm' => $this->input('name')]);
+        }
+    }
+
     #[Override]
     public function messages(): array
     {
