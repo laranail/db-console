@@ -299,3 +299,60 @@ it('keeps other sessions responsive when the server closes one', function (strin
 
     expect($slowest)->toBeLessThan(1.0, sprintf('session A waited %.2fs after the server closed another session', $slowest));
 })->with('drivers');
+
+/*
+ * `mytls` is a MySQL 8.4 that refuses plaintext and has a certificate for the
+ * name `mytls` only, from the same CA; it also answers to `mytls-alias`.
+ * pdo_mysql would check the certificate against 127.0.0.1, so the TLS relay
+ * does the TLS step and checks the real name.
+ */
+
+function liveVerifiedMysqlTunnel(string $driver, string $host): string
+{
+    $ca = (string) getenv('DB_CONSOLE_LIVE_MYTLS_CA');
+    expect(is_file($ca))->toBeTrue("DB_CONSOLE_LIVE_MYTLS_CA must name the CA that signed mytls's certificate, got '{$ca}'");
+
+    return liveTunnel('mysql', $driver, [], ['enabled' => true, 'verify' => true, 'ca' => $ca], $host);
+}
+
+it('verifies a MySQL certificate against the real name through the relay', function (string $driver): void {
+    $server = liveVerifiedMysqlTunnel($driver, 'mytls');
+    $connection = app(ServerRegistry::class)->connection($server)->underlying();
+
+    // The first login on a fresh server is caching_sha2's full exchange; the
+    // second is its fast path. Both cross the relay's renumbering.
+    expect(liveScalar($server, 'SELECT DATABASE()'))->toBe('db_console_test')
+        ->and($connection->getConfig('unix_socket'))->toEndWith('/mysql-tls.sock')
+        ->and(app(TlsChecker::class)->status($server))->toBe(TlsStatus::RequiredOk)
+        ->and((string) ((array) $connection->selectOne("SHOW SESSION STATUS LIKE 'Ssl_version'"))['Value'])->toStartWith('TLS');
+
+    $second = app('db')->connectUsing("{$server}_second", $connection->getConfig(), true);
+    expect($second->selectOne('SELECT 41 + 1 AS answer')->answer)->toBe(42);
+    app('db')->purge("{$server}_second");
+})->with('drivers');
+
+it('refuses a MySQL certificate that does not name the host, and says so', function (string $driver): void {
+    $server = liveVerifiedMysqlTunnel($driver, 'mytls-alias');
+
+    try {
+        app(ServerRegistry::class)->ensureReachable($server);
+        $this->fail('a certificate for mytls was accepted for mytls-alias');
+    } catch (ServerUnreachable $e) {
+        expect((string) $e->getPrevious()?->getMessage())
+            ->toContain('TLS to mytls-alias failed')
+            ->toContain('did not match');
+    }
+})->with('drivers');
+
+it('backs up MySQL through the relay', function (string $driver): void {
+    app()->register(DbToolsServiceProvider::class);
+    config()->set('filesystems.disks.local', ['driver' => 'local', 'root' => sys_get_temp_dir() . "/db-console-live-mytls-{$driver}"]);
+
+    $server = liveVerifiedMysqlTunnel($driver, 'mytls');
+    liveScalar($server, 'CREATE TABLE IF NOT EXISTS relayed_backup_marker (id int primary key)');
+
+    $path = app(DbToolsBackupService::class)->snapshot($server, new DbName('db_console_test'));
+
+    expect($path)->toBeString()
+        ->and(Storage::disk('local')->get((string) $path))->toContain('relayed_backup_marker');
+})->with('drivers');
