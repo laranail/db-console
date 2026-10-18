@@ -425,6 +425,13 @@ jobs:
           openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 2 -out server.crt \
             -extfile <(printf 'subjectAltName=DNS:pgtls\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n')
           openssl x509 -in server.crt -noout -ext subjectAltName
+          # The same CA signs mytls, a MySQL whose certificate names mytls only.
+          mkdir -p "$RUNNER_TEMP/mytls"
+          openssl req -nodes -newkey rsa:2048 -subj "/CN=mytls" -keyout "$RUNNER_TEMP/mytls/server.key" -out "$RUNNER_TEMP/mytls/server.csr"
+          openssl x509 -req -in "$RUNNER_TEMP/mytls/server.csr" -CA ca.crt -CAkey ca.key -CAcreateserial -days 2 \
+            -out "$RUNNER_TEMP/mytls/server.crt" \
+            -extfile <(printf 'subjectAltName=DNS:mytls\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n')
+          cp ca.crt "$RUNNER_TEMP/mytls/ca.crt"
       - name: Start PostgreSQL with TLS on the service network
         run: |
           docker run -d --name pgtls \
@@ -444,6 +451,29 @@ jobs:
             sleep 1
           done
           docker exec pgtls pg_isready -h 127.0.0.1 -U db_console
+      # pdo_mysql verifies a certificate against the host it dials, which a
+      # tunnel makes 127.0.0.1; the TLS relay verifies the real name instead.
+      # This MySQL refuses plaintext outright (require_secure_transport), and
+      # also answers to mytls-alias, a name its certificate does not carry.
+      - name: Start MySQL with TLS on the service network
+        run: |
+          docker run -d --name mytls \
+            --network "${{ job.services.postgres.network }}" \
+            --network-alias mytls --network-alias mytls-alias \
+            -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=db_console_test \
+            -v "$RUNNER_TEMP/mytls:/certs:ro" \
+            --entrypoint bash mysql:8.4 -euc '
+              install -d -o mysql -g mysql -m 700 /etc/mytls
+              install -o mysql -g mysql -m 600 /certs/server.crt /certs/server.key /certs/ca.crt /etc/mytls/
+              exec docker-entrypoint.sh mysqld --require-secure-transport=ON \
+                --ssl-ca=/etc/mytls/ca.crt --ssl-cert=/etc/mytls/server.crt --ssl-key=/etc/mytls/server.key
+            '
+          # TCP only answers once the entrypoint's socket-only init server is gone.
+          for attempt in $(seq 1 90); do
+            if docker exec mytls mysqladmin ping -h 127.0.0.1 -uroot -psecret --silent >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec mytls mysqladmin ping -h 127.0.0.1 -uroot -psecret
       - name: Install the PostgreSQL 18 client tools for pg_dump
         run: |
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
@@ -457,6 +487,7 @@ jobs:
           DB_CONSOLE_LIVE_MYSQL_CA: ${{ runner.temp }}/mysql-ca.pem
           DB_CONSOLE_LIVE_PGTLS_CA: ${{ runner.temp }}/pgtls/ca.crt
           DB_CONSOLE_LIVE_PG_BIN: /usr/lib/postgresql/18/bin
+          DB_CONSOLE_LIVE_MYTLS_CA: ${{ runner.temp }}/mytls/ca.crt
         # Bounded so a hung tunnel fails the step (and the logs below still
         # run) instead of the job being cancelled at its own timeout. Events
         # stream as they happen, so a hang names the test it happened in;
@@ -472,3 +503,4 @@ jobs:
           ps -eo pid,etime,args | grep -E 'ssh|php|pg_dump|psql' | grep -v grep || true
           docker logs sshd
           docker logs pgtls
+          docker logs mytls

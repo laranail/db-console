@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MySQL and MariaDB verify the server's real name through an SSH tunnel.** pdo_mysql checks a
+  certificate against the host it dials, which through a tunnel is 127.0.0.1, so `tls.verify=true`
+  failed for every real certificate. A TLS relay (`Tunnels\Relay\MysqlTlsRelay`, a PHP process
+  started with the tunnel) now takes the client's place in MySQL's in-protocol TLS upgrade,
+  verifies the certificate against the database's name and `tls.ca`, and passes everything else
+  through; PDO talks to it in plaintext over a `0600` socket in the tunnel's `0700` directory. A
+  certificate that does not match fails the login with a MySQL error naming why. Proven live in the
+  `live-ssh` job against a MySQL that refuses plaintext, through both drivers. The relay reaches
+  the tunnel over TCP (PHP cannot start TLS on a Unix socket), so it needs `ssh.local=port`.
+- `Tunnels\Contracts\TlsRelayLauncher` (bound to `Tunnels\Relay\VerifyingRelay`) and
+  `Tunnels\Contracts\TerminatesTls`, and `Tunnels\Support\WorkerProcess`, the child-process launch
+  the phpseclib driver and the relay share.
 - **`doctor` reports whether each server's backup-before-drop can run: `server:<name>:backup-client`.**
   A missing `mysqldump`, or a `pg_dump` older than the server, used to surface only when a drop of a
   non-empty database needed the backup, and with `backup.abort_drop_on_failure` on the drop was then

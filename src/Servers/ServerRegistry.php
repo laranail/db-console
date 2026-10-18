@@ -22,8 +22,10 @@ use Simtabi\Laranail\DBConsole\Tunnels\TunnelManager;
 use Simtabi\Laranail\DBConsole\Exceptions\UnknownServer;
 use Simtabi\Laranail\DBConsole\Tunnels\TunnelledConnection;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerUnreachable;
+use Simtabi\Laranail\DBConsole\Tunnels\Relay\VerifyingRelay;
 use Simtabi\Laranail\DBConsole\Exceptions\ServerMisconfigured;
 use Simtabi\Laranail\DBConsole\Encryption\TlsConnectionOptions;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TerminatesTls;
 
 /**
  * The multi-server entry point (section 5). Resolves a server name to an
@@ -358,6 +360,14 @@ final class ServerRegistry
 
         $remote = $this->tunnelTarget($definition->name) ?? throw new LogicException('unreachable: the server has an ssh block');
 
+        if ($ssh->local === LocalEnd::Socket && VerifyingRelay::appliesTo($definition, $remote, $driver)) {
+            throw ServerMisconfigured::named(
+                $definition->name,
+                'verified MySQL TLS through a tunnel runs through the TLS relay, which reaches the tunnel over TCP '
+                    . '(PHP cannot start TLS on a Unix socket); use ssh.local=port. The client still talks to the relay over a private socket',
+            );
+        }
+
         if ($ssh->local === LocalEnd::Socket && $definition->tlsEnabled() && ! $remote->isLocalToItsHost()) {
             throw ServerMisconfigured::named(
                 $definition->name,
@@ -370,6 +380,12 @@ final class ServerRegistry
 
         try {
             $rewritten = TunnelledConnection::rewrite($config, $tunnel->local(), $remote);
+
+            // TLS is the relay's, verified against the real name; the client
+            // talks plaintext to it over the tunnel's private socket.
+            if ($tunnel instanceof TerminatesTls) {
+                $rewritten = TunnelledConnection::withoutClientTls($rewritten);
+            }
         } catch (InvalidArgumentException $e) {
             $this->tunnels->close($definition->name);
 
