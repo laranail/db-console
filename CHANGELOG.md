@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   behaviour: adoptions report `newly_managed: false` and a rollback leaves their records alone.
 - Adoption results carry **`newly_managed`**: true when that call put the resource under
   management for the first time. Results from `adopt_and_apply` also carry it.
+- **The live SSH job proves verified TLS inside the tunnel.** A PostgreSQL with TLS and a
+  certificate for one name: `verify-full` reaches `required_ok` through both drivers, a name the
+  certificate does not carry is refused, and backup-before-drop dumps through the tunnel.
 
 ### Fixed
 
@@ -34,6 +37,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about. The hosting check saw `127.0.0.1` instead of the database's host, so a managed provider
   behind a bastion was never recognised. Both now read the endpoint the tunnel forwards to, through
   `ServerRegistry::databasePort()` and `databaseHost()`.
+- **A session the database ended no longer hangs its client through a phpseclib tunnel.** When the
+  database closed a session (an idle timeout, `pg_terminate_backend`, a restart), the SSH server
+  sent CHANNEL_EOF, which phpseclib drops without a trace, so the pump never passed it on. libpq,
+  having read the FATAL error, then waited forever for the end of the stream, and the request
+  hung. The pump now shuts its write side to that client, as OpenSSH's forwarding does, and the
+  client fails at once. The OpenSSH driver was not affected.
+- **A session closed by the server no longer stalls the others through a phpseclib tunnel.**
+  phpseclib raises its read timeout to 5 seconds when it handles one channel's close while
+  reading another, so a poll of an idle session could block the whole forwarding process and
+  every session through it. `ForwardingSsh2` clamps that timeout to the poll's own while it polls.
 
 ## [0.1.3] - 2026-10-18
 

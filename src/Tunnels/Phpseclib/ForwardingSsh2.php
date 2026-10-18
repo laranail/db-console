@@ -21,7 +21,32 @@ final class ForwardingSsh2 extends SSH2
     /** Window and maximum packet size offered for each forwarded channel. */
     private const int PACKET_SIZE = 0x4000;
 
+    /** Seconds a poll of one channel may wait for its next packet. */
+    private const float POLL_TIMEOUT = 0.005;
+
+    /**
+     * phpseclib's remaining wait for the packet it is reading. When it
+     * handles a CHANNEL_CLOSE on another channel during a read, it raises this
+     * to 5 seconds and keeps reading, so a poll of an idle channel would block
+     * the whole pump, and every other session through it, until that timeout
+     * ran out. While polling, the wait is never raised past the poll's own.
+     * The hook applies to writes from phpseclib's code too, which is the point.
+     */
+    protected int|float|null $curTimeout = null {
+        set(int|float|null $value) {
+            $this->curTimeout = $this->polling && $value !== null && $value > self::POLL_TIMEOUT
+                ? self::POLL_TIMEOUT
+                : $value;
+        }
+    }
+
     private int $blockingTimeout = 10;
+
+    /** True while readForward() polls a channel. */
+    private bool $polling = false;
+
+    /** @var array<int, true> channels the server has sent CHANNEL_EOF on */
+    private array $remoteEof = [];
 
     public function setBlockingTimeout(int $seconds): void
     {
@@ -57,10 +82,16 @@ final class ForwardingSsh2 extends SSH2
             return false;
         }
 
-        $this->curTimeout = 0.005;
+        $this->polling = true;
+        $this->curTimeout = self::POLL_TIMEOUT;
         $this->is_timeout = false;
 
-        $data = $this->get_channel_packet($channel);
+        try {
+            $data = $this->get_channel_packet($channel);
+        } finally {
+            $this->polling = false;
+        }
+
         if (is_string($data)) {
             return $data;
         }
@@ -78,10 +109,53 @@ final class ForwardingSsh2 extends SSH2
         $this->send_channel_packet($channel, $data);
     }
 
+    /**
+     * Whether the server has finished sending on a channel: the far end
+     * (the database) closed its side. Whatever it sent before that has
+     * already been returned by readForward() once that returns null.
+     */
+    public function remoteFinished(int $channel): bool
+    {
+        return isset($this->remoteEof[$channel]);
+    }
+
     public function closeForward(int $channel): void
     {
+        unset($this->remoteEof[$channel]);
+
         if (isset($this->channel_status[$channel])) {
             $this->close_channel($channel);
+        }
+    }
+
+    /**
+     * phpseclib drops a received CHANNEL_EOF without recording it anywhere,
+     * so nothing in its state says the far end has closed. With
+     * NET_SSH2_LOGGING defined (ForwardPump defines it), every received
+     * packet passes through here; the EOFs are noted and nothing is kept,
+     * so the log never grows.
+     *
+     * @param array<int, mixed> $message_number_log
+     * @param array<int, mixed> $message_log
+     */
+    protected function append_log_helper(
+        int $constant,
+        string $message_number,
+        string $message,
+        array &$message_number_log,
+        array &$message_log,
+        ?int &$log_size,
+        mixed &$realtime_log_file,
+        ?bool &$realtime_log_wrap,
+        ?int &$realtime_log_size,
+    ): void {
+        // The payload is the message type, then the recipient channel: ours.
+        if (str_starts_with($message_number, '<- SSH_MSG_CHANNEL_EOF ') && strlen($message) >= 5) {
+            $channel = unpack('N', substr($message, 1, 4));
+
+            if (is_array($channel) && is_int($channel[1] ?? null)) {
+                $this->remoteEof[$channel[1]] = true;
+            }
         }
     }
 
