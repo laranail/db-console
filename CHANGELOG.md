@@ -28,6 +28,7 @@ host still using one sees.
 
 ### Added
 
+- **A Managed databases page and a DigitalOcean recipe** (`docs/managed-databases.md`, `docs/recipes/digitalocean.md`), which bring the hosting profile, TLS, the least-privilege admin, `doctor`'s checks and backups together for a provider-managed server. Linked from the servers, doctor, backups and engines pages and the README.
 - **Catalog migration `0001_01_01_001100_migrate_db_console_permission_names`.** Renames permission
   rows stored under `db-console.*` to `laranail-db-console.*`, merging into a scoped row install
   already seeded so no role loses a permission, and gives the shipped Owner `resource.adopt`

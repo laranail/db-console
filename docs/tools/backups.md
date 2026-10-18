@@ -33,7 +33,7 @@ After each successful snapshot, earlier snapshots of the same database older tha
 | `backup.retention_days` | `30` | prune older snapshots of the same database; `0` keeps all |
 | `backup.dump_on_managed` | `false` (env `DB_CONSOLE_BACKUP_DUMP_ON_MANAGED`) | also dump servers whose [hosting](servers.md#hosting) is managed |
 
-On a server whose [hosting](servers.md#hosting) is managed, no dump is taken by default: the provider's point-in-time recovery restores to any second in its retention window, which a snapshot taken at drop time cannot. The drop logs `database.backup.provider` with the hosting and a `restore_point` timestamp, which is the moment to restore to. Set `backup.dump_on_managed` to also keep a copy you hold yourself. db-tools' [backup & restore](https://opensource.simtabi.com/documentation/laranail/db-tools/tools/backup-restore) page covers the flags it passes to `mysqldump` and `pg_dump` for managed servers.
+On a server whose [hosting](servers.md#hosting) is managed, no dump is taken by default: the provider's point-in-time recovery restores to any second in its retention window, which a snapshot taken at drop time cannot. The drop logs `database.backup.provider` with the hosting and a `restore_point` timestamp, which is the moment to restore to. Set `backup.dump_on_managed` to also keep a copy you hold yourself. See [Managed databases](../managed-databases.md#backups). db-tools' [backup & restore](https://opensource.simtabi.com/documentation/laranail/db-tools/tools/backup-restore) page covers the flags it passes to `mysqldump` and `pg_dump` for managed servers.
 
 ---
 
