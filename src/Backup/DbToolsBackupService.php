@@ -36,7 +36,7 @@ use Simtabi\Laranail\DbTools\Backup\Contracts\BackupManagerInterface;
  * provider) no dump is taken unless `backup.dump_on_managed` is on; the
  * restore point is logged instead.
  */
-final readonly class DbToolsBackupService implements BackupService
+final readonly class DbToolsBackupService implements BackupService, PreflightsBackups
 {
     private const string BACKUP_MANAGER = BackupManagerInterface::class;
 
@@ -65,8 +65,7 @@ final readonly class DbToolsBackupService implements BackupService
         // A managed provider's point-in-time recovery restores to any second
         // of the retention window, which a dump cannot. The record of when
         // the drop happened is what an operator needs to restore from it.
-        if ($definition->hosting->profile($definition->engine)->providerBackups
-            && ! (bool) $this->config->get('laranail.db-console.backup.dump_on_managed', false)) {
+        if ($this->providerKeepsBackups($definition->hosting->profile($definition->engine)->providerBackups)) {
             $this->log->write(
                 Severity::Notice,
                 'database.backup.provider',
@@ -132,6 +131,50 @@ final readonly class DbToolsBackupService implements BackupService
         }
     }
 
+    /**
+     * Ask db-tools whether a dump of this server would run now, through the
+     * same admin connection (and SSH tunnel) a snapshot uses. Nothing is
+     * dumped. Null where snapshot() would take no dump either, or where the
+     * installed db-tools predates its preflight (laranail/db-tools 0.1.7 and
+     * earlier). Read by method, not by interface, so this compiles and runs
+     * against either.
+     */
+    public function preflight(string $server): ?BackupClientStatus
+    {
+        if (! $this->available()) {
+            return null;
+        }
+
+        $definition = $this->registry->definition($server);
+
+        if ($this->providerKeepsBackups($definition->hosting->profile($definition->engine)->providerBackups)) {
+            return null;
+        }
+
+        $manager = $this->container->make(self::BACKUP_MANAGER);
+
+        if (! method_exists($manager, 'preflight')) {
+            return null;
+        }
+
+        // Open the tunnel first, as snapshot() does, so the server probed is
+        // the one a dump would reach.
+        $this->registry->resolve($server);
+
+        $preflight = $manager->preflight($definition->connection);
+
+        if (! is_object($preflight) || ! method_exists($preflight, 'isReady')) {
+            return null;
+        }
+
+        return new BackupClientStatus(
+            ready: (bool) $preflight->isReady(),
+            tool: $this->stringProperty($preflight, 'tool'),
+            binary: $this->stringProperty($preflight, 'binary'),
+            message: $this->stringProperty($preflight, 'message'),
+        );
+    }
+
     public function available(): bool
     {
         return $this->configEnabled() && interface_exists(self::BACKUP_MANAGER);
@@ -148,6 +191,22 @@ final readonly class DbToolsBackupService implements BackupService
         }
 
         return null;
+    }
+
+    /**
+     * Whether no dump is taken because the server's provider keeps
+     * point-in-time recovery and `backup.dump_on_managed` is off.
+     */
+    private function providerKeepsBackups(bool $providerBackups): bool
+    {
+        return $providerBackups && ! (bool) $this->config->get('laranail.db-console.backup.dump_on_managed', false);
+    }
+
+    private function stringProperty(object $object, string $name): string
+    {
+        $value = property_exists($object, $name) ? $object->{$name} : null;
+
+        return is_string($value) ? $value : '';
     }
 
     private function configEnabled(): bool

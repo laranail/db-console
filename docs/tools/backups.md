@@ -14,6 +14,14 @@ Before it drops a non-empty database, DBConsole snapshots it through `laranail/d
 
 `backup.abort_drop_on_failure=false` restores the old behaviour: log the failure as a warning and drop anyway.
 
+## Checking the dump client
+
+The snapshot runs `mysqldump` or `pg_dump` on the machine running the app, found on its `PATH` or at db-tools' `backup.binaries.*`. A missing client, or a `pg_dump` older than the server (it cannot dump a newer one), fails the snapshot and so refuses the drop. `doctor` reports both in advance as `server:<name>:backup-client`: `DbToolsBackupService::preflight()` asks db-tools whether the dump would run, through the same admin connection and SSH tunnel a snapshot uses, and dumps nothing. It needs a db-tools with `BackupManager::preflight()`; with an older one there is no finding.
+
+A process keeps the `PATH` it started with. Run doctor the way the app runs (the same user, worker or container), or it may find a client the app does not.
+
+A host's own `BackupService` takes part by also implementing `PreflightsBackups` (`preflight(string $server): ?BackupClientStatus`).
+
 ## Files
 
 Snapshots land on the `backup.disk` disk at `db-console/backups/{server}/{database}-{UTC timestamp}.{ext}`: `.dump` for PostgreSQL (pg_dump's custom format, which db-tools restores with `pg_restore`) and `.sql` otherwise. Each snapshot is its own file.

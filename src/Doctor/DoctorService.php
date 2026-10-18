@@ -20,7 +20,8 @@ use Simtabi\Laranail\DBConsole\Exceptions\DBConsoleException;
  * posture, the real capability set, and — the doctrine-not-option check —
  * whether the admin account is root-like, in which case doctor FAILS with the exact minimal-grant fix so
  * setup won't quietly proceed insecure. Also reports the secret driver and
- * catalog encryption mode, and operator assurance.
+ * catalog encryption mode, and operator assurance, and whether each server's
+ * backup-before-drop has a dump client that can run.
  */
 final readonly class DoctorService
 {
@@ -35,6 +36,7 @@ final readonly class DoctorService
         private OperatorSecurityCheck $operatorSecurity,
         private TunnelCheck $tunnel,
         private ConfigCheck $configCheck,
+        private BackupClientCheck $backupClient,
     ) {}
 
     /**
@@ -82,7 +84,12 @@ final readonly class DoctorService
             $findings[] = DoctorFinding::ok("server:{$server}:tls", "TLS on '{$server}': " . $this->tls->status($server)->value . '.');
         }
 
-        $findings = [...$findings, ...$this->checkAdminPrivileges($server), ...$this->checkHosting($server)];
+        $findings = [
+            ...$findings,
+            ...$this->checkAdminPrivileges($server),
+            ...$this->checkHosting($server),
+            ...$this->backupClient->findings($server),
+        ];
 
         $capabilities = $this->registry->capabilities($server);
         $findings[] = DoctorFinding::ok(
