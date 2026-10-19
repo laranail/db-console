@@ -127,7 +127,7 @@ describe('TLS is measured from the session, not read from config', function (): 
 describe('locality', function (): void {
     it('reads the host from a url-only connection instead of assuming localhost', function (): void {
         config()->set('database.connections.url_admin', [
-            'driver' => 'pgsql', 'url' => 'pgsql://doadmin:secret@db-pg-1.b.db.ondigitalocean.com:25060/defaultdb',
+            'driver' => 'pgsql', 'url' => sprintf('pgsql://doadmin:%s@db-pg-1.b.db.ondigitalocean.com:25060/defaultdb', rawurlencode(testPassword())),
         ]);
         config()->set('laranail.db-console.servers.managed', [
             'engine' => 'pgsql', 'connection' => 'url_admin', 'tls' => ['enabled' => true],

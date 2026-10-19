@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Test credentials are generated at run time.** Passwords, secrets and connection-URL
+  passwords in the tests come from `TestCredentials` instead of literals, which secret scanning
+  reported as leaks. A guard test fails on any literal left behind; deliberate fixed values carry
+  a `@credential-literal-exempt` marker and a reason. The `laranail/package-tools` floor is now
+  `^0.1.9`, the release that ships these helpers.
 - **No credential-looking literal is left in the tests secret scanning flagged.** The vault tests'
   admin secret, rotated secret and KMS data keys, the existing-account password in the policy tests
   and `FakeProvisioningEngine`, and the SSH driver test's host key are generated at run time. The

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Http;
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Simtabi\Laranail\DBConsole\Enums\SecretDriver;
+use Simtabi\Laranail\Package\Tools\Testing\TestCredentials;
 use Simtabi\Laranail\DBConsole\Secrets\Drivers\HashiCorpVault;
 use Simtabi\Laranail\DBConsole\Exceptions\SecretDriverMisconfigured;
 
@@ -21,7 +22,7 @@ function vaultConfig(array $overrides = []): array
         'auth'        => 'token',
         'role_id'     => null,
         'secret_id'   => null,
-        'token'       => 'root-token',
+        'token'       => TestCredentials::secret('vault'),
         'mount'       => 'secret',
         'path_prefix' => 'db-console',
     ], $overrides);
@@ -39,7 +40,7 @@ it('reads a KV v2 secret over the Vault HTTP API with a token', function (): voi
     expect($vault->reveal('server:prod')->reveal())->toBe('vault-stored-admin-secret')
         ->and($vault->driver())->toBe(SecretDriver::Vault->value);
 
-    Http::assertSent(fn ($request): bool => $request->hasHeader('X-Vault-Token', 'root-token')
+    Http::assertSent(fn ($request): bool => $request->hasHeader('X-Vault-Token', TestCredentials::secret('vault'))
         && str_contains((string) $request->url(), '/v1/secret/data/db-console/server:prod'));
 });
 
@@ -57,7 +58,7 @@ it('writes a KV v2 secret', function (): void {
 it('authenticates with AppRole when configured, then uses the returned token', function (): void {
     Http::fake([
         'https://vault.example.com/v1/auth/approle/login' => Http::response([
-            'auth' => ['client_token' => 'approle-issued-token'],
+            'auth' => ['client_token' => TestCredentials::secret('approle')],
         ]),
         'https://vault.example.com/v1/secret/data/*' => Http::response([
             'data' => ['data' => ['value' => 'secret-via-approle']],

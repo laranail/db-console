@@ -29,7 +29,7 @@ function tunnelledServer(array $ssh = [], array $tls = ['enabled' => false], arr
 {
     config()->set('database.connections.admin_tunnelled', [
         'driver'   => 'mysql', 'host' => 'db.internal', 'port' => 3306, 'database' => 'defaultdb',
-        'username' => 'admin', 'password' => 'secret', 'unix_socket' => '', ...$connection,
+        'username' => 'admin', 'password' => testPassword(), 'unix_socket' => '', ...$connection,
     ]);
     config()->set('laranail.db-console.servers.behind-bastion', [
         'engine'     => ($connection['driver'] ?? 'mysql') === 'pgsql' ? 'pgsql' : 'mysql',

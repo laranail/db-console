@@ -6,6 +6,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\SecretVaultManager;
+use Simtabi\Laranail\Package\Tools\Testing\TestCredentials;
 
 /*
  * SecretVaultManager hands the Doppler resolver secrets.reference.token. The
@@ -26,8 +27,11 @@ it('defines secrets.reference.token in the shipped config', function (): void {
 
 it('passes secrets.reference.token to the Doppler resolver', function (): void {
     config()->set('laranail.db-console.secrets.driver', 'reference');
+    // @credential-literal-exempt: a provider name under the secrets key, not a credential
     config()->set('laranail.db-console.secrets.reference.provider', 'doppler');
-    config()->set('laranail.db-console.secrets.reference.token', 'dp.st.test-token');
+    // Doppler service tokens carry a `dp.st.` prefix.
+    $token = sprintf('dp.st.%s', TestCredentials::secret('doppler'));
+    config()->set('laranail.db-console.secrets.reference.token', $token);
 
     Http::fake([
         'api.doppler.com/*' => Http::response(['value' => ['computed' => 'resolved-admin-secret']]),
@@ -38,6 +42,6 @@ it('passes secrets.reference.token to the Doppler resolver', function (): void {
 
     expect($vault->reveal('server:doppler')->reveal())->toBe('resolved-admin-secret');
 
-    Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', 'Bearer dp.st.test-token')
+    Http::assertSent(fn (Request $request): bool => $request->hasHeader('Authorization', sprintf('Bearer %s', $token))
         && str_contains($request->url(), 'name=DB_ADMIN'));
 });

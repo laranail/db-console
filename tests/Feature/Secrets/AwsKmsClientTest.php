@@ -9,6 +9,7 @@ use Aws\Kms\KmsClient as AwsKms;
 use Simtabi\Laranail\DBConsole\Secrets\Secret;
 use Simtabi\Laranail\DBConsole\Secrets\Drivers\KmsVault;
 use Simtabi\Laranail\DBConsole\Secrets\Kms\AwsKmsClient;
+use Simtabi\Laranail\Package\Tools\Testing\TestCredentials;
 use Simtabi\Laranail\DBConsole\Secrets\Stores\ArraySecretStore;
 
 /*
@@ -43,7 +44,7 @@ it('drives the full envelope round-trip through the real aws-sdk KMS client', fu
     $realSdk = new AwsKms([
         'region'      => 'us-east-1',
         'version'     => 'latest',
-        'credentials' => ['key' => 'test', 'secret' => 'test'],
+        'credentials' => ['key' => TestCredentials::secret('access'), 'secret' => TestCredentials::secret('signing')],
         'handler'     => $mock,
     ]);
 

@@ -14,17 +14,19 @@ use Simtabi\Laranail\DBConsole\Logging\DBConsoleLogger;
 use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhook;
 use Simtabi\Laranail\DBConsole\Webhooks\DeliverWebhooks;
 use Simtabi\Laranail\DBConsole\Models\WebhookSubscription;
+use Simtabi\Laranail\Package\Tools\Testing\TestCredentials;
 
 beforeEach(function (): void {
     $this->migrateCatalog();
     config()->set('laranail.db-console.webhooks.enabled', true);
 
-    $this->secret = 'test-secret-not-real';
+    $this->secret = TestCredentials::secret('webhook');
     app(SecretVault::class)->store('webhook:test', new Secret($this->secret));
 
     $this->sub = WebhookSubscription::query()->create([
-        'url'           => 'https://hooks.example.com/db',
-        'events'        => ['database.dropped'],
+        'url'    => 'https://hooks.example.com/db',
+        'events' => ['database.dropped'],
+        // @credential-literal-exempt: a vault reference name, not a secret
         'secret_ref'    => 'webhook:test',
         'active'        => true,
         'server'        => null,

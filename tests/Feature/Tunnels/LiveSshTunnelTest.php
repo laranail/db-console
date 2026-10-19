@@ -53,8 +53,8 @@ function liveTunnel(string $engine, string $driver, array $ssh = [], array $tls 
     $name = "ssh_{$engine}_{$driver}" . ($host !== null ? '_' . str_replace('-', '_', $host) : '');
 
     config()->set("database.connections.{$name}", $engine === 'pgsql'
-        ? ['driver' => 'pgsql', 'host' => $host ?? 'postgres', 'port' => 5432, 'database' => 'db_console_test', 'username' => 'db_console', 'password' => 'secret']
-        : ['driver' => 'mysql', 'host' => $host ?? 'mysql', 'port' => 3306, 'database' => 'db_console_test', 'username' => 'root', 'password' => 'secret']);
+        ? ['driver' => 'pgsql', 'host' => $host ?? 'postgres', 'port' => 5432, 'database' => 'db_console_test', 'username' => 'db_console', 'password' => 'secret'] // @credential-literal-exempt: the disposable CI database containers' password, set in tests.yml
+        : ['driver' => 'mysql', 'host' => $host ?? 'mysql', 'port' => 3306, 'database' => 'db_console_test', 'username' => 'root', 'password' => 'secret']); // @credential-literal-exempt: the disposable CI database containers' password, set in tests.yml
 
     config()->set("laranail.db-console.servers.{$name}", [
         'engine'     => $engine,
