@@ -27,7 +27,6 @@ it('defines secrets.reference.token in the shipped config', function (): void {
 
 it('passes secrets.reference.token to the Doppler resolver', function (): void {
     config()->set('laranail.db-console.secrets.driver', 'reference');
-    // @credential-literal-exempt: a provider name under the secrets key, not a credential
     config()->set('laranail.db-console.secrets.reference.provider', 'doppler');
     // Doppler service tokens carry a `dp.st.` prefix.
     $token = sprintf('dp.st.%s', TestCredentials::secret('doppler'));

@@ -22,3 +22,14 @@ it('keeps literal credentials out of the tests', function (): void {
 
     expect(true)->toBeTrue();
 });
+
+it('names every generated credential with a single word', function (): void {
+    $root = dirname(__DIR__, 2);
+
+    $this->assertCredentialPurposesAreWordsIn(
+        [$root . '/tests', $root . '/database/factories'],
+        minFiles: 105,
+    );
+
+    expect(true)->toBeTrue();
+});

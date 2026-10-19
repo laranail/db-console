@@ -24,9 +24,8 @@ beforeEach(function (): void {
     app(SecretVault::class)->store('webhook:test', new Secret($this->secret));
 
     $this->sub = WebhookSubscription::query()->create([
-        'url'    => 'https://hooks.example.com/db',
-        'events' => ['database.dropped'],
-        // @credential-literal-exempt: a vault reference name, not a secret
+        'url'           => 'https://hooks.example.com/db',
+        'events'        => ['database.dropped'],
         'secret_ref'    => 'webhook:test',
         'active'        => true,
         'server'        => null,
