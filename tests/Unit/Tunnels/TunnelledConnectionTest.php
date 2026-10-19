@@ -69,14 +69,14 @@ it('dials the loopback plainly when no host name is being verified', function (s
 
 it('expands a url so it cannot override the rewritten host', function () use ($local, $remote): void {
     $config = TunnelledConnection::rewrite(
-        ['driver' => 'pgsql', 'url' => 'pgsql://admin:pw@db.internal:25060/defaultdb'],
+        ['driver' => 'pgsql', 'url' => sprintf('pgsql://admin:%s@db.internal:25060/defaultdb', rawurlencode(testPassword()))],
         $local,
         $remote,
     );
 
     expect($config)->not->toHaveKey('url')
         ->and($config)->toMatchArray(['host' => '127.0.0.1', 'port' => 41000, 'database' => 'defaultdb', 'username' => 'admin'])
-        ->and(TunnelledConnection::origin(['driver' => 'pgsql', 'url' => 'pgsql://admin:pw@db.internal:25060/defaultdb']))
+        ->and(TunnelledConnection::origin(['driver' => 'pgsql', 'url' => sprintf('pgsql://admin:%s@db.internal:25060/defaultdb', rawurlencode(testPassword()))]))
         ->toBe(['host' => 'db.internal', 'port' => 25060]);
 });
 

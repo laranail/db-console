@@ -129,7 +129,7 @@ it('gives each snapshot its own timestamped file, named for the dump format', fu
 it('dumps the target database when the admin connection is a url', function (): void {
     $manager = useBackupManager(fails: false);
     config()->set('database.connections.url_admin', [
-        'driver' => 'mysql', 'url' => 'mysql://doadmin:pw@db-mysql.b.db.ondigitalocean.com:25060/defaultdb',
+        'driver' => 'mysql', 'url' => sprintf('mysql://doadmin:%s@db-mysql.b.db.ondigitalocean.com:25060/defaultdb', rawurlencode(testPassword())),
     ]);
     config()->set('laranail.db-console.servers.managed', [
         'engine' => 'mysql', 'connection' => 'url_admin', 'tls' => ['enabled' => false],
