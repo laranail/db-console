@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-20
+
 ### Changed
 
 - **Test credentials are generated at run time.** Passwords, secrets and connection-URL passwords
@@ -653,7 +655,8 @@ Both are removed no earlier than the next minor after 0.1.
 
 Initial public release.
 
-[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/laranail/db-console/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/laranail/db-console/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/laranail/db-console/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/laranail/db-console/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/laranail/db-console/compare/v0.1.2...v0.1.3
