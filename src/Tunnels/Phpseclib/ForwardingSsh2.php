@@ -32,9 +32,13 @@ final class ForwardingSsh2 extends SSH2
      * ran out. While polling, the wait is never raised past the poll's own.
      * The hook applies to writes from phpseclib's code too, which is the point.
      */
-    protected int|float|null $curTimeout = null {
-        set(int|float|null $value) {
-            $this->curTimeout = $this->polling && $value !== null && $value > self::POLL_TIMEOUT
+    protected int|float|false $curTimeout = false {
+        set(int|float|false $value) {
+            // `false` is phpseclib's "no timeout", as `null` was before 4.0.3. It is excluded from
+            // the comparison for the same reason null was: it is not a duration, so `> POLL_TIMEOUT`
+            // would be meaningless. An overriding property MUST repeat the parent's type exactly,
+            // so this declaration tracks SSH2::$curTimeout rather than expressing a preference.
+            $this->curTimeout = $this->polling && $value !== false && $value > self::POLL_TIMEOUT
                 ? self::POLL_TIMEOUT
                 : $value;
         }
