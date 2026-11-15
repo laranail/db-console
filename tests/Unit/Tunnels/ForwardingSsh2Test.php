@@ -15,7 +15,7 @@ it('never lets a poll wait longer than the poll timeout', function (): void {
     // Lazy: the constructor connects nothing until a method needs the socket.
     $ssh = new ForwardingSsh2('ssh.invalid', 22, 10);
 
-    $timeoutAfterClose = Closure::bind(function (bool $polling): int|float|null {
+    $timeoutAfterClose = Closure::bind(function (bool $polling): int|float {
         $this->polling = $polling;
         $this->curTimeout = 5;   // what get_channel_packet() does on a CHANNEL_CLOSE
 
