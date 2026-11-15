@@ -480,12 +480,24 @@ jobs:
             sleep 1
           done
           docker exec mytls mysqladmin ping -h 127.0.0.1 -uroot -psecret
-      - name: Install the PostgreSQL 18 client tools for pg_dump
+      - name: Ensure the PostgreSQL 18 client tools for pg_dump
         run: |
-          # Quiet on success, as before -- but dpkg writes its reason to STDOUT, so
-          # `>/dev/null` discarded the only line that says why an install failed, leaving
-          # apt's bare "Sub-process /usr/bin/dpkg returned an error code (1)" and exit 100.
-          # Capture instead of discard, and print it when it fails.
+          # The runner image already ships PostgreSQL 18 from PGDG, so pg_dump is normally
+          # present and nothing needs installing. Installing regardless upgraded the whole
+          # PGDG set (18.6 -> 18.7) and died on an upstream file conflict: libpq-dev 18.7
+          # and postgresql-common 293 both ship /usr/bin/pg_config. dpkg said as much --
+          # "Unpacking postgresql-client-18 (18.7) over (18.6)" -- and the install was never
+          # needed for the version check on the last line to pass.
+          #
+          # So: use what the image provides, and keep the install only as a fallback for an
+          # image that stops shipping it. No --force-overwrite: that would paper over a real
+          # conflict rather than avoid it.
+          if /usr/lib/postgresql/18/bin/pg_dump --version; then
+            exit 0
+          fi
+          echo "pg_dump 18 absent from the image; installing from PGDG."
+          # Quiet on success -- but dpkg writes its reason to STDOUT, so a bare `>/dev/null`
+          # discarded the only line that classifies a failure. Capture, and print on failure.
           log="${RUNNER_TEMP}/pgdg-install.log"
           if ! {
             sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y &&
