@@ -482,8 +482,20 @@ jobs:
           docker exec mytls mysqladmin ping -h 127.0.0.1 -uroot -psecret
       - name: Install the PostgreSQL 18 client tools for pg_dump
         run: |
-          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
-          sudo apt-get install -y -qq postgresql-client-18 >/dev/null
+          # Quiet on success, as before -- but dpkg writes its reason to STDOUT, so
+          # `>/dev/null` discarded the only line that says why an install failed, leaving
+          # apt's bare "Sub-process /usr/bin/dpkg returned an error code (1)" and exit 100.
+          # Capture instead of discard, and print it when it fails.
+          log="${RUNNER_TEMP}/pgdg-install.log"
+          if ! {
+            sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y &&
+            sudo apt-get install -y -qq postgresql-client-18
+          } >"${log}" 2>&1; then
+            echo "::group::apt and dpkg output"
+            cat "${log}"
+            echo "::endgroup::"
+            exit 1
+          fi
           /usr/lib/postgresql/18/bin/pg_dump --version
       - name: Live SSH tunnels
         env:
