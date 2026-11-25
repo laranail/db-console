@@ -16,7 +16,6 @@ return RectorConfig::configure()
         SetList::CODE_QUALITY,
         SetList::DEAD_CODE,
         SetList::TYPE_DECLARATION,
-        SetList::EARLY_RETURN,
     ])
     // NarrowWideUnionReturnTypeRector cannot see a property hook. ForwardingSsh2::$curTimeout has a
     // `set` hook that rewrites 5 to POLL_TIMEOUT (0.005) while polling, so the closure in
