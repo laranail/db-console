@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
-use Simtabi\Laranail\DBConsole\Tunnels\TunnelSpec;
-use Simtabi\Laranail\DBConsole\Tunnels\SshSettings;
 use Simtabi\Laranail\DBConsole\Enums\TunnelDriverType;
-use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
 use Simtabi\Laranail\DBConsole\Exceptions\TunnelFailed;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
 use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TunnelDriver;
+use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
+use Simtabi\Laranail\DBConsole\Tunnels\SshSettings;
+use Simtabi\Laranail\DBConsole\Tunnels\TunnelSpec;
 
 /**
  * Opens tunnels that forward nothing, so the registry's wiring can be tested

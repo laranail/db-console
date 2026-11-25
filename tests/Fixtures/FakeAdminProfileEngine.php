@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
-use Simtabi\Laranail\DBConsole\Domain\Charset;
-use Simtabi\Laranail\DBConsole\Engines\Engine;
-use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Username;
-use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
-use Simtabi\Laranail\DBConsole\Engines\AdminInspectingEngine;
+use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
 use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\Password;
 use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Engines\AdminInspectingEngine;
+use Simtabi\Laranail\DBConsole\Engines\Engine;
+use Simtabi\Laranail\DBConsole\Enums\EngineType;
 
 /**
  * A Postgres admin profile answered by SQLite, so the doctor's judgement of
@@ -31,7 +31,7 @@ final readonly class FakeAdminProfileEngine implements AdminInspectingEngine, En
     {
         return new StatementList(Statement::plain(
             'SELECT 0 AS is_superuser, 1 AS can_create_db, 1 AS can_create_role,'
-            . " 170004 AS server_version_num, {$this->serverPort} AS server_port",
+            ." 170004 AS server_version_num, {$this->serverPort} AS server_port",
         ));
     }
 

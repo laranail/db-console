@@ -21,7 +21,7 @@ function frame(int $seq, string $payload): string
 {
     $n = strlen($payload);
 
-    return chr($n & 0xFF) . chr(($n >> 8) & 0xFF) . chr($n >> 16) . chr($seq) . $payload;
+    return chr($n & 0xFF).chr(($n >> 8) & 0xFF).chr($n >> 16).chr($seq).$payload;
 }
 
 /** @return array{0: int, 1: string} */
@@ -63,7 +63,7 @@ if ($server === false) {
     exit(2);
 }
 $name = (string) stream_socket_get_name($server, false);
-fwrite(STDOUT, 'READY ' . substr($name, strrpos($name, ':') + 1) . "\n");
+fwrite(STDOUT, 'READY '.substr($name, strrpos($name, ':') + 1)."\n");
 
 while ($conn = @stream_socket_accept($server, 30)) {
     // No read-ahead: a client may send its SSLRequest and TLS ClientHello in
@@ -72,8 +72,8 @@ while ($conn = @stream_socket_accept($server, 30)) {
 
     // Protocol 41 | SSL | plugin auth, in the lower and upper halves.
     $caps = 0x0200 | 0x0800 | 0x8000 | 0x0008_0000;
-    fwrite($conn, frame(0, "\x0a" . "8.4.0-fake\0" . pack('V', 1) . str_repeat('a', 8) . "\0" . pack('v', $caps & 0xFFFF)
-        . "\xff" . pack('v', 2) . pack('v', $caps >> 16) . "\x15" . str_repeat("\0", 10) . str_repeat('b', 12) . "\0" . "caching_sha2_password\0"));
+    fwrite($conn, frame(0, "\x0a"."8.4.0-fake\0".pack('V', 1).str_repeat('a', 8)."\0".pack('v', $caps & 0xFFFF)
+        ."\xff".pack('v', 2).pack('v', $caps >> 16)."\x15".str_repeat("\0", 10).str_repeat('b', 12)."\0"."caching_sha2_password\0"));
 
     [$seq, $request] = packet($conn);
     expectSequence($seq, 1, 'SSLRequest');
@@ -101,7 +101,7 @@ while ($conn = @stream_socket_accept($server, 30)) {
 
     [$seq, $query] = packet($conn);
     expectSequence($seq, 0, 'COM_QUERY');
-    fwrite($conn, frame(1, "\x00\x00\x00\x02\x00\x00\x00" . 'echo:' . substr($query, 1) . ':' . $password));
+    fwrite($conn, frame(1, "\x00\x00\x00\x02\x00\x00\x00".'echo:'.substr($query, 1).':'.$password));
 
     fclose($conn);
 }

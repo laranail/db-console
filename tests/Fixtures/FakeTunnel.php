@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
 use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
 use Simtabi\Laranail\DBConsole\Tunnels\TunnelSpec;
-use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
 
 final class FakeTunnel implements Tunnel
 {

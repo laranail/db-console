@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
-use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
-use Simtabi\Laranail\DBConsole\Tunnels\PrivateDirectory;
 use Simtabi\Laranail\DBConsole\Servers\ServerDefinition;
 use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TerminatesTls;
 use Simtabi\Laranail\DBConsole\Tunnels\Contracts\TlsRelayLauncher;
+use Simtabi\Laranail\DBConsole\Tunnels\Contracts\Tunnel;
+use Simtabi\Laranail\DBConsole\Tunnels\Endpoint;
+use Simtabi\Laranail\DBConsole\Tunnels\PrivateDirectory;
 
 /**
  * Relays nothing: records what it was asked to put a relay in front of, and
@@ -24,7 +24,8 @@ final class FakeTlsRelayLauncher implements TlsRelayLauncher
     {
         $this->launched[] = ['server' => $definition->name, 'upstream' => $tunnel->local()->describe(), 'name' => (string) $remote->host];
 
-        return new readonly class($tunnel, Endpoint::socket($directory->file('mysql-tls.sock')), (string) $remote->host) implements TerminatesTls, Tunnel {
+        return new readonly class($tunnel, Endpoint::socket($directory->file('mysql-tls.sock')), (string) $remote->host) implements TerminatesTls, Tunnel
+        {
             public function __construct(private Tunnel $tunnel, private Endpoint $local, private string $name) {}
 
             public function local(): Endpoint
