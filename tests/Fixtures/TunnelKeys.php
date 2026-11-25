@@ -24,8 +24,8 @@ final class TunnelKeys
     public static function generated(): string
     {
         $public = sodium_crypto_sign_publickey(sodium_crypto_sign_keypair());
-        $blob = pack('N', 11) . 'ssh-ed25519' . pack('N', strlen($public)) . $public;
+        $blob = pack('N', 11).'ssh-ed25519'.pack('N', strlen($public)).$public;
 
-        return 'ssh-ed25519 ' . base64_encode($blob);
+        return 'ssh-ed25519 '.base64_encode($blob);
     }
 }

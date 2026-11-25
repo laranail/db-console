@@ -4,26 +4,26 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use ReflectionProperty;
 use Illuminate\Support\Facades\DB;
-use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\DbName;
+use ReflectionProperty;
+use Simtabi\Laranail\DBConsole\Domain\Capabilities;
 use Simtabi\Laranail\DBConsole\Domain\Charset;
+use Simtabi\Laranail\DBConsole\Domain\DbName;
+use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
+use Simtabi\Laranail\DBConsole\Domain\Host;
+use Simtabi\Laranail\DBConsole\Domain\Password;
+use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Domain\Statement;
+use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
+use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
 use Simtabi\Laranail\DBConsole\Engines\Engine;
-use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
 use Simtabi\Laranail\DBConsole\Engines\PasswordConstrainedEngine;
 use Simtabi\Laranail\DBConsole\Engines\ServerVersionAwareEngine;
-use Simtabi\Laranail\DBConsole\Domain\Password;
-use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Enums\EngineType;
-use Simtabi\Laranail\DBConsole\Domain\Statement;
-use Simtabi\Laranail\DBConsole\Domain\Capabilities;
-use Simtabi\Laranail\DBConsole\Domain\StatementList;
-use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
+use Simtabi\Laranail\DBConsole\Exceptions\WeakPassword;
 use Simtabi\Laranail\DBConsole\Servers\AdminConnection;
-use Simtabi\Laranail\DBConsole\Domain\EncryptionCapabilities;
-use Simtabi\Laranail\DBConsole\Engines\EmptinessProbingEngine;
-use Simtabi\Laranail\DBConsole\Domain\Privileges\PrivilegeSet;
+use Simtabi\Laranail\DBConsole\Servers\ServerRegistry;
 
 /**
  * A provisioning server played by three SQLite tables, so the services' create

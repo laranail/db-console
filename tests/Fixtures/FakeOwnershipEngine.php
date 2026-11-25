@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
 use Simtabi\Laranail\DBConsole\Domain\Host;
-use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Domain\Statement;
 use Simtabi\Laranail\DBConsole\Domain\StatementList;
+use Simtabi\Laranail\DBConsole\Domain\Username;
 use Simtabi\Laranail\DBConsole\Engines\OwnershipReleasingEngine;
 
 /**
@@ -26,7 +26,7 @@ final class FakeOwnershipEngine implements OwnershipReleasingEngine
 
     public function holdsPrivilegesOf(Username $u): StatementList
     {
-        return new StatementList(Statement::plain('SELECT ' . ($this->alreadyHolds ? '1' : '0')));
+        return new StatementList(Statement::plain('SELECT '.($this->alreadyHolds ? '1' : '0')));
     }
 
     public function takeMembership(Username $u): StatementList

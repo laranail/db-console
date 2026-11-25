@@ -90,7 +90,7 @@ final readonly class ReconcileService
         $count = 0;
         foreach ($databases as $name) {
             $adopted = ManagedDatabase::query()->firstOrCreate(
-                ['server_name' => $server, 'name' => (new DbName($name))->value],
+                ['server_name' => $server, 'name' => new DbName($name)->value],
                 ['is_managed' => false],
             );
 

@@ -25,8 +25,6 @@ function accessGranting(array $granted): AccessManager
         {
             return in_array($permission->value, $this->granted, true);
         }
-
-        public function authorize(?Authenticatable $user, ConsolePermission $permission, ?string $scope): void {}
     };
 }
 

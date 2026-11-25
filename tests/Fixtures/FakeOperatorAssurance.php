@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use DateTimeInterface;
 use Carbon\CarbonImmutable;
+use DateTimeInterface;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
 

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Simtabi\Laranail\DBConsole\Tests\Fixtures;
 
-use ReflectionProperty;
 use Illuminate\Support\Facades\Schema;
-use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
+use ReflectionProperty;
 use Simtabi\Laranail\DBConsole\Access\Contracts\RbacDriver;
 use Simtabi\Laranail\DBConsole\Contracts\OperatorAssurance;
+use Simtabi\Laranail\DBConsole\Enums\ConsoleRole;
 
 /**
  * Builders for the operator-assurance tests: an operators table, operators in

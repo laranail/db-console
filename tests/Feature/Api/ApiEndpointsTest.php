@@ -54,8 +54,6 @@ function accessByUser(array $byUser): AccessManager
         {
             return in_array($permission, $this->byUser[$user?->getAuthIdentifier()] ?? [], true);
         }
-
-        public function authorize(?Authenticatable $user, ConsolePermission $permission, ?string $scope): void {}
     };
 }
 
